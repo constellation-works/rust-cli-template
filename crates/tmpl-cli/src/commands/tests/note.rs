@@ -1,4 +1,7 @@
-use crate::command::list_notice;
+use crate::cli::Cli;
+use crate::commands::note::list_notice;
+use crate::commands::{Command, NoteCommand};
+use clap::Parser;
 use std::num::NonZeroUsize;
 use time::OffsetDateTime;
 use tmpl_cli_core::{ListFilter, Note, NoteId, NoteList, Priority};
@@ -48,4 +51,29 @@ fn a_cut_list_says_how_many_matched_and_a_whole_one_says_nothing() {
     let notice = list_notice(&filter, &listed(2, 5)).unwrap();
     assert!(notice.contains("2 of 5"), "got {notice:?}");
     assert_eq!(list_notice(&filter, &listed(2, 2)), None);
+}
+
+fn command(args: &[&str]) -> Command {
+    Cli::try_parse_from(args).unwrap().command
+}
+
+#[test]
+fn only_note_add_is_audited() {
+    // STD-01 R31: list and show are read-only, so they write no audit line.
+    let add = command(&["tmpl-cli", "note", "add", "t"]).audit().unwrap();
+    assert_eq!(add.command, "note add");
+    assert!(command(&["tmpl-cli", "note", "list"]).audit().is_none());
+    assert!(
+        command(&["tmpl-cli", "note", "show", "1"])
+            .audit()
+            .is_none()
+    );
+}
+
+#[test]
+fn the_parsed_verb_reaches_its_noun() {
+    assert!(matches!(
+        command(&["tmpl-cli", "note", "list"]),
+        Command::Note(NoteCommand::List(_))
+    ));
 }

@@ -1,6 +1,6 @@
 ---
 type: design
-summary: "Spec: store — file layout, private modes, atomic replacement, locking and format versioning"
+summary: "Spec: store — file layout, private modes, atomic replacement, locking, format versioning and the audit log"
 last_validated: 2026-09-26
 ---
 
@@ -22,6 +22,9 @@ leave unparseable state.
 - `<root>/notes.json` — `{"format": 1, "notes": [...]}`, mode `0600`.
 - `<root>/.lock` — the lock file, mode `0600`; created once, never deleted;
   holds the current holder's `pid (label) since <time>`.
+- `<root>/audit.jsonl` — the audit log, mode `0600`, created by the first
+  audited command: one line per mutating command, `{"format": 1, "at",
+  "command", "status", "target", "error_code", "duration_ms"}`.
 
 ## Invariants
 
@@ -43,6 +46,10 @@ leave unparseable state.
 - `format` greater than this build's is refused (`store_too_new`) for reads
   and writes; the file is left untouched. Format 0 is `store_corrupt`.
 - Every change to the persisted shape bumps `format` and appends one step
-  to `UPGRADES` in `store.rs`; shipped steps never change. Reads upgrade an
+  to `UPGRADES` in `store/format.rs`; shipped steps never change. Reads upgrade an
   older document in memory; the next write persists the current format.
 - One unparseable note makes the whole file `store_corrupt`.
+- Audit lines are appended in one write under `.lock` and `fsync`ed; they are
+  never rewritten. Read-only commands never write one. A line holds no
+  argument values or error text. A line that cannot be written is a warning
+  and never changes the command's result.

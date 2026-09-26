@@ -7,7 +7,7 @@ status: Draft
 feature: tmpl-cli
 doc_role: design
 type: design
-summary: How tmpl-cli is layered, how an invocation flows from argv to bytes, how the store stays consistent, and which gates hold each standard in place.
+summary: How tmpl-cli is layered, how an invocation flows from argv to bytes, how the store stays consistent, what the audit log records, and which gates hold each standard in place.
 tags: [tmpl-cli, cli, architecture]
 paths: ["crates/**", "scripts/**", "Makefile"]
 related_features: [tmpl-cli]
@@ -25,10 +25,17 @@ and the gates. The output and store contracts are specified in
 ## 1. Layering
 
 Two crates (why: [4_decisions.md](./4_decisions.md#a-domain-library-crate-and-a-cli-crate)).
-`tmpl-cli-core` holds contract types (`note`), mechanisms (`fsio`), and the
-domain (`store`, `error`); it has no clap, no terminal access and never reads
-the environment. `tmpl-cli` holds composition (`app`) and the surface (`cli`,
-`command`, `output`). The tier table and module rules are in
+`tmpl-cli-core` holds business logic with no I/O (`note`: the types and the
+next-id rule; `query`: list selection; `error`) and one persistence module,
+`store`, which is the only code that touches disk (why a module, not a crate:
+[4_decisions.md](./4_decisions.md#persistence-is-one-module-inside-the-core-crate)).
+Inside it, the `Store` facade sits over `format` (the persisted document and
+its upgrades), `audit` (the audit record shape) and `fsio` (durable writes,
+appends, locking, private-state checks; mechanism only). The core has no clap,
+no terminal access and never reads the environment. `tmpl-cli` holds
+composition (`app`) and the surface: `cli` (the root flags), `commands` (one
+module per noun, holding its subcommands, flags, help and handlers),
+`audit_middleware` and `output`. The tier table and module rules are in
 [ARCHITECTURE.md](../../../ARCHITECTURE.md), and
 `scripts/check-dependency-direction.sh` enforces both from source text alone,
 so it runs in `make ci-fast` without compiling.
@@ -43,9 +50,12 @@ so it runs in `make ci-fast` without compiling.
    (`COLUMNS`, terminals only). Nothing else in the program asks these
    questions; `scripts/check-terminal-guard.sh` rejects any attempt.
 3. `app::Context::resolve` picks the data directory and constructs the store.
-4. `command::run` makes one store call and wraps the result in a payload
-   (`Output::Notes` or `Output::Note`) with an optional stderr notice. Core
-   errors cross into `CliError` through its single `#[from]`.
+4. `commands::run` is the one chokepoint. If the command is audited it
+   starts an `AuditGuard` (section 5); then the noun's handler makes one
+   store call and wraps the result in a payload (`Output::Notes` or
+   `Output::Note`) with an optional stderr notice. Core errors cross into
+   `CliError` through its single `#[from]`. The guard is told the outcome and
+   writes its line as `run` returns, before rendering.
 5. `output::finish` renders the payload for the sink, or reports the error
    (`error: …` line, or `{"error","code"}` in JSON mode) and returns exit 1.
    A write that fails with `BrokenPipe` ends the process with exit 0 and no
@@ -80,19 +90,38 @@ otherwise it refuses with the `chmod` that fixes it. `add` loads once before
 touching anything, so a refused store leaves nothing behind; it then creates
 the data directory (`0700`), takes `.lock` (`0600`, never through a link; an
 OS advisory lock with a 10-second deadline, and a timeout names the holder's
-pid, label and start time), re-reads under the lock, assigns max id + 1, and
-writes through `fsio::write_atomic` (a `0600` temp file in the same
+pid, label and start time), re-reads under the lock, assigns the next id (`NoteId::next_after`: max id
++ 1), and writes through `fsio::write_atomic` (a `0600` temp file in the same
 directory, `fsync`, rename, `fsync` of the directory). The temp file removes
 itself on every failure path. A file declaring a newer format is refused for
 reads and writes; an older one is upgraded in memory through the append-only
 `UPGRADES` registry (empty so far) and persisted by the next write.
 
-## 5. Gates
+## 5. The audit log
+
+Every command that changes durable state is audited; today that is `note
+add`. `Command::audit` declares it per command with an exhaustive match, so a
+new command does not compile until it decides. Read-only commands are not
+audited, because they must not write (STD-01 R31).
+
+`AuditGuard` (in `audit_middleware.rs`, modelled on Orbit's) is created
+before dispatch in the failure state, so an early return or a panic is
+recorded as a failure, never as success. `mark_result` sets the outcome, the
+note id on success and the stable error code on failure; `Drop` appends one
+line to `<root>/audit.jsonl` through `Store::record_audit`, which checks the
+data directory like any write, holds `.lock` for the append and creates the
+file `0600`. Each line is `{"format": 1, "at", "command", "status",
+"target", "error_code", "duration_ms"}`: identifiers only, never argument
+values or error text (STD-05 R13). The log is a side channel, so it fails open
+(STD-02 R31): a line that cannot be written is a `warn` on stderr and never
+changes the command's result or exit code.
+
+## 6. Gates
 
 | Gate | Make target | Holds |
 |------|-------------|-------|
 | `cargo fmt --check` | `ci-fast` | formatting |
-| `check-dependency-direction.sh` | `ci-fast` | crate and module layering (STD-02 R1–R6), no clock-defaulted timestamps (R16) |
+| `check-dependency-direction.sh` | `ci-fast` | crate and module layering (STD-02 R1–R6), file access only in `store/`, no clock-defaulted timestamps (R16), retired paths stay gone (R17) |
 | `check-test-modules.sh` | `ci-fast` | every sibling unit-test file is declared (STD-02 R19) |
 | `check-terminal-guard.sh` | `ci-fast` | one owner for streams, TTY and color env (STD-01 R12, R17) |
 | `docs/standards/check.sh` | `ci-fast` (`standards-check`) | vendored standards (warns until vendored; fails in CI) |
@@ -107,7 +136,7 @@ fails. CI runs `make ci` on Linux and macOS with a 30-minute job timeout,
 with actions pinned by commit SHA and the toolchain and tools by version;
 Dependabot proposes updates to both crate and action pins.
 
-## 6. Concerns & Honest Limitations
+## 7. Concerns & Honest Limitations
 
 - Terminal width comes only from `COLUMNS`, which most shells set but do not
   export, so truncation rarely engages; querying the terminal needs a
@@ -124,6 +153,12 @@ Dependabot proposes updates to both crate and action pins.
   lock is taken, so a waiter can briefly read the previous holder's line, and
   a failure to write it is logged rather than failing the write.
 - The ownership and mode checks are unix-only; on Windows they are no-ops.
+- The audit log grows without bound and has no reader command; rotating or
+  querying it is left to the domain. A crash mid-append can leave a torn last
+  line, which a reader must skip.
+- An audit line records that a command ran, not that its output reached the
+  reader: a `note add` whose stdout write then fails is still `success`,
+  because the note was written.
 - One unparseable note makes the whole store `store_corrupt`
   ([4_decisions.md](./4_decisions.md#one-malformed-note-makes-the-store-corrupt)).
 

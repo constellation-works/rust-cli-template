@@ -18,7 +18,9 @@ tmpl-cli note show <id>
 
 Notes live in one JSON file under the data directory: `--root <dir>`, else
 `$TMPL_CLI_ROOT`, else `~/.tmpl-cli`. The directory is created owner-only,
-and a store that another user owns or could write is refused.
+and a store that another user owns or could write is refused. Each `note add`
+appends one line to `audit.jsonl` beside it (what ran, on which note, how it
+ended; never the note's text). Reading commands write nothing.
 
 | Setting | Flag | Environment | Default |
 |---------|------|-------------|---------|
@@ -49,9 +51,13 @@ keep them runnable.
 ## Layout
 
 ```
-crates/tmpl-cli-core/   domain library: note types, file store, errors (no clap, no terminal)
-crates/tmpl-cli/        the binary: cli.rs (flags), app.rs (composition),
-                        command.rs (dispatch), output/ (sink, rendering, errors)
+crates/tmpl-cli-core/   domain library (no clap, no terminal): note.rs and query.rs
+                        (business logic, no I/O), store/ (persistence: facade,
+                        format, audit log, fsio), error.rs
+crates/tmpl-cli/        the binary: cli.rs (root flags), app.rs (composition),
+                        commands/ (one module per noun: flags and handlers),
+                        audit_middleware.rs (audits mutating commands),
+                        output/ (sink, rendering, errors)
 crates/*/tests/         integration tests; crates/tmpl-cli/tests/goldens/ holds the
                         help and output goldens
 scripts/                structure gates run by `make ci-fast`

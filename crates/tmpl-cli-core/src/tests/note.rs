@@ -19,6 +19,21 @@ fn note_id_rejects_zero_and_non_numbers() {
 }
 
 #[test]
+fn the_next_id_is_one_past_the_highest_whatever_the_order() {
+    let at = |id: u64| {
+        NewNote {
+            title: "t".parse().unwrap(),
+            body: None,
+            tags: Vec::new(),
+            priority: Priority::Normal,
+        }
+        .into_note(NoteId::try_from(id).unwrap(), OffsetDateTime::UNIX_EPOCH)
+    };
+    assert_eq!(NoteId::next_after(&[]), NoteId::FIRST);
+    assert_eq!(NoteId::next_after(&[at(3), at(1), at(7)]).get(), 8);
+}
+
+#[test]
 fn note_id_deserialization_validates_too() {
     assert!(serde_json::from_str::<NoteId>("0").is_err());
     assert_eq!(serde_json::from_str::<NoteId>("3").unwrap().get(), 3);

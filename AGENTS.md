@@ -6,13 +6,13 @@ Loaded as both `AGENTS.md` and `CLAUDE.md` (a symlink). tmpl-cli keeps short not
 <!-- Managed by the constellation's operations/scripts/sync-standards.sh; edits inside this block are overwritten. -->
 ## Constellation standards
 
-This repository adopts these constellation standards, vendored read-only in `docs/standards/`:
+This repository adopts these constellation standards, vendored read-only in `docs/standards/` (each a directory: `STD-nn.md` holds the rules, `why.md` and `checks.md` the reasons and gates):
 
-- `STD-01@2` — [docs/standards/STD-01-cli-surface.md](docs/standards/STD-01-cli-surface.md)
-- `STD-02@2` — [docs/standards/STD-02-rust-architecture-and-errors.md](docs/standards/STD-02-rust-architecture-and-errors.md)
-- `STD-03@2` — [docs/standards/STD-03-concurrency-and-process-safety.md](docs/standards/STD-03-concurrency-and-process-safety.md)
-- `STD-04@1` — [docs/standards/STD-04-testing-and-verification.md](docs/standards/STD-04-testing-and-verification.md)
-- `STD-05@1` — [docs/standards/STD-05-security-boundaries.md](docs/standards/STD-05-security-boundaries.md)
+- `STD-01@2` — [docs/standards/STD-01-cli-surface/STD-01.md](docs/standards/STD-01-cli-surface/STD-01.md)
+- `STD-02@3` — [docs/standards/STD-02-rust-architecture-and-errors/STD-02.md](docs/standards/STD-02-rust-architecture-and-errors/STD-02.md)
+- `STD-03@2` — [docs/standards/STD-03-concurrency-and-process-safety/STD-03.md](docs/standards/STD-03-concurrency-and-process-safety/STD-03.md)
+- `STD-04@1` — [docs/standards/STD-04-testing-and-verification/STD-04.md](docs/standards/STD-04-testing-and-verification/STD-04.md)
+- `STD-05@1` — [docs/standards/STD-05-security-boundaries/STD-05.md](docs/standards/STD-05-security-boundaries/STD-05.md)
 
 Follow them; they are normative. To deviate from a rule, record a decision in `docs/design/<feature>/4_decisions.md` citing `STD-nn@<version> §Rn`; never edit `docs/standards/` (`sh docs/standards/check.sh` enforces this).
 Reviewers check every change against the adopted standards and report violations as `STD-nn §Rn` with file:line evidence.
@@ -39,13 +39,14 @@ Reviewers check every change against the adopted standards and report violations
 ## Code
 
 - Layers: [`ARCHITECTURE.md`](ARCHITECTURE.md). Design and decisions: [`docs/design/tmpl-cli/`](docs/design/tmpl-cli/); new features copy [`docs/design/_templates/`](docs/design/_templates/).
-- `tmpl-cli-core` is the domain: no clap, no terminal, no environment reads. The CLI crate parses (`cli.rs`), composes (`app.rs`), dispatches (`command.rs`) and renders (`output/`).
+- `tmpl-cli-core` is the domain: no clap, no terminal, no environment reads. Business logic (`note.rs`, `query.rs`) does no I/O; everything that touches disk is in `store/`. The CLI crate parses (`cli.rs`), composes (`app.rs`), dispatches (`commands/`, one module per noun holding its flags and handlers; a large noun becomes `commands/<noun>/` with one file per verb), audits (`audit_middleware.rs`) and renders (`output/`).
+- Every mutating command is audited: declare it in `Command::audit` (the match is exhaustive, so a new command must decide). Read-only commands return `None`; they never write. Audit lines carry ids and error codes, never argument values or messages.
 - Lints come from `[workspace.lints]`: no `unwrap`/`expect` in production code, no `print!` (use `tracing`), no lock guard across `.await`, no wildcard arm on an enum, no narrowing `as`. CI runs clippy with `-D warnings`.
 - Only `crates/tmpl-cli/src/output/` touches stdout, stderr, TTY state or color/format env vars. stdout is payload only.
 - Errors: typed `thiserror` enums; the core's `Error` crosses into `CliError` through its one `#[from]`. Exit codes: 0 ok, 1 failure, 2 usage.
-- `--json` field names, the list envelope (`notes`, `total`, `truncated`) and the store's persisted shape are contracts: add fields, never rename or retype them. A persisted-shape change bumps the store format and appends a step to `store.rs::UPGRADES`.
+- `--json` field names, the list envelope (`notes`, `total`, `truncated`) and the store's persisted shape are contracts: add fields, never rename or retype them. A persisted-shape change bumps the store format and appends a step to `store/format.rs::UPGRADES`.
 - Default to `pub(crate)`; workspace dependencies via `.workspace = true`.
 - Unit tests live in a sibling `tests/` directory mirroring source file names, declared in its `mod.rs`; crate-root `tests/` is integration only.
 - Never put internal task, friction or record ids in help, examples or messages; use placeholders such as `<id>`.
-- Store writes go through `fsio::write_atomic` under the store lock. Never rewrite a durable file in place. Reads never write or lock. Store state is owner-only and checked on every load.
+- Store writes go through `store::fsio::write_atomic` (the audit log through `append_private`) under the store lock. Never rewrite a durable file in place. Reads never write or lock. Store state is owner-only and checked on every load.
 - Report commands and outcomes at handoff — passed, failed, not run — never "tested".

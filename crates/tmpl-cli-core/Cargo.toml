@@ -1,6 +1,6 @@
 [package]
 name = "tmpl-cli-core"
-description = "The tmpl-cli note store as a library: types, storage, errors. No terminal, no argument parsing."
+description = "The tmpl-cli note store as a library: business logic, persistence, errors. No terminal, no argument parsing."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

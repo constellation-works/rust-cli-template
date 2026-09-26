@@ -1,4 +1,5 @@
-use crate::cli::{Cli, Command, NoteCommand};
+use crate::cli::Cli;
+use crate::commands::{Command, NoteCommand};
 use crate::output::FormatArg;
 use clap::{CommandFactory, Parser};
 use std::ffi::OsString;

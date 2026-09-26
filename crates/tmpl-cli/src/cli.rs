@@ -1,16 +1,15 @@
-//! The command tree: every command, flag and help string, declared once
-//! (STD-01 R25). `--help` is rendered from these doc comments, so they are
-//! user-facing text: placeholders like `<id>`, never real ids or tracker
-//! numbers (STD-01 R23).
+//! The root of the command tree: the program, its global flags and the
+//! parse entry point. Each noun's subcommands, flags and help live beside its
+//! handlers in `commands/` (STD-01 R25: declared once). `--help` is rendered
+//! from these doc comments, so they are user-facing text: placeholders like
+//! `<id>`, never real ids or tracker numbers (STD-01 R23).
 
+use crate::commands::Command;
 use crate::output::FormatArg;
-use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::error::ErrorKind;
-use clap::{ArgAction, Args, CommandFactory, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser};
 use std::ffi::OsString;
-use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use tmpl_cli_core::{Body, NoteId, Priority, Tag, Title};
 
 /// Help heading for the flags every command accepts.
 const GLOBAL: &str = "Global options";
@@ -23,30 +22,6 @@ Examples:
   tmpl-cli note list | cut -f1,3
 
 Exit status: 0 on success, 1 when a command fails, 2 on a usage error.";
-
-const NOTE_EXAMPLES: &str = "\
-Examples:
-  tmpl-cli note add \"Renew passport\" --tag admin
-  tmpl-cli note list --priority high
-  tmpl-cli note show <id>";
-
-const ADD_EXAMPLES: &str = "\
-Examples:
-  tmpl-cli note add \"Buy milk\"
-  tmpl-cli note add \"Draft the report\" --tag work --tag writing --priority high
-  tmpl-cli note add \"Ideas\" --body \"longer text, shown by note show\" --json";
-
-const LIST_EXAMPLES: &str = "\
-Examples:
-  tmpl-cli note list
-  tmpl-cli note list --tag work --limit 10
-  tmpl-cli note list --json | jq '.notes[].title'
-  tmpl-cli note list | wc -l";
-
-const SHOW_EXAMPLES: &str = "\
-Examples:
-  tmpl-cli note show <id>
-  tmpl-cli note show <id> --json";
 
 /// Keep short notes in a local store.
 #[derive(Debug, Parser)]
@@ -110,76 +85,4 @@ impl GlobalArgs {
             self.format
         }
     }
-}
-
-/// Top-level nouns.
-#[derive(Debug, Subcommand)]
-pub(crate) enum Command {
-    /// Add, list and show notes
-    #[command(subcommand, after_help = NOTE_EXAMPLES)]
-    Note(NoteCommand),
-}
-
-/// Verbs on the `note` noun.
-#[derive(Debug, Subcommand)]
-pub(crate) enum NoteCommand {
-    /// Add a note and print it
-    #[command(after_help = ADD_EXAMPLES)]
-    Add(AddArgs),
-    /// List notes, oldest first
-    #[command(after_help = LIST_EXAMPLES)]
-    List(ListArgs),
-    /// Show one note in full, including its body
-    #[command(after_help = SHOW_EXAMPLES)]
-    Show(ShowArgs),
-}
-
-/// Arguments to `note add`.
-#[derive(Debug, Args)]
-pub(crate) struct AddArgs {
-    /// The note's title: one line, at most 200 characters
-    #[arg(value_name = "TITLE")]
-    pub(crate) title: Title,
-
-    /// Longer text, shown by `note show` and in --json output; not blank [default: none]
-    #[arg(long, value_name = "TEXT")]
-    pub(crate) body: Option<Body>,
-
-    /// Label the note; repeat for several (lowercase letters, digits, '-')
-    #[arg(long = "tag", value_name = "TAG", action = ArgAction::Append)]
-    pub(crate) tags: Vec<Tag>,
-
-    /// How much it matters [default: normal]
-    #[arg(long, value_name = "PRIORITY", value_parser = priority_parser())]
-    pub(crate) priority: Option<Priority>,
-}
-
-/// Arguments to `note list`.
-#[derive(Debug, Args)]
-pub(crate) struct ListArgs {
-    /// Only notes with this tag [default: any]
-    #[arg(long, value_name = "TAG")]
-    pub(crate) tag: Option<Tag>,
-
-    /// Only notes at this priority [default: any]
-    #[arg(long, value_name = "PRIORITY", value_parser = priority_parser())]
-    pub(crate) priority: Option<Priority>,
-
-    /// Show at most this many of the matching notes, 1 or more; --json reports the total and whether the list was cut [default: all]
-    #[arg(long, value_name = "N")]
-    pub(crate) limit: Option<NonZeroUsize>,
-}
-
-/// Arguments to `note show`.
-#[derive(Debug, Args)]
-pub(crate) struct ShowArgs {
-    /// The note's id, as printed by `note list`
-    #[arg(value_name = "ID")]
-    pub(crate) id: NoteId,
-}
-
-/// Allowed priorities come from the domain type, so help and parsing cannot
-/// drift from it (STD-01 R25).
-fn priority_parser() -> impl TypedValueParser<Value = Priority> {
-    PossibleValuesParser::new(Priority::NAMES).try_map(|s| s.parse::<Priority>())
 }

@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::fsio::{LockGuard, write_atomic};
+use crate::store::fsio::{LockGuard, write_atomic};
 use std::time::Duration;
 
 #[test]
@@ -51,7 +51,9 @@ mod private_state {
     //! STD-05 R7–R9: owner-only creation, and refusal of links, foreign
     //! owners and loose modes on load.
     use crate::error::Error;
-    use crate::fsio::{LockGuard, create_private_dir, inspect_dir, inspect_file, write_atomic};
+    use crate::store::fsio::{
+        LockGuard, append_private, create_private_dir, inspect_dir, inspect_file, write_atomic,
+    };
     use std::fs::{self, Permissions};
     use std::os::unix::fs::{PermissionsExt, symlink};
     use std::path::Path;
@@ -76,7 +78,7 @@ mod private_state {
 
     #[test]
     fn missing_state_is_absent_not_an_error() {
-        let dir = crate::tests::private_tempdir();
+        let dir = crate::store::tests::private_tempdir();
         assert!(!inspect_dir(&dir.path().join("none")).unwrap());
         assert!(!inspect_file(&dir.path().join("none.json")).unwrap());
         assert!(inspect_dir(dir.path()).unwrap());
@@ -143,6 +145,28 @@ mod private_state {
         let lock = dir.path().join(".lock");
         symlink(&target, &lock).unwrap();
         let err = LockGuard::acquire(&lock, "t", Duration::from_secs(1)).unwrap_err();
+        assert!(matches!(err, Error::Symlink { .. }), "got {err:?}");
+        assert_eq!(fs::read(&target).unwrap(), b"precious");
+    }
+
+    #[test]
+    fn append_private_creates_the_log_owner_only_and_appends_in_order() {
+        let dir = crate::store::tests::private_tempdir();
+        let log = dir.path().join("audit.jsonl");
+        append_private(&log, b"one\n").unwrap();
+        append_private(&log, b"two\n").unwrap();
+        assert_eq!(fs::read(&log).unwrap(), b"one\ntwo\n");
+        assert_eq!(mode(&log), 0o600);
+    }
+
+    #[test]
+    fn append_private_never_follows_a_link() {
+        let dir = crate::store::tests::private_tempdir();
+        let target = dir.path().join("elsewhere");
+        fs::write(&target, b"precious").unwrap();
+        let link = dir.path().join("audit.jsonl");
+        symlink(&target, &link).unwrap();
+        let err = append_private(&link, b"x\n").unwrap_err();
         assert!(matches!(err, Error::Symlink { .. }), "got {err:?}");
         assert_eq!(fs::read(&target).unwrap(), b"precious");
     }

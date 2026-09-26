@@ -91,20 +91,40 @@ ban() {
 CORE=crates/tmpl-cli-core/src
 CLI=crates/tmpl-cli/src
 
-# Contract types are I/O-free leaves (R5).
-ban "$CORE/note.rs"  'std::(fs|net|process)|crate::(store|fsio)' "note.rs holds I/O-free contract types"
+# Core is business logic plus one persistence module (R5). Every core module
+# but store/ is I/O-free and knows nothing of how notes are stored; a new
+# business module is covered as soon as it exists.
+for path in "$CORE"/*; do
+  name=$(basename "$path")
+  case "$name" in store | tests) continue ;; esac
+  ban "$path" 'std::(fs|net|process)|tempfile::|rustix::' "core/$name is business logic: file and process access belong in store/"
+  ban "$path" 'crate::store'                              "core/$name is business logic: it must not depend on persistence"
+done
+# Inside store/: fsio is mechanism with no knowledge of notes, and the format
+# and audit record shapes do no I/O of their own (R4, R5).
+ban "$CORE/store/fsio.rs"   'crate::(note|query|store)|super::'  "store/fsio.rs is mechanism only; it must not know notes or the store"
+ban "$CORE/store/format.rs" 'std::fs|super::fsio'                "store/format.rs converts bytes; it must not do I/O"
+ban "$CORE/store/audit.rs"  'std::fs|super::fsio'                "store/audit.rs is a record shape; it must not do I/O"
 # The domain receives resolved roots and configuration (R3).
 ban "$CORE"          'std::env::|home_dir|current_dir'           "the core crate must not read the environment or discover paths"
-# Composition does not know about parsing or rendering (R2).
-ban "$CLI/app.rs"    'crate::(cli|command|output)'               "app.rs (composition) must not import surface modules"
+# Composition does not know about parsing, dispatch or rendering (R2).
+ban "$CLI/app.rs"    'crate::(cli|commands|output|audit_middleware)' "app.rs (composition) must not import surface modules"
 # Rendering is derived from payloads only; it never reaches back up (R1).
-ban "$CLI/output"    'crate::(app|cli|command)'                  "output must not import app, cli or command"
+ban "$CLI/output"    'crate::(app|cli|commands|audit_middleware)'    "output must not import app, cli, commands or audit_middleware"
+# Dispatch depends on the middleware, never the reverse (R1).
+ban "$CLI/audit_middleware.rs" 'crate::(cli|commands)'           "audit_middleware must not import cli or commands"
 
 # Persisted shapes never fabricate a timestamp on read (R16).
 ban crates 'serde\(default *= *"[A-Za-z_:]*(now|now_utc)"'    "a persisted timestamp must not default to the current time"
 
 # Retired paths stay retired (R17). List a path here when you delete a module.
-for retired in; do
+for retired in \
+  crates/tmpl-cli/src/command.rs \
+  crates/tmpl-cli/src/tests/command.rs \
+  crates/tmpl-cli-core/src/fsio.rs \
+  crates/tmpl-cli-core/src/store.rs \
+  crates/tmpl-cli-core/src/tests/fsio.rs \
+  crates/tmpl-cli-core/src/tests/store.rs; do
   [[ -e "$retired" ]] && err "retired path exists again: $retired"
 done
 

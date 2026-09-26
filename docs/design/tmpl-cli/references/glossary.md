@@ -16,4 +16,5 @@ stdout, exit code) is excluded.
 | **Plain form** | The headerless tab-separated output used when stdout is not a terminal. See [2_design.md §3](../2_design.md). |
 | **Sink** | The per-invocation resolution of output mode, color and width. See [2_design.md §2](../2_design.md). |
 | **List envelope** | The `--json` shape of every list: `{"notes", "total", "truncated"}`. See [specs/output-contract.md](../specs/output-contract.md). |
+| **Audit log** | `<root>/audit.jsonl`: one line per mutating command (what ran, on which note, how it ended), written by the audit middleware. See [2_design.md §5](../2_design.md). |
 | **Store format** | The integer `format` in `notes.json`; a newer one is refused, an older one is upgraded through `UPGRADES`. See [specs/store.md](../specs/store.md). |

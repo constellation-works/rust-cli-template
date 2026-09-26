@@ -7,7 +7,7 @@ status: Draft
 feature: tmpl-cli
 doc_role: decisions
 type: design
-summary: Why two crates, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, how the store format evolves and stays private, and every recorded standard deviation or rule the template does not exercise.
+summary: Why two crates with persistence as one core module, why commands are one module per noun, why mutating commands are audited through one guard, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, how the store format evolves and stays private, and every recorded standard deviation or rule the template does not exercise.
 tags: [tmpl-cli, decisions]
 paths: ["Cargo.toml", "crates/**", "Makefile"]
 related_features: [tmpl-cli]
@@ -35,7 +35,7 @@ edge that must be enforceable", R7's own justification for a split.
 
 ### Decision
 
-Two crates: `tmpl-cli-core` (library; contract types, mechanisms, domain) and
+Two crates: `tmpl-cli-core` (library; business logic and persistence) and
 `tmpl-cli` (binary; composition and surface). Cargo makes clap unreachable
 from the core rather than merely banned, and the core is ready to be consumed
 by a second surface (MCP server, desktop app) without restructuring. Further
@@ -50,6 +50,100 @@ collapse to one crate with STD-02's single-crate check.
 - Cost: two manifests, a `[workspace.dependencies]` table, and a crate
   boundary that forces `pub` on the core's API where one crate would use
   `pub(crate)`.
+
+## Persistence is one module inside the core crate
+
+**Recorded:** 2026-09-26
+**Code anchors:** `crates/tmpl-cli-core/src/store/mod.rs`; `scripts/check-dependency-direction.sh` (the `store | tests` loop)
+
+### Context
+
+A core crate that mixes business rules with file handling becomes hard to
+extend: the rules get tested through a filesystem, and a second backend (a
+database, a remote store) means untangling them first. The obvious fix is
+more crates (types, domain, storage, CLI), but four crates is heavy for a
+starting template, and STD-02@3 §R7 asks a further crate for a build or
+dependency reason the template does not have yet.
+
+### Decision
+
+Keep two crates, and split the core by responsibility inside it. Business
+logic (`note`: types and the next-id rule; `query`: list selection) does no
+I/O and never imports `crate::store`. Everything that touches disk is the
+`store` module: the `Store` facade over private submodules `format`, `audit`
+and `fsio`, declared with `pub(super)` so nothing outside `store` can reach a
+file primitive. The dependency-direction script bans file and process access,
+and `crate::store` imports, in every other core module, including ones added
+later. When persistence earns its own crate (a second backend, or heavy
+dependencies the rules should not compile against), `store/` moves out whole.
+
+### Consequences
+
+- The selection and id rules are unit-tested without a filesystem.
+- Cost: `Store` stays a concrete type, not a trait, so swapping the backend
+  still edits the facade; the module boundary is enforced by visibility and
+  grep, which are weaker than a crate edge.
+
+## Commands are one module per noun
+
+**Recorded:** 2026-09-26
+**Code anchors:** `crates/tmpl-cli/src/commands/mod.rs`, `crates/tmpl-cli/src/commands/note.rs`
+
+### Context
+
+A single `command.rs` dispatching every verb, with every flag in `cli.rs`,
+reads well at three verbs and badly at thirty: each new noun edits both
+files, and the flags sit far from the handlers that use them.
+
+### Decision
+
+`commands/mod.rs` holds the `Command` enum of nouns, the audited-command
+table and `run`, the one chokepoint. Each noun is a module holding its
+subcommand enum, its `Args` structs, help examples and handlers
+(`commands/note.rs`); `cli.rs` keeps only the program root and the global
+flags. A noun that outgrows one file becomes a directory split along its
+verbs, `commands/note/{mod,add,list,show,support}.rs` with `tests/` beside
+them, as Orbit's `command/` tree does. The split follows responsibilities, not
+length (STD-02@3 §R18).
+
+### Consequences
+
+- Adding a noun is one new module plus one variant and one `run` arm.
+- Cost: clap declarations are spread across modules, so the whole command
+  tree is no longer readable in one file; `--help` goldens stay the review
+  surface for it.
+
+## Mutating commands are audited through one guard
+
+**Recorded:** 2026-09-26
+**Code anchors:** `crates/tmpl-cli/src/audit_middleware.rs::AuditGuard`; `crates/tmpl-cli/src/commands/mod.rs::Command::audit`, `::run`
+
+### Context
+
+A store changed by several people, scripts and agents needs an answer to
+"what changed it, and did that work". Logging from each handler repeats the
+rule per verb and misses early returns and panics. Auditing every command
+would make `list` and `show` write, which STD-01@2 §R31 forbids and which
+would break them on a read-only data directory.
+
+### Decision
+
+Orbit's pattern: an RAII `AuditGuard` created at the dispatch chokepoint
+(STD-02@3 §R24), starting in the failure state, told the outcome by
+`mark_result`, writing one JSON line to `<root>/audit.jsonl` on drop.
+`Command::audit` declares per command, with an exhaustive match, whether it
+is audited; read-only commands return `None`. A line holds identifiers only
+(command path, note id, status, stable error code, timing), so no free text
+is persisted and no redactor is needed (STD-05@1 §R13). The log is a side
+channel and fails open with a warning (STD-02@3 §R31). Appends hold the store
+lock, so concurrent commands never interleave lines.
+
+### Consequences
+
+- A panic or early return in a handler is logged as a failure.
+- Cost: every audited command pays a second lock and an `fsync`; a command
+  that cannot write its line still succeeds, so the log can miss entries,
+  and it grows without rotation.
 
 ## --json is the one alias for --format json
 
@@ -105,7 +199,7 @@ is 0. This reads R16's "nothing" as "no records", as Orbit does.
 ## The store lock uses std file locks, not a crate
 
 **Recorded:** 2026-09 · [ORB-13117]
-**Code anchors:** `crates/tmpl-cli-core/src/fsio.rs::LockGuard::acquire`
+**Code anchors:** `crates/tmpl-cli-core/src/store/fsio.rs::LockGuard::acquire`
 
 ### Context
 
@@ -202,7 +296,7 @@ sets, and then it fails.
 ## A list's JSON is an envelope with total and truncated
 
 **Recorded:** 2026-09 · [ORB-13134]
-**Code anchors:** `crates/tmpl-cli/src/output/payload.rs::ListPayload`; `crates/tmpl-cli-core/src/store.rs::NoteList`; `crates/tmpl-cli/src/command.rs::list_notice`
+**Code anchors:** `crates/tmpl-cli/src/output/payload.rs::ListPayload`; `crates/tmpl-cli-core/src/query.rs::NoteList`; `crates/tmpl-cli/src/commands/note.rs::list_notice`
 
 ### Context
 
@@ -230,7 +324,7 @@ matching notes` on stderr in every mode. `--limit` must be at least 1.
 ## add names what it wrote on stderr
 
 **Recorded:** 2026-09 · [ORB-13134]
-**Code anchors:** `crates/tmpl-cli/src/command.rs::add`
+**Code anchors:** `crates/tmpl-cli/src/commands/note.rs::add`
 
 ### Context
 
@@ -255,7 +349,7 @@ Errors that depend on the data directory name the store file too
 ## Store format upgrades are an append-only registry
 
 **Recorded:** 2026-09 · [ORB-13134]
-**Code anchors:** `crates/tmpl-cli-core/src/store.rs::UPGRADES`, `::FORMAT`
+**Code anchors:** `crates/tmpl-cli-core/src/store/format.rs::UPGRADES`, `::FORMAT`
 
 ### Context
 
@@ -286,7 +380,7 @@ registry ships empty.
 ## Store state is owner-only and checked on every load
 
 **Recorded:** 2026-09 · [ORB-13134]
-**Code anchors:** `crates/tmpl-cli-core/src/fsio.rs::create_private_dir`, `::inspect_dir`, `::inspect_file`, `::LockGuard::acquire`
+**Code anchors:** `crates/tmpl-cli-core/src/store/fsio.rs::create_private_dir`, `::inspect_dir`, `::inspect_file`, `::LockGuard::acquire`
 
 ### Context
 
@@ -323,7 +417,7 @@ for Windows, which would need ACLs).
 ## One malformed note makes the store corrupt
 
 **Recorded:** 2026-09 · [ORB-13134]
-**Code anchors:** `crates/tmpl-cli-core/src/store.rs::Store::load`
+**Code anchors:** `crates/tmpl-cli-core/src/store/mod.rs::Store::load`, `crates/tmpl-cli-core/src/store/format.rs::decode`
 
 ### Context
 
@@ -406,7 +500,7 @@ refused as usage errors naming the flag.
 
 ### Context
 
-The template adopts STD-01@2, STD-02@2, STD-03@2, STD-04@1 and STD-05@1.
+The template adopts STD-01@2, STD-02@3, STD-03@2, STD-04@1 and STD-05@1.
 Some of their rules govern things a three-verb note CLI does not do. A
 project grown from the template must not read their absence as a waiver.
 
@@ -417,7 +511,7 @@ govern. Each binds as soon as it does, and this entry is edited then:
 
 - No destructive verb, prompt, removed flag or default filter: STD-01@2 §R5,
   §R27, §R35 (and §R33's default-filter clause).
-- No agent or script hand-off, no recovery path: STD-02@2 §R25, §R33.
+- No agent or script hand-off, no recovery path: STD-02@3 §R25, §R33.
 - No async code, channels or nested locks: STD-03@2 §R1–§R3. One store file,
   so no multi-store commit or replay: §R8, §R9.
 - No spawned or detached processes in the product: STD-03@2 §R11–§R16 and
@@ -431,9 +525,10 @@ govern. Each binds as soon as it does, and this entry is edited then:
 - No authorization, plugins, credentials, listeners, consent or tokens:
   STD-05@1 §R1–§R5, §R15–§R19, §R21, §R22, §R25. The binary makes no
   network request at all (§R20).
-- No persisted logs or captured output: the only stored text is note content
-  the caller asked to store, kept verbatim, so there is no redaction layer
-  (STD-05@1 §R13, §R14).
+- No persisted free text besides note content the caller asked to store,
+  kept verbatim, so there is no redaction layer (STD-05@1 §R13, §R14). The
+  audit log persists identifiers and stable codes only; a unit test pins its
+  fields, and adding a free-text field to it brings §R13 into force.
 
 ### Consequences
 

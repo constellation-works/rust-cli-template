@@ -7,7 +7,7 @@
 //!
 //! The serde shapes double as the persisted format (STD-02 R16): never rename
 //! or retype a field, and give a new one a default. Any change to the shape
-//! also bumps the store format with an upgrade step (`store.rs::UPGRADES`).
+//! also bumps the store format with an upgrade step (`store/format.rs::UPGRADES`).
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -58,9 +58,20 @@ impl NoteId {
         self.0
     }
 
+    /// The id to assign to a note added after `notes`: one past the highest,
+    /// or [`NoteId::FIRST`] when there are none. A business rule, so it lives
+    /// here, not in the store that persists the result.
+    pub(crate) fn next_after(notes: &[Note]) -> Self {
+        notes
+            .iter()
+            .map(|n| n.id)
+            .max()
+            .map_or(Self::FIRST, Self::next)
+    }
+
     /// The id after this one. Saturates rather than wrapping: a store would
     /// need 2^64 notes to reach it.
-    pub(crate) fn next(self) -> Self {
+    fn next(self) -> Self {
         Self(self.0.saturating_add(1))
     }
 }

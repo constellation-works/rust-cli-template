@@ -266,6 +266,54 @@ fn add_names_the_record_and_the_file_it_wrote() {
     );
 }
 
+fn audit_lines(fx: &Fixture) -> Vec<serde_json::Value> {
+    std::fs::read_to_string(fx.root().join("audit.jsonl"))
+        .unwrap_or_default()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect()
+}
+
+#[test]
+fn each_add_writes_one_audit_line_and_reads_write_none() {
+    // The audit middleware covers mutating commands only (STD-01 R31).
+    let fx = Fixture::new();
+    fx.ok(&["note", "list"]);
+    assert!(!fx.root().exists(), "a read created the data directory");
+    fx.ok(&["note", "add", "Private words", "--tag", "home"]);
+    fx.ok(&["note", "list", "--json"]);
+    fx.ok(&["note", "show", "1"]);
+    let lines = audit_lines(&fx);
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    assert_eq!(lines[0]["command"], "note add");
+    assert_eq!(lines[0]["status"], "success");
+    assert_eq!(lines[0]["target"], "1");
+    // STD-05 R13: argument values never reach the log.
+    let raw = std::fs::read_to_string(fx.root().join("audit.jsonl")).unwrap();
+    assert!(
+        !raw.contains("Private words") && !raw.contains("home"),
+        "{raw}"
+    );
+}
+
+#[test]
+fn a_refused_add_is_audited_as_a_failure_with_its_code() {
+    let fx = Fixture::new();
+    fx.ok(&["note", "add", "x"]);
+    std::fs::write(fx.root().join("notes.json"), b"not json").unwrap();
+    let out = fx.run(&["note", "add", "y"]);
+    assert_eq!(out.status.code(), Some(1));
+    let lines = audit_lines(&fx);
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert_eq!(lines[1]["status"], "failure");
+    assert_eq!(lines[1]["error_code"], "store_corrupt");
+    assert!(
+        !text(&out.stderr).contains("audit"),
+        "a written audit line is silent: {}",
+        text(&out.stderr)
+    );
+}
+
 #[test]
 fn a_blank_body_is_refused_by_name_and_nothing_is_written() {
     // STD-01 R29: never silently dropped; the offending flag is named.

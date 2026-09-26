@@ -12,6 +12,8 @@
 //!   holder dies, so a crash cannot wedge the store the way a create-if-absent
 //!   lock file would. Rust opens files close-on-exec, so a child process never
 //!   inherits it. Acquisition has a deadline, and a timeout names the holder.
+//! - [`append_private`] adds one record to a log in a single `write` and
+//!   `fsync`s it; the caller holds the lock, so records never interleave.
 //! - [`create_private_dir`], [`inspect_dir`] and [`inspect_file`] keep store
 //!   state owner-only: created `0700`/`0600` explicitly, and refused on load
 //!   when it is a symbolic link, another user's, or writable by others. These
@@ -40,7 +42,7 @@ const PRIVATE_DIR_MODE: u32 = 0o700;
 const PRIVATE_FILE_MODE: u32 = 0o600;
 
 /// Replace `path` with `bytes` atomically and durably. The file is `0600`.
-pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
+pub(super) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     let parent = parent_dir(path);
     // Same directory as the target, so the rename cannot cross filesystems.
     // tempfile creates the file 0600 on unix and the rename keeps that mode.
@@ -54,6 +56,27 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
         .persist(path)
         .map_err(|e| Error::io("replace", path, e.error))?;
     sync_dir(parent)
+}
+
+/// Append `bytes` to `path` in one write and `fsync` it, creating the file
+/// `0600` if it is missing. An existing file is checked like any store file
+/// first, so a link is refused, not followed (STD-05 R7), and a new file's
+/// directory entry is synced too.
+pub(super) fn append_private(path: &Path, bytes: &[u8]) -> Result<()> {
+    let existed = inspect_file(path)?;
+    let mut options = OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, PRIVATE_FILE_MODE);
+    let mut file = options.open(path).map_err(|e| Error::io("open", path, e))?;
+    file.write_all(bytes)
+        .and_then(|()| file.sync_data())
+        .map_err(|e| Error::io("append to", path, e))?;
+    if existed {
+        Ok(())
+    } else {
+        sync_dir(parent_dir(path))
+    }
 }
 
 /// `fsync` a directory so a rename inside it survives a crash. Windows cannot
@@ -77,7 +100,7 @@ fn parent_dir(path: &Path) -> &Path {
 }
 
 /// Create `dir` and any missing parents, each `0700`.
-pub(crate) fn create_private_dir(dir: &Path) -> Result<()> {
+pub(super) fn create_private_dir(dir: &Path) -> Result<()> {
     let mut builder = fs::DirBuilder::new();
     builder.recursive(true);
     #[cfg(unix)]
@@ -91,7 +114,7 @@ pub(crate) fn create_private_dir(dir: &Path) -> Result<()> {
 ///
 /// The directory is followed if it is a link: the operator may name the data
 /// directory through one, and what is checked is the directory itself.
-pub(crate) fn inspect_dir(dir: &Path) -> Result<bool> {
+pub(super) fn inspect_dir(dir: &Path) -> Result<bool> {
     match fs::metadata(dir) {
         Ok(meta) => check_owner_and_mode(dir, &meta, "700").map(|()| true),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
@@ -101,7 +124,7 @@ pub(crate) fn inspect_dir(dir: &Path) -> Result<bool> {
 
 /// Check an existing store file; `Ok(false)` when it does not exist. A file
 /// reached through a symbolic link is refused, not followed.
-pub(crate) fn inspect_file(path: &Path) -> Result<bool> {
+pub(super) fn inspect_file(path: &Path) -> Result<bool> {
     let meta = match fs::symlink_metadata(path) {
         Ok(meta) => meta,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(false),
@@ -154,7 +177,7 @@ fn check_owner_and_mode(_path: &Path, _meta: &Metadata, _fix: &'static str) -> R
 /// holds the old one.
 #[must_use = "the lock is released as soon as the guard is dropped"]
 #[derive(Debug)]
-pub(crate) struct LockGuard {
+pub(super) struct LockGuard {
     file: File,
     path: PathBuf,
 }
@@ -164,7 +187,7 @@ impl LockGuard {
     ///
     /// `label` says what the holder is doing; it is recorded with the pid and
     /// time so a writer that times out can say who is in the way.
-    pub(crate) fn acquire(path: &Path, label: &str, wait: Duration) -> Result<Self> {
+    pub(super) fn acquire(path: &Path, label: &str, wait: Duration) -> Result<Self> {
         // Never create or truncate through a link (STD-05 R7).
         match fs::symlink_metadata(path) {
             Ok(meta) => refuse_symlink(path, &meta)?,
