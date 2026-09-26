@@ -1,0 +1,19 @@
+Show one note in full, including its body
+
+Usage: tmpl-cli note show [OPTIONS] <ID>
+
+Arguments:
+  <ID>  The note's id, as printed by `note list`
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+
+Global options:
+      --root <DIR>       Data directory [default: $TMPL_CLI_ROOT, else ~/.tmpl-cli]
+      --format <FORMAT>  Output format; auto is a table on a terminal, tab-separated lines otherwise, and json is one JSON document [default: $TMPL_CLI_FORMAT, else auto] [possible values: auto, table, json]
+      --json             Shorthand for --format json
+
+Examples:
+  tmpl-cli note show <id>
+  tmpl-cli note show <id> --json

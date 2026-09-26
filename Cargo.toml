@@ -1,0 +1,63 @@
+[workspace]
+resolver = "3"
+# Two crates, and why two: docs/design/tmpl-cli/4_decisions.md
+# ("A domain library crate and a CLI crate"). A new member needs a policy entry
+# in scripts/check-dependency-direction.sh and a row in ARCHITECTURE.md.
+members = [
+    "crates/tmpl-cli-core",
+    "crates/tmpl-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+# 1.89 stabilized `File::lock`/`File::try_lock`, which the store's advisory
+# lock uses instead of a third-party crate.
+rust-version = "1.89"
+license = "MIT"
+repository = "https://github.com/constellation-works/tmpl-cli"
+
+[workspace.dependencies]
+tmpl-cli-core = { path = "crates/tmpl-cli-core" }
+# No `color` or `wrap_help`: both make clap query the terminal itself, and the
+# output sink is the only place allowed to do that (STD-01 R17). Help is plain
+# text everywhere, which also keeps the help goldens byte-stable.
+clap = { version = "4", default-features = false, features = ["std", "derive", "help", "usage", "error-context", "suggestions"] }
+# Unix only: the process's effective uid, for the store ownership check
+# (STD-05 R9). std has no safe `geteuid`; tempfile already builds rustix.
+rustix = { version = "1", default-features = false, features = ["std", "process"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+thiserror = "2"
+time = { version = "0.3", features = ["formatting", "parsing", "serde"] }
+tracing = "0.1"
+# No `ansi`: log lines go to stderr as plain text in every mode.
+tracing-subscriber = { version = "0.3", default-features = false, features = ["std", "fmt", "env-filter"] }
+
+[profile.release]
+strip = true
+
+# STD-02 lint baseline, verbatim from the standard. Do not trim it; add to it.
+# Workspace-wide lint config. Each crate opts in via `[lints] workspace = true`.
+# Keep this list short — only rules that are mechanically true everywhere.
+[workspace.lints.clippy]
+await_holding_lock = "deny"
+dbg_macro = "deny"
+expect_used = "warn"
+print_stderr = "warn"
+print_stdout = "warn"
+unwrap_used = "warn"
+
+# Adoptable additions beyond the baseline (STD-02 "Adoptable additions").
+# STD-02 R27: no wildcard arm on an enum match; a foreign enum that needs one
+# gets a scoped #[allow] with its reason.
+wildcard_enum_match_arm = "warn"
+match_wildcard_for_single_variants = "warn"
+# STD-02 R28: narrowing `as` casts must be checked conversions.
+cast_possible_truncation = "warn"
+cast_sign_loss = "warn"
+cast_possible_wrap = "warn"
+
+[workspace.lints.rust]
+missing_docs = "warn"

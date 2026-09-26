@@ -1,0 +1,23 @@
+Add, list and show notes
+
+Usage: tmpl-cli note [OPTIONS] <COMMAND>
+
+Commands:
+  add   Add a note and print it
+  list  List notes, oldest first
+  show  Show one note in full, including its body
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+
+Global options:
+      --root <DIR>       Data directory [default: $TMPL_CLI_ROOT, else ~/.tmpl-cli]
+      --format <FORMAT>  Output format; auto is a table on a terminal, tab-separated lines otherwise, and json is one JSON document [default: $TMPL_CLI_FORMAT, else auto] [possible values: auto, table, json]
+      --json             Shorthand for --format json
+
+Examples:
+  tmpl-cli note add "Renew passport" --tag admin
+  tmpl-cli note list --priority high
+  tmpl-cli note show <id>

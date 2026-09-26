@@ -1,0 +1,23 @@
+Add a note and print it
+
+Usage: tmpl-cli note add [OPTIONS] <TITLE>
+
+Arguments:
+  <TITLE>  The note's title: one line, at most 200 characters
+
+Options:
+      --body <TEXT>          Longer text, shown by `note show` and in --json output; not blank [default: none]
+      --tag <TAG>            Label the note; repeat for several (lowercase letters, digits, '-')
+      --priority <PRIORITY>  How much it matters [default: normal] [possible values: low, normal, high]
+  -h, --help                 Print help
+  -V, --version              Print version
+
+Global options:
+      --root <DIR>       Data directory [default: $TMPL_CLI_ROOT, else ~/.tmpl-cli]
+      --format <FORMAT>  Output format; auto is a table on a terminal, tab-separated lines otherwise, and json is one JSON document [default: $TMPL_CLI_FORMAT, else auto] [possible values: auto, table, json]
+      --json             Shorthand for --format json
+
+Examples:
+  tmpl-cli note add "Buy milk"
+  tmpl-cli note add "Draft the report" --tag work --tag writing --priority high
+  tmpl-cli note add "Ideas" --body "longer text, shown by note show" --json

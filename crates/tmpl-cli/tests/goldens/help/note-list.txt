@@ -1,0 +1,21 @@
+List notes, oldest first
+
+Usage: tmpl-cli note list [OPTIONS]
+
+Options:
+      --tag <TAG>            Only notes with this tag [default: any]
+      --priority <PRIORITY>  Only notes at this priority [default: any] [possible values: low, normal, high]
+      --limit <N>            Show at most this many of the matching notes, 1 or more; --json reports the total and whether the list was cut [default: all]
+  -h, --help                 Print help
+  -V, --version              Print version
+
+Global options:
+      --root <DIR>       Data directory [default: $TMPL_CLI_ROOT, else ~/.tmpl-cli]
+      --format <FORMAT>  Output format; auto is a table on a terminal, tab-separated lines otherwise, and json is one JSON document [default: $TMPL_CLI_FORMAT, else auto] [possible values: auto, table, json]
+      --json             Shorthand for --format json
+
+Examples:
+  tmpl-cli note list
+  tmpl-cli note list --tag work --limit 10
+  tmpl-cli note list --json | jq '.notes[].title'
+  tmpl-cli note list | wc -l

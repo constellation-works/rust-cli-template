@@ -1,0 +1,30 @@
+[package]
+name = "tmpl-cli"
+description = "Keep short notes in a local store."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "tmpl-cli"
+path = "src/main.rs"
+
+[dependencies]
+tmpl-cli-core = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+time = { workspace = true, features = ["macros"] }
+
+[lints]
+workspace = true
