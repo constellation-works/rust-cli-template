@@ -183,6 +183,9 @@ pub fn write_store(root: &Path, count: usize) {
             serde_json::json!({
                 "id": id,
                 "title": format!("note number {id} with a title long enough to fill the pipe quickly"),
+                "body": serde_json::Value::Null,
+                "tags": [],
+                "priority": "normal",
                 "created_at": "2026-01-02T03:04:05Z",
             })
         })

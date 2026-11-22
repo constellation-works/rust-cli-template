@@ -81,7 +81,8 @@ pub(crate) fn note_detail(out: &mut dyn Write, sink: &Sink, note: &NotePayload) 
             let body = note
                 .body
                 .as_deref()
-                .unwrap_or("-")
+                .map(sanitize_for_display)
+                .unwrap_or_else(|| String::from("-"))
                 .replace('\n', "\n          ");
             writeln!(out, "id        {}", note.id)?;
             writeln!(out, "title     {}", note.title)?;
@@ -91,6 +92,26 @@ pub(crate) fn note_detail(out: &mut dyn Write, sink: &Sink, note: &NotePayload) 
             writeln!(out, "body      {body}")
         }
     }
+}
+
+/// Neutralize control characters other than newline and tab so terminal
+/// escape sequences and carriage returns cannot reach stdout raw.
+fn sanitize_for_display(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\r' && chars.peek() == Some(&'\n') {
+            continue;
+        }
+        if c == '\n' || c == '\t' || !c.is_control() {
+            out.push(c);
+        } else {
+            for escaped in c.escape_default() {
+                out.push(escaped);
+            }
+        }
+    }
+    out
 }
 
 fn list_row(note: &NotePayload) -> Vec<Cell> {

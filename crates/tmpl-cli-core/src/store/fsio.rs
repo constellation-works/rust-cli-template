@@ -257,8 +257,40 @@ fn read_holder(file: &mut File) -> String {
     let read = file
         .seek(SeekFrom::Start(0))
         .and_then(|_| file.read_to_string(&mut text));
-    match read {
-        Ok(_) if !text.trim().is_empty() => text.trim().to_owned(),
-        Ok(_) | Err(_) => String::from("an unknown process"),
+    let Ok(_) = read else {
+        return String::from("an unknown process");
+    };
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return String::from("an unknown process");
     }
+    match parse_holder_pid(trimmed) {
+        Some(pid) if pid_is_alive(pid) => trimmed.to_owned(),
+        Some(_) | None => String::from("an unknown process"),
+    }
+}
+
+fn parse_holder_pid(text: &str) -> Option<u32> {
+    let rest = text.strip_prefix("pid ")?;
+    let digits = rest.split_whitespace().next()?;
+    digits.parse::<u32>().ok()
+}
+
+#[cfg(unix)]
+fn pid_is_alive(pid: u32) -> bool {
+    let Ok(raw) = i32::try_from(pid) else {
+        return false;
+    };
+    let Some(pid) = rustix::process::Pid::from_raw(raw) else {
+        return false;
+    };
+    match rustix::process::test_kill_process(pid) {
+        Ok(()) | Err(rustix::io::Errno::PERM) => true,
+        Err(_) => false,
+    }
+}
+
+#[cfg(not(unix))]
+fn pid_is_alive(_pid: u32) -> bool {
+    true
 }

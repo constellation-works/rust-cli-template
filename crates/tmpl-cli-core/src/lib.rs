@@ -25,10 +25,10 @@ mod note;
 mod query;
 mod store;
 
-pub use error::{Error, Result};
+pub use error::{BadRecord, BadRecordReason, Error, RecordLocator, Result};
 pub use note::{Body, NewNote, Note, NoteError, NoteId, Priority, Tag, Title};
 pub use query::{ListFilter, NoteList};
-pub use store::{AUDIT_FILE, AuditEvent, AuditStatus, DEFAULT_LOCK_WAIT, STORE_FILE, Store};
+pub use store::{AuditEvent, AuditStatus, Loaded, STORE_FILE, Store};
 
 #[cfg(test)]
 mod tests;

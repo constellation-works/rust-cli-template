@@ -39,6 +39,7 @@ fn added_note(store: &Store) -> Output {
     Output::Note {
         note: NotePayload::from(&note),
         notice: None,
+        warnings: Vec::new(),
     }
 }
 
@@ -47,13 +48,14 @@ fn an_unmarked_guard_records_a_failure() {
     // A command that returned early or panicked never reads as success.
     let dir = private_tempdir();
     let store = Store::open(dir.path());
-    let guard = AuditGuard::start(&store, ADD, datetime!(2026-09-26 12:00:00 UTC));
+    let guard = AuditGuard::start(&store, ADD, datetime!(2026-09-26 12:00:00 UTC), None);
     assert_eq!(guard.event().status, AuditStatus::Failure);
     drop(guard);
     let lines = lines(&store);
     assert_eq!(lines.len(), 1);
     assert_eq!(lines[0]["status"], "failure");
     assert_eq!(lines[0]["command"], "note add");
+    assert_eq!(lines[0]["actor"], serde_json::Value::Null);
     assert_eq!(lines[0]["error_code"], serde_json::Value::Null);
 }
 
@@ -62,11 +64,17 @@ fn a_success_records_the_note_it_acted_on_and_nothing_it_contained() {
     let dir = private_tempdir();
     let store = Store::open(dir.path());
     let output = added_note(&store);
-    let mut guard = AuditGuard::start(&store, ADD, datetime!(2026-09-26 12:00:00 UTC));
+    let mut guard = AuditGuard::start(
+        &store,
+        ADD,
+        datetime!(2026-09-26 12:00:00 UTC),
+        Some(String::from("alice")),
+    );
     guard.mark_result(&Ok(output));
     drop(guard);
     let lines = lines(&store);
     assert_eq!(lines[0]["status"], "success");
+    assert_eq!(lines[0]["actor"], "alice");
     assert_eq!(lines[0]["target"], "1");
     assert_eq!(lines[0]["at"], "2026-09-26T12:00:00Z");
     // STD-05 R13: no argument values in the log.
@@ -80,7 +88,7 @@ fn a_failure_records_the_stable_code_never_the_message() {
     let store = Store::open(dir.path());
     let err = CliError::Core(store.show("9".parse().unwrap()).unwrap_err());
     let message = err.to_string();
-    let mut guard = AuditGuard::start(&store, ADD, datetime!(2026-09-26 12:00:00 UTC));
+    let mut guard = AuditGuard::start(&store, ADD, datetime!(2026-09-26 12:00:00 UTC), None);
     guard.mark_result(&Err(err));
     drop(guard);
     let lines = lines(&store);
@@ -99,7 +107,7 @@ fn an_unwritable_audit_log_fails_open() {
     let file = dir.path().join("not-a-dir");
     std::fs::write(&file, b"").unwrap();
     let store = Store::open(PathBuf::from(&file));
-    let mut guard = AuditGuard::start(&store, ADD, datetime!(2026-09-26 12:00:00 UTC));
+    let mut guard = AuditGuard::start(&store, ADD, datetime!(2026-09-26 12:00:00 UTC), None);
     guard.mark_result(&Err(CliError::NoDataDir));
     drop(guard);
     assert_eq!(std::fs::read(&file).unwrap(), b"");

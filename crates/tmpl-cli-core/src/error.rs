@@ -5,9 +5,65 @@
 //! cause stays on [`std::error::Error::source`], so a surface can print the
 //! whole chain once without repeating it.
 
-use crate::note::NoteId;
+use crate::note::{NoteError, NoteId};
+use std::fmt;
 use std::io;
 use std::path::PathBuf;
+
+/// Where a bad record sits in the store file: its note id when readable,
+/// otherwise its 1-based line number in the file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RecordLocator {
+    /// The record had a readable note id.
+    Id(NoteId),
+    /// The record's id itself was missing or unreadable; identified by its
+    /// 1-based line number in the store file.
+    Line(usize),
+}
+
+impl fmt::Display for RecordLocator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Id(id) => write!(f, "note {id}"),
+            Self::Line(line) => write!(f, "line {line}"),
+        }
+    }
+}
+
+/// Why a stored note record failed validation.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum BadRecordReason {
+    /// The note entry was not a JSON object.
+    #[error("expected a JSON object")]
+    NotAnObject,
+    /// A required field was absent from the stored note.
+    #[error("missing required field '{0}'")]
+    MissingField(&'static str),
+    /// A field had the wrong JSON type or an unparseable value.
+    #[error("invalid field '{field}': {detail}")]
+    InvalidField {
+        /// The offending field name.
+        field: &'static str,
+        /// What was wrong with its value.
+        detail: String,
+    },
+    /// A domain validation rule rejected a field value.
+    #[error(transparent)]
+    Validation(#[from] NoteError),
+}
+
+/// One invalid note record isolated while loading a store (STD-02 R32).
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("bad record at {locator} in {}: {reason}", path.display())]
+pub struct BadRecord {
+    /// The store file holding the record.
+    pub path: PathBuf,
+    /// The record's id, or its 1-based line number when the id is unreadable.
+    pub locator: RecordLocator,
+    /// Why the record was rejected.
+    pub reason: BadRecordReason,
+}
 
 /// Everything a [`crate::Store`] operation can fail with.
 ///
@@ -37,6 +93,15 @@ pub enum Error {
         #[source]
         source: io::Error,
     },
+    /// Serializing a store document or audit event failed before any file was touched.
+    #[error("cannot encode {what}")]
+    Encode {
+        /// What was being serialized.
+        what: &'static str,
+        /// What the serializer rejected.
+        #[source]
+        source: serde_json::Error,
+    },
     /// The store file exists but is not a store this build can parse.
     #[error("{} is not a valid store file", path.display())]
     Corrupt {
@@ -45,6 +110,27 @@ pub enum Error {
         /// What the parser rejected.
         #[source]
         source: serde_json::Error,
+    },
+    /// One or more note records in the store failed validation.
+    #[error(transparent)]
+    BadRecord(#[from] BadRecord),
+    /// Two notes in the store share the same id.
+    #[error("{} contains duplicate note id {id}", path.display())]
+    DuplicateId {
+        /// The store file.
+        path: PathBuf,
+        /// The repeated id.
+        id: NoteId,
+    },
+    /// The store already holds the largest possible note id (`u64::MAX`).
+    #[error(
+        "{} cannot allocate another note id: the maximum id ({}) is already in use",
+        path.display(),
+        u64::MAX
+    )]
+    IdExhausted {
+        /// The store file.
+        path: PathBuf,
     },
     /// The store was written by a newer build (STD-03 R10: refuse, never
     /// rewrite or reinterpret newer state).
@@ -119,7 +205,11 @@ impl Error {
         match self {
             Self::NotFound { .. } => "note_not_found",
             Self::Io { .. } => "io_error",
+            Self::Encode { .. } => "encode_error",
             Self::Corrupt { .. } => "store_corrupt",
+            Self::BadRecord(_) => "store_bad_record",
+            Self::DuplicateId { .. } => "store_duplicate_id",
+            Self::IdExhausted { .. } => "note_id_exhausted",
             Self::NewerFormat { .. } => "store_too_new",
             Self::Locked { .. } => "store_locked",
             Self::Symlink { .. } => "store_symlink",

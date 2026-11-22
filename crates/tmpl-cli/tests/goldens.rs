@@ -12,14 +12,6 @@ mod support;
 use std::path::PathBuf;
 use support::{Fixture, redact_timestamps, text};
 
-const HELP: &[(&str, &[&str])] = &[
-    ("root", &["--help"]),
-    ("note", &["note", "--help"]),
-    ("note-add", &["note", "add", "--help"]),
-    ("note-list", &["note", "list", "--help"]),
-    ("note-show", &["note", "show", "--help"]),
-];
-
 const OUTPUT: &[(&str, &[&str])] = &[
     ("note-list.plain.txt", &["note", "list"]),
     (
@@ -47,7 +39,7 @@ fn updating() -> bool {
 
 /// Compare `actual` to the golden at `rel`, or rewrite it when updating.
 /// Returns a failure description instead of panicking so one run reports
-/// every stale golden at once.
+/// every stale or missing golden at once.
 fn check(rel: &str, actual: &str) -> Option<String> {
     let path = golden_dir().join(rel);
     if updating() {
@@ -55,7 +47,12 @@ fn check(rel: &str, actual: &str) -> Option<String> {
         std::fs::write(&path, actual).unwrap();
         return None;
     }
-    let expected = std::fs::read_to_string(&path).unwrap_or_default();
+    let Ok(expected) = std::fs::read_to_string(&path) else {
+        return Some(format!(
+            "missing golden {rel} ({})\n--- actual\n{actual}",
+            path.display()
+        ));
+    };
     (expected != actual).then(|| {
         format!(
             "golden {rel} differs\n--- expected ({})\n{expected}\n--- actual\n{actual}",
@@ -75,10 +72,20 @@ fn report(failures: &[String]) {
 #[test]
 fn help_matches_goldens() {
     let fx = Fixture::new();
-    let failures: Vec<String> = HELP
+    let commands = tmpl_cli::every_command();
+    assert!(!commands.is_empty(), "every_command() returned no commands");
+    let failures: Vec<String> = commands
         .iter()
-        .filter_map(|(name, args)| {
-            let out = fx.ok(args);
+        .filter_map(|(path, _cmd)| {
+            let subcommands: Vec<&str> = path.split_whitespace().skip(1).collect();
+            let name = if subcommands.is_empty() {
+                String::from("root")
+            } else {
+                subcommands.join("-")
+            };
+            let mut args = subcommands;
+            args.push("--help");
+            let out = fx.ok(&args);
             check(&format!("help/{name}.txt"), &text(&out.stdout))
         })
         .collect();

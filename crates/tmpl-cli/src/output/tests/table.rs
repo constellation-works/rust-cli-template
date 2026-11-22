@@ -86,3 +86,19 @@ fn truncate_keeps_short_text_and_marks_cut_text() {
     assert_eq!(truncate("abc", 3), "abc");
     assert_eq!(truncate("abcdef", 4), "abc…");
 }
+
+#[test]
+fn cjk_cells_align_by_display_width() {
+    let rows = [row("1", "日本語", "a"), row("2", "abcdef", "b")];
+    let text = render(&COLUMNS, &rows, None, false);
+    assert_eq!(
+        text,
+        "ID  TITLE   TAGS\n \
+         1  日本語  a\n \
+         2  abcdef  b\n"
+    );
+
+    // Truncation also respects display width (wide char = 2 columns, ellipsis = 1).
+    assert_eq!(truncate("日本語テスト", 5), "日本…");
+    assert_eq!(truncate("日本語テスト", 6), "日本…");
+}

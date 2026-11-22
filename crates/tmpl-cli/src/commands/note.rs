@@ -67,7 +67,7 @@ pub(crate) struct AddArgs {
     #[arg(long, value_name = "TEXT")]
     pub(crate) body: Option<Body>,
 
-    /// Label the note; repeat for several (lowercase letters, digits, '-')
+    /// Label the note; repeat for several (lowercase letters, digits, '-') [default: none]
     #[arg(long = "tag", value_name = "TAG", action = ArgAction::Append)]
     pub(crate) tags: Vec<Tag>,
 
@@ -142,6 +142,7 @@ fn add(args: AddArgs, ctx: &Context) -> Result<Output, CliError> {
     Ok(Output::Note {
         note: NotePayload::from(&note),
         notice: Some(notice),
+        warnings: Vec::new(),
     })
 }
 
@@ -151,19 +152,24 @@ fn list(args: ListArgs, ctx: &Context) -> Result<Output, CliError> {
         priority: args.priority,
         limit: args.limit,
     };
-    let listed = ctx.store().list(&filter)?;
+    let loaded = ctx.store().list(&filter)?;
+    let listed = loaded.value;
+    let warnings = loaded.bad_records.iter().map(ToString::to_string).collect();
     Ok(Output::Notes {
         notes: listed.notes.iter().map(NotePayload::from).collect(),
         total: listed.total,
         notice: list_notice(&filter, &listed),
+        warnings,
     })
 }
 
 fn show(args: &ShowArgs, ctx: &Context) -> Result<Output, CliError> {
-    let note = ctx.store().show(args.id)?;
+    let loaded = ctx.store().show(args.id)?;
+    let warnings = loaded.bad_records.iter().map(ToString::to_string).collect();
     Ok(Output::Note {
-        note: NotePayload::from(&note),
+        note: NotePayload::from(&loaded.value),
         notice: None,
+        warnings,
     })
 }
 

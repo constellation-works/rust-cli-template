@@ -7,7 +7,10 @@ use std::path::Path;
 use std::sync::Arc;
 use time::OffsetDateTime;
 use time::macros::datetime;
-use tmpl_cli_core::{Error, ListFilter, NewNote, NoteId, Priority, STORE_FILE, Store, Tag};
+use tmpl_cli_core::{
+    BadRecordReason, Error, ListFilter, NewNote, NoteId, Priority, RecordLocator, STORE_FILE,
+    Store, Tag,
+};
 
 const NOW: OffsetDateTime = datetime!(2026-01-02 03:04:05 UTC);
 
@@ -53,8 +56,9 @@ fn a_missing_store_lists_nothing_and_creates_nothing() {
     let root = dir.path().join("data");
     let store = Store::open(&root);
     let listed = store.list(&ListFilter::default()).unwrap();
-    assert!(listed.notes.is_empty());
-    assert_eq!(listed.total, 0);
+    assert!(listed.value.notes.is_empty());
+    assert_eq!(listed.value.total, 0);
+    assert!(listed.bad_records.is_empty());
     assert!(!root.exists(), "reads must not create the data directory");
 }
 
@@ -70,8 +74,8 @@ fn add_assigns_sequential_ids_and_show_finds_them() {
         .unwrap();
     assert_eq!(first.id.get(), 1);
     assert_eq!(second.id.get(), 2);
-    assert_eq!(store.show(second.id).unwrap(), second);
-    assert_eq!(store.show(first.id).unwrap().created_at, NOW);
+    assert_eq!(store.show(second.id).unwrap().value, second);
+    assert_eq!(store.show(first.id).unwrap().value.created_at, NOW);
 }
 
 #[test]
@@ -109,6 +113,7 @@ fn list_filters_before_the_limit_and_reports_the_total() {
         store
             .list(&filter)
             .unwrap()
+            .value
             .notes
             .into_iter()
             .map(|n| n.title.as_str().to_owned())
@@ -152,9 +157,10 @@ fn list_filters_before_the_limit_and_reports_the_total() {
             limit: limit(2),
             ..ListFilter::default()
         })
-        .unwrap();
+        .unwrap()
+        .value;
     assert_eq!((cut.notes.len(), cut.total, cut.truncated()), (2, 3, true));
-    let whole = store.list(&ListFilter::default()).unwrap();
+    let whole = store.list(&ListFilter::default()).unwrap().value;
     assert_eq!(
         (whole.notes.len(), whole.total, whole.truncated()),
         (3, 3, false)
@@ -183,6 +189,7 @@ fn concurrent_writers_never_lose_a_note_or_reuse_an_id() {
     let mut ids: Vec<u64> = store
         .list(&ListFilter::default())
         .unwrap()
+        .value
         .notes
         .iter()
         .map(|n| n.id.get())
@@ -232,21 +239,54 @@ fn a_corrupt_store_is_reported_with_its_path() {
 }
 
 #[test]
-fn a_format_one_document_with_only_required_fields_still_loads() {
-    // Persisted shape contract (STD-02 R16): fields added later default.
+fn bad_records_are_isolated_on_read_fail_on_show_and_refuse_writes() {
     let dir = tempdir();
-    let minimal = r#"{"format": 1, "notes": [
-        {"id": 1, "title": "old", "created_at": "2025-05-06T07:08:09Z"}
+    let raw = r#"{"format": 1, "notes": [
+        {"id": 1, "title": "good", "body": null, "tags": [], "priority": "normal", "created_at": "2025-05-06T07:08:09Z"},
+        {"id": 2, "title": "bad\u001btitle", "body": null, "tags": [], "priority": "normal", "created_at": "2025-05-06T07:08:09Z"},
+        {"id": 3, "title": "missing fields", "created_at": "2025-05-06T07:08:09Z"}
     ]}"#;
-    write_store_file(dir.path(), minimal);
-    let notes = Store::open(dir.path())
-        .list(&ListFilter::default())
-        .unwrap()
-        .notes;
-    assert_eq!(notes.len(), 1);
-    assert_eq!(notes[0].priority, Priority::Normal);
-    assert!(notes[0].tags.is_empty());
-    assert_eq!(notes[0].body, None);
+    write_store_file(dir.path(), raw);
+    let store = Store::open(dir.path());
+
+    let listed = store.list(&ListFilter::default()).unwrap();
+    assert_eq!(listed.value.notes.len(), 1);
+    assert_eq!(listed.value.notes[0].id.get(), 1);
+    assert_eq!(listed.bad_records.len(), 2);
+    assert_eq!(
+        listed.bad_records[0].locator,
+        RecordLocator::Id(NoteId::try_from(2).unwrap())
+    );
+    assert_eq!(
+        listed.bad_records[1].locator,
+        RecordLocator::Id(NoteId::try_from(3).unwrap())
+    );
+    assert_eq!(
+        listed.bad_records[1].reason,
+        BadRecordReason::MissingField("body")
+    );
+
+    // Showing the good id succeeds and still surfaces the bad records.
+    let shown = store.show(NoteId::try_from(1).unwrap()).unwrap();
+    assert_eq!(shown.value.title.as_str(), "good");
+    assert_eq!(shown.bad_records.len(), 2);
+
+    // Showing a bad id fails with that record's typed error.
+    let err = store.show(NoteId::try_from(2).unwrap()).unwrap_err();
+    assert_eq!(err.code(), "store_bad_record");
+    assert!(matches!(
+        err,
+        Error::BadRecord(ref r) if r.locator == RecordLocator::Id(NoteId::try_from(2).unwrap())
+    ));
+
+    // Adding refuses without modifying the file or creating a lock.
+    let before = std::fs::read(store.path()).unwrap();
+    let err = store
+        .add(new_note("new", &[], Priority::Normal), NOW)
+        .unwrap_err();
+    assert_eq!(err.code(), "store_bad_record");
+    assert_eq!(std::fs::read(store.path()).unwrap(), before);
+    assert!(!dir.path().join(".lock").exists());
 }
 
 #[test]
@@ -257,4 +297,53 @@ fn format_zero_never_existed_and_reads_as_corrupt() {
         .list(&ListFilter::default())
         .unwrap_err();
     assert_eq!(err.code(), "store_corrupt");
+}
+
+#[test]
+fn duplicate_note_ids_fail_to_load_with_a_stable_code() {
+    let dir = tempdir();
+    let dup = r#"{"format": 1, "notes": [
+        {"id": 1, "title": "first", "body": null, "tags": [], "priority": "normal", "created_at": "2026-01-02T03:04:05Z"},
+        {"id": 1, "title": "second", "body": null, "tags": [], "priority": "normal", "created_at": "2026-01-02T03:04:05Z"}
+    ]}"#;
+    write_store_file(dir.path(), dup);
+    let err = Store::open(dir.path())
+        .list(&ListFilter::default())
+        .unwrap_err();
+    assert_eq!(err.code(), "store_duplicate_id", "got {err:?}");
+}
+
+#[test]
+fn add_refuses_when_max_id_is_already_in_use() {
+    let dir = tempdir();
+    let max_doc = format!(
+        r#"{{"format": 1, "notes": [
+            {{"id": {}, "title": "last", "body": null, "tags": [], "priority": "normal", "created_at": "2026-01-02T03:04:05Z"}}
+        ]}}"#,
+        u64::MAX
+    );
+    write_store_file(dir.path(), &max_doc);
+    let err = Store::open(dir.path())
+        .add(new_note("overflow", &[], Priority::Normal), NOW)
+        .unwrap_err();
+    assert_eq!(err.code(), "note_id_exhausted", "got {err:?}");
+}
+
+#[test]
+fn encode_failure_is_not_io_and_names_no_path() {
+    let dir = tempdir();
+    let store = Store::open(dir.path());
+    // RFC 3339 cannot serialize negative years, forcing a real serde_json encode error.
+    let bad_date = time::Date::from_calendar_date(-1, time::Month::January, 1).unwrap();
+    let bad_time = OffsetDateTime::new_utc(bad_date, time::Time::MIDNIGHT);
+    let err = store
+        .add(new_note("encode fail", &[], Priority::Normal), bad_time)
+        .unwrap_err();
+    assert!(matches!(err, Error::Encode { .. }), "got {err:?}");
+    assert_eq!(err.code(), "encode_error");
+    let msg = err.to_string();
+    assert!(
+        !msg.contains(&dir.path().display().to_string()) && !msg.contains(STORE_FILE),
+        "encode error must not invent a path: {msg}"
+    );
 }

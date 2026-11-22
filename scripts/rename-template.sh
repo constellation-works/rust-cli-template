@@ -91,9 +91,12 @@ find "$ROOT" "${prune[@]}" -o -type f -print0 \
       perl -pi -e "s/$PH_UPPER/$UPPER/g; s/$PH_SNAKE/$SNAKE/g; s/$PH_KEBAB/$NAME/g" "$file"
     done
 
-# Names: deepest first, so a directory is renamed after its contents.
-find "$ROOT" -depth "${prune[@]}" -o \( -name "*$PH_KEBAB*" -o -name "*$PH_SNAKE*" \) -print \
-  | while IFS= read -r path; do
+# Names: prune first (never with -depth, which disables -prune), then sort
+# deepest first so a directory is renamed after its contents.
+find "$ROOT" "${prune[@]}" -o \( -name "*$PH_KEBAB*" -o -name "*$PH_SNAKE*" \) -print0 \
+  | perl -0ne 'push @p, $_; END { print for sort { ($b =~ tr|/||) <=> ($a =~ tr|/||) || length($b) <=> length($a) } @p }' \
+  | while IFS= read -r -d '' path; do
+      [[ "$path" == "$ROOT" ]] && continue
       base="$(basename "$path")"
       new="${base//$PH_KEBAB/$NAME}"
       new="${new//$PH_SNAKE/$SNAKE}"

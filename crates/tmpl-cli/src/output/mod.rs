@@ -97,11 +97,22 @@ pub(crate) fn finish_parse_error(err: &clap::Error, args: &[OsString]) -> ExitCo
 }
 
 fn emit(sink: &Sink, output: &Output) -> io::Result<()> {
-    let (Output::Notes { notice, .. } | Output::Note { notice, .. }) = output;
-    if let Some(notice) = notice {
-        // Fail open (STD-02 R31): a notice that cannot reach stderr never
-        // fails a command whose payload is fine.
-        let _ = writeln!(io::stderr().lock(), "{notice}");
+    let (Output::Notes {
+        notice, warnings, ..
+    }
+    | Output::Note {
+        notice, warnings, ..
+    }) = output;
+    if !warnings.is_empty() || notice.is_some() {
+        // Fail open (STD-02 R31): warnings and notices that cannot reach stderr
+        // never fail a command whose payload is fine.
+        let mut err = io::stderr().lock();
+        for warning in warnings {
+            let _ = writeln!(err, "warning: {warning}");
+        }
+        if let Some(notice) = notice {
+            let _ = writeln!(err, "{notice}");
+        }
     }
     let mut out = io::stdout().lock();
     match output {

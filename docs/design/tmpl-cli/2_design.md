@@ -49,14 +49,18 @@ so it runs in `make ci-fast` without compiling.
    > auto), color (`NO_COLOR`, `CLICOLOR_FORCE`, `TERM`, TTY) and width
    (`COLUMNS`, terminals only). Nothing else in the program asks these
    questions; `scripts/check-terminal-guard.sh` rejects any attempt.
-3. `app::Context::resolve` picks the data directory and constructs the store.
-4. `commands::run` is the one chokepoint. If the command is audited it
+3. `app::Context::resolve` picks the data directory, resolves the OS actor
+   (`USER`, else `USERNAME`, else `None`), and constructs the store.
+4. `commands::run_with` is the one chokepoint. If the command is audited it
    starts an `AuditGuard` (section 5); then the noun's handler makes one
    store call and wraps the result in a payload (`Output::Notes` or
-   `Output::Note`) with an optional stderr notice. Core errors cross into
-   `CliError` through its single `#[from]`. The guard is told the outcome and
-   writes its line as `run` returns, before rendering.
-5. `output::finish` renders the payload for the sink, or reports the error
+   `Output::Note`) with an optional stderr notice and any bad-record warnings.
+   Core errors cross into `CliError` through its single `#[from]`. The guard is
+   told the outcome, `output::finish` renders the payload or error, and then
+   the guard drops and writes its line so any fail-open audit warning reaches
+   stderr after the payload or JSON error object.
+5. `output::finish` renders the payload for the sink (writing any bad-record
+   warnings and notices to stderr in every mode), or reports the error
    (`error: …` line, or `{"error","code"}` in JSON mode) and returns exit 1.
    A write that fails with `BrokenPipe` ends the process with exit 0 and no
    message.
@@ -86,16 +90,26 @@ write nothing: the file is only ever replaced by rename, so readers see a
 whole version, and `list`/`show` work on a read-only data directory. Every
 load first checks that the data directory and the store file belong to this
 user and are not writable by others, and that the store file is not a link;
-otherwise it refuses with the `chmod` that fixes it. `add` loads once before
-touching anything, so a refused store leaves nothing behind; it then creates
-the data directory (`0700`), takes `.lock` (`0600`, never through a link; an
-OS advisory lock with a 10-second deadline, and a timeout names the holder's
-pid, label and start time), re-reads under the lock, assigns the next id (`NoteId::next_after`: max id
-+ 1), and writes through `fsio::write_atomic` (a `0600` temp file in the same
-directory, `fsync`, rename, `fsync` of the directory). The temp file removes
-itself on every failure path. A file declaring a newer format is refused for
-reads and writes; an older one is upgraded in memory through the append-only
-`UPGRADES` registry (empty so far) and persisted by the next write.
+otherwise it refuses with the `chmod` that fixes it. Each note record is
+decoded individually at the construction boundary with no silent field
+defaults: a record whose title or tag fails validation or which lacks a
+required field is isolated as a `BadRecord` (`store_bad_record`) naming its id
+(or 1-based line number when the id is unreadable) and reason; reads return
+the valid notes plus per-record warnings, `show <bad id>` fails with that
+record's error, and `add` refuses while any bad record exists so nothing is
+ever dropped or defaulted. Duplicate note ids are refused on load
+(`store_duplicate_id`). `add` loads once before touching anything, so a
+refused store leaves nothing behind; it then creates the data directory
+(`0700`), takes `.lock` (`0600`, never through a link; an OS advisory lock
+with a 10-second deadline, and a timeout names the holder's pid, label and
+start time only while that pid is still alive), re-reads under the lock,
+assigns the next id (`NoteId::next_after`: checked max id + 1, refusing with
+`note_id_exhausted` at `u64::MAX`), and writes through `fsio::write_atomic` (a
+`0600` temp file in the same directory, `fsync`, rename, `fsync` of the
+directory). The temp file removes itself on every failure path. A file
+declaring a newer format is refused for reads and writes; an older one is
+upgraded in memory through the append-only `UPGRADES` registry (empty so far)
+and persisted by the next write.
 
 ## 5. The audit log
 
@@ -107,14 +121,20 @@ audited, because they must not write (STD-01 R31).
 `AuditGuard` (in `audit_middleware.rs`, modelled on Orbit's) is created
 before dispatch in the failure state, so an early return or a panic is
 recorded as a failure, never as success. `mark_result` sets the outcome, the
-note id on success and the stable error code on failure; `Drop` appends one
-line to `<root>/audit.jsonl` through `Store::record_audit`, which checks the
-data directory like any write, holds `.lock` for the append and creates the
-file `0600`. Each line is `{"format": 1, "at", "command", "status",
-"target", "error_code", "duration_ms"}`: identifiers only, never argument
-values or error text (STD-05 R13). The log is a side channel, so it fails open
-(STD-02 R31): a line that cannot be written is a `warn` on stderr and never
-changes the command's result or exit code.
+note id on success and the stable error code on failure; `Drop` runs after
+`output::finish` and appends one line to `<root>/audit.jsonl` through
+`Store::record_audit`, which checks the data directory like any write, holds
+`.audit.lock` (separate from `.lock` so a lock timeout on a note write still
+records its failure line within one deadline) and creates the file `0600`.
+Each line is `{"format": 2, "at", "actor", "command", "status", "target",
+"error_code", "duration_ms"}`: identifiers only, never argument values or
+error text (STD-05 R13). `actor` is the OS user name read once in `AppEnv`
+from `USER`, else `USERNAME`, serialized as `null` when neither is set; older
+format-1 lines without `actor` upgrade in memory via `store/audit.rs::UPGRADES`
+with `"actor": null`. The log is a side channel, so it fails open (STD-02
+R31): a line that cannot be written is a `warn` on stderr (after the command's
+own output or JSON error object) and never changes the command's result or
+exit code.
 
 ## 6. Gates
 
@@ -140,8 +160,7 @@ Dependabot proposes updates to both crate and action pins.
 
 - Terminal width comes only from `COLUMNS`, which most shells set but do not
   export, so truncation rarely engages; querying the terminal needs a
-  dependency (`terminal_size`) the template does not take. Wide (CJK, emoji)
-  characters are counted as one column each.
+  dependency (`terminal_size`) the template does not take.
 - Usage errors keep clap's multi-line rendering in human mode
   ([4_decisions.md](./4_decisions.md#usage-errors-keep-claps-rendering)).
 - The whole store is one file rewritten on every `add`: fine for thousands of
@@ -150,8 +169,9 @@ Dependabot proposes updates to both crate and action pins.
 - Under plain `cargo test` (nextest absent) there is no per-test timeout;
   only the CI job timeout bounds a hang.
 - Holder information in `.lock` is best effort: it is written just after the
-  lock is taken, so a waiter can briefly read the previous holder's line, and
-  a failure to write it is logged rather than failing the write.
+  lock is taken, so a waiter can briefly read the previous holder's line
+  (suppressed as unknown if that pid has already exited), and a failure to
+  write it is logged rather than failing the write.
 - The ownership and mode checks are unix-only; on Windows they are no-ops.
 - The audit log grows without bound and has no reader command; rotating or
   querying it is left to the domain. A crash mid-append can leave a torn last
@@ -159,8 +179,9 @@ Dependabot proposes updates to both crate and action pins.
 - An audit line records that a command ran, not that its output reached the
   reader: a `note add` whose stdout write then fails is still `success`,
   because the note was written.
-- One unparseable note makes the whole store `store_corrupt`
-  ([4_decisions.md](./4_decisions.md#one-malformed-note-makes-the-store-corrupt)).
+- A store holding any bad record remains readable (valid notes plus stderr
+  warnings), but writes refuse until the bad record is fixed by hand
+  ([4_decisions.md](./4_decisions.md#bad-note-records-are-isolated-on-read-and-block-writes)).
 
 ## Task References
 

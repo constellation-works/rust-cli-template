@@ -1,7 +1,7 @@
 //! Audit middleware: one audit-log line per mutating command.
 //!
 //! [`AuditGuard`] wraps a command's execution at the one chokepoint,
-//! `commands::run` (STD-02 R24). It is created before dispatch, told the
+//! `commands::run_with` (STD-02 R24). It is created before dispatch, told the
 //! outcome with [`AuditGuard::mark_result`], and writes the line when it is
 //! dropped. It starts out recording a failure, so a command that returns early
 //! or panics is logged as one; an outcome is never assumed to be success
@@ -9,9 +9,9 @@
 //!
 //! Which commands are audited is declared per command in
 //! `commands::Command::audit`; read-only commands are not, because they must
-//! not write (STD-01 R31). The line holds the command path, the record acted
-//! on, the outcome and the stable error code: never argument values or error
-//! text, which can carry note contents or paths (STD-05 R13).
+//! not write (STD-01 R31). The line holds the actor, the command path, the
+//! record acted on, the outcome and the stable error code: never argument
+//! values or error text, which can carry note contents or paths (STD-05 R13).
 //!
 //! The audit log is a side channel, so it fails open (STD-02 R31): a line that
 //! cannot be written never fails the command that already ran, and is reported
@@ -39,6 +39,7 @@ pub(crate) struct AuditGuard<'a> {
     store: &'a Store,
     meta: AuditMeta,
     at: OffsetDateTime,
+    actor: Option<String>,
     started: Instant,
     status: AuditStatus,
     target: Option<String>,
@@ -48,11 +49,17 @@ pub(crate) struct AuditGuard<'a> {
 impl<'a> AuditGuard<'a> {
     /// Start auditing a command that began at `at`. Until
     /// [`AuditGuard::mark_result`] is called, the command reads as failed.
-    pub(crate) fn start(store: &'a Store, meta: AuditMeta, at: OffsetDateTime) -> Self {
+    pub(crate) fn start(
+        store: &'a Store,
+        meta: AuditMeta,
+        at: OffsetDateTime,
+        actor: Option<String>,
+    ) -> Self {
         Self {
             store,
             meta,
             at,
+            actor,
             started: Instant::now(),
             status: AuditStatus::Failure,
             target: None,
@@ -81,6 +88,7 @@ impl<'a> AuditGuard<'a> {
     pub(crate) fn event(&self) -> AuditEvent {
         AuditEvent {
             at: self.at,
+            actor: self.actor.clone(),
             command: self.meta.command.to_owned(),
             status: self.status,
             target: self.target.clone(),
