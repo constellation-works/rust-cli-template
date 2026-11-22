@@ -7,7 +7,7 @@
 > The rename replaces `tmpl-cli` everywhere, removes this note and deletes itself.
 <!-- template-only:end -->
 
-Keep short notes in a local store.
+The starting point for a new constellation Rust CLI, with two crates, an output contract, a local store, and gates and CI that meet the constellation standards; copies come from GitHub's Use this template or the umbrella's operations/scripts/new-rust-cli.sh.
 
 ```sh
 tmpl-cli note add "Call the plumber" --tag home --priority high
