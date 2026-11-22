@@ -117,13 +117,16 @@ fn read_bounded(reader: impl Read, limit: u64) -> io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// List the UTF-8 names in a checked store directory in sorted order.
+/// List the UTF-8 names in a checked store directory in sorted order. A
+/// directory that does not exist yet lists as empty.
 #[cfg_attr(
     not(test),
     expect(dead_code, reason = "template mechanism for multi-file stores")
 )]
 pub(super) fn list_dir(dir: &Path) -> Result<Vec<String>> {
-    inspect_dir(dir)?;
+    if !inspect_dir(dir)? {
+        return Ok(Vec::new());
+    }
     let mut names = Vec::new();
     for item in fs::read_dir(dir).map_err(|e| Error::io("list", dir, e))? {
         let item = item.map_err(|e| Error::io("list", dir, e))?;

@@ -29,6 +29,14 @@ fn listing_and_removing_private_records_leaves_the_other_records_intact() {
 }
 
 #[test]
+fn listing_a_directory_that_does_not_exist_yields_no_names() {
+    let dir = crate::store::tests::private_tempdir();
+    let absent = dir.path().join("not-created-yet");
+    assert!(list_dir(&absent).unwrap().is_empty());
+    assert!(!absent.exists(), "listing must not create the directory");
+}
+
+#[test]
 fn write_atomic_into_a_missing_directory_fails_without_creating_anything() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("missing").join("data.json");
