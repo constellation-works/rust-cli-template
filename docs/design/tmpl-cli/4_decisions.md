@@ -98,7 +98,7 @@ files, and the flags sit far from the handlers that use them.
 ### Decision
 
 `commands/mod.rs` holds the `Command` enum of nouns, the audited-command
-table and `run`, the one chokepoint. Each noun is a module holding its
+table and `run_with`, the one chokepoint. Each noun is a module holding its
 subcommand enum, its `Args` structs, help examples and handlers
 (`commands/note.rs`); `cli.rs` keeps only the program root and the global
 flags. A noun that outgrows one file becomes a directory split along its

@@ -46,6 +46,10 @@ fn note_id_deserialization_validates_too() {
 #[test]
 fn title_is_trimmed_and_must_be_one_non_empty_line() {
     assert_eq!("  Buy milk ".parse::<Title>().unwrap().as_str(), "Buy milk");
+    // Edge whitespace is trimmed before the check, so a trailing newline or tab
+    // is accepted and stored trimmed (as before the control-character check).
+    assert_eq!("Buy milk\n".parse::<Title>().unwrap().as_str(), "Buy milk");
+    assert_eq!("Buy milk\t".parse::<Title>().unwrap().as_str(), "Buy milk");
     assert_eq!("   ".parse::<Title>(), Err(NoteError::EmptyTitle));
     assert_eq!("a\tb".parse::<Title>(), Err(NoteError::TitleNotSingleLine));
     assert_eq!("a\nb".parse::<Title>(), Err(NoteError::TitleNotSingleLine));

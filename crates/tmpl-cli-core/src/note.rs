@@ -149,7 +149,7 @@ impl TryFrom<String> for Title {
         if trimmed.is_empty() {
             return Err(NoteError::EmptyTitle);
         }
-        if value.chars().any(char::is_control) {
+        if trimmed.chars().any(char::is_control) {
             return Err(NoteError::TitleNotSingleLine);
         }
         let chars = trimmed.chars().count();
