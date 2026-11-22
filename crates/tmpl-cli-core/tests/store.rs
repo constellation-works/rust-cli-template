@@ -1,6 +1,13 @@
 //! End-to-end tests of the public store API (STD-02 R20). Every test works in
 //! its own temporary directory and never touches the real home (STD-03 R20).
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::expect_used,
+        clippy::unwrap_used,
+        reason = "integration tests assert fixture setup"
+    )
+)]
 
 use std::num::NonZeroUsize;
 use std::path::Path;
@@ -13,6 +20,21 @@ use tmpl_cli_core::{
 };
 
 const NOW: OffsetDateTime = datetime!(2026-01-02 03:04:05 UTC);
+
+#[test]
+fn a_lock_timeout_omits_an_oversized_holder_record() {
+    let dir = tempdir();
+    let path = dir.path().join(".lock");
+    let lock = std::fs::File::create(&path).unwrap();
+    let record = format!("pid {} ({})", std::process::id(), "x".repeat(4096));
+    std::fs::write(&path, record).unwrap();
+    lock.try_lock().unwrap();
+    let store = Store::open(dir.path()).with_lock_wait(std::time::Duration::ZERO);
+    let err = store
+        .add(new_note("waiting", &[], Priority::Normal), NOW)
+        .unwrap_err();
+    assert!(matches!(err, Error::Locked { holder, .. } if holder == "an unknown process"));
+}
 
 /// A temporary directory that is owner-only whatever the umask, as a store
 /// directory must be (STD-05 R9). `tempfile` leaves the mode to the umask.

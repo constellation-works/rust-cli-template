@@ -6,12 +6,14 @@ last_validated: YYYY-MM-DD
 status: Draft
 feature: <feature-slug>
 doc_role: overview
+stage: idea
+next: <one concrete next step>
 type: design
 summary: <one-line hook for agent retrieval — non-empty, single line>
 tags: [<feature-slug>]
 paths: ["crates/<crate>/**"]
 related_features: [<feature-slug>]
-related_artifacts: [ORB-NNNNN]
+related_artifacts: []
 ---
 
 # <Feature> — Overview
@@ -35,10 +37,10 @@ related_artifacts: [ORB-NNNNN]
 
 | Concern | File | Task |
 |---------|------|------|
-| <concern> | [crates/...](../../../crates/...) | [ORB-NNNNN] |
+| <concern> | [crates/...](../../../crates/...) | <public reference> |
 
 ## Task References
 
-- [ORB-NNNNN] — <verb phrase: what the task did>
+- <public reference> — <verb phrase: what the task did>
 
-> Resolve any task above with `orbit task show <ID>` or `git log --grep=<ID>`.
+> List public issues or pull requests cited above.

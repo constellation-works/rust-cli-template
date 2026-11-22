@@ -5,6 +5,7 @@
 //! fails CI if anything else does. `main` resolves a [`Sink`] once and every
 //! renderer reads its answers from it.
 
+use super::color::Color;
 use clap::ValueEnum;
 use std::ffi::OsString;
 use std::io::IsTerminal;
@@ -74,7 +75,7 @@ pub(crate) struct Sink {
     /// The resolved output mode.
     pub(crate) mode: OutputMode,
     /// Whether ANSI color may be written to stdout.
-    pub(crate) color: bool,
+    pub(super) color: Color,
     /// The width a table must fit, or `None` for "never truncate".
     pub(crate) width: Option<usize>,
 }
@@ -118,15 +119,21 @@ pub(crate) fn resolve_mode(
 /// Color is off off a terminal, under a non-empty `NO_COLOR`, and for
 /// `TERM=dumb`; a non-empty `CLICOLOR_FORCE` overrides `TERM=dumb` but never
 /// `NO_COLOR` or a pipe (STD-01 R17).
-pub(crate) fn resolve_color(is_tty: bool, env: &SinkEnv) -> bool {
+pub(super) fn resolve_color(is_tty: bool, env: &SinkEnv) -> Color {
     let set = |v: &Option<String>| v.as_deref().is_some_and(|s| !s.is_empty());
     if !is_tty || set(&env.no_color) {
-        return false;
+        return Color::Plain;
     }
-    if set(&env.clicolor_force) {
-        return true;
+    if set(&env.clicolor_force) || env.term.as_deref() != Some("dumb") {
+        return Color::Ansi;
     }
-    env.term.as_deref() != Some("dumb")
+    Color::Plain
+}
+
+/// Width for root help wrapping. Piped help keeps one line per command.
+pub(crate) fn help_width() -> Option<usize> {
+    let columns = std::env::var("COLUMNS").ok();
+    resolve_width(std::io::stdout().is_terminal(), columns.as_deref())
 }
 
 /// Only a terminal has a width; piped output is never truncated (STD-01 R9).

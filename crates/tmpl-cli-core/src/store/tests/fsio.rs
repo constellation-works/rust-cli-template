@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::store::fsio::{LockGuard, write_atomic};
+use crate::store::fsio::{LockGuard, list_dir, remove_private, write_atomic};
 use std::time::Duration;
 
 #[test]
@@ -11,6 +11,21 @@ fn write_atomic_replaces_the_file_and_leaves_no_temp_files() {
     assert_eq!(std::fs::read(&path).unwrap(), b"two");
     let entries = std::fs::read_dir(dir.path()).unwrap().count();
     assert_eq!(entries, 1, "only the target file should remain");
+}
+
+#[test]
+fn listing_and_removing_private_records_leaves_the_other_records_intact() {
+    let dir = crate::store::tests::private_tempdir();
+    let _lock = LockGuard::acquire(&dir.path().join(".lock"), "remove", Duration::ZERO).unwrap();
+    let first = dir.path().join("a");
+    let last = dir.path().join("z");
+    write_atomic(&last, b"last").unwrap();
+    write_atomic(&first, b"first").unwrap();
+    assert_eq!(list_dir(dir.path()).unwrap(), [".lock", "a", "z"]);
+    remove_private(&first).unwrap();
+    remove_private(&first).unwrap();
+    assert_eq!(list_dir(dir.path()).unwrap(), [".lock", "z"]);
+    assert_eq!(std::fs::read(&last).unwrap(), b"last");
 }
 
 #[test]
@@ -52,7 +67,8 @@ mod private_state {
     //! owners and loose modes on load.
     use crate::error::Error;
     use crate::store::fsio::{
-        LockGuard, append_private, create_private_dir, inspect_dir, inspect_file, write_atomic,
+        LockGuard, append_private, create_private_dir, inspect_dir, inspect_file, list_dir,
+        remove_private, write_atomic,
     };
     use std::fs::{self, Permissions};
     use std::os::unix::fs::{PermissionsExt, symlink};
@@ -147,6 +163,34 @@ mod private_state {
         let err = LockGuard::acquire(&lock, "t", Duration::from_secs(1)).unwrap_err();
         assert!(matches!(err, Error::Symlink { .. }), "got {err:?}");
         assert_eq!(fs::read(&target).unwrap(), b"precious");
+    }
+
+    #[test]
+    fn private_remove_refuses_links_and_writable_files() {
+        let dir = crate::store::tests::private_tempdir();
+        let _lock =
+            LockGuard::acquire(&dir.path().join(".lock"), "remove", Duration::ZERO).unwrap();
+        let target = dir.path().join("target");
+        write_atomic(&target, b"keep").unwrap();
+        let link = dir.path().join("link");
+        symlink(&target, &link).unwrap();
+        assert!(matches!(remove_private(&link), Err(Error::Symlink { .. })));
+        assert!(link.is_symlink());
+        fs::set_permissions(&target, Permissions::from_mode(0o662)).unwrap();
+        assert!(matches!(
+            remove_private(&target),
+            Err(Error::Permissions { .. })
+        ));
+        assert_eq!(fs::read(&target).unwrap(), b"keep");
+    }
+
+    #[test]
+    fn listing_refuses_a_directory_writable_by_others() {
+        let dir = crate::store::tests::private_tempdir();
+        fs::set_permissions(dir.path(), Permissions::from_mode(0o777)).unwrap();
+        let result = list_dir(dir.path());
+        fs::set_permissions(dir.path(), Permissions::from_mode(0o700)).unwrap();
+        assert!(matches!(result, Err(Error::Permissions { .. })));
     }
 
     #[test]

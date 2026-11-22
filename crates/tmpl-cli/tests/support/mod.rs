@@ -7,7 +7,10 @@
 
 // Each integration-test binary compiles this module and uses a different
 // subset of it.
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    reason = "each integration target uses a different subset of the fixture"
+)]
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output};

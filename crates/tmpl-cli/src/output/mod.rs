@@ -13,7 +13,7 @@ mod sink;
 mod table;
 
 pub(crate) use payload::{NotePayload, Output};
-pub(crate) use sink::{FORMAT_ENV, FormatArg, Sink};
+pub(crate) use sink::{FORMAT_ENV, FormatArg, Sink, help_width};
 
 use crate::error::CliError;
 use serde::Serialize;

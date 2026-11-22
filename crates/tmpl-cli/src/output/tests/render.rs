@@ -18,7 +18,7 @@ fn note(id: u64, tags: &[&str]) -> NotePayload {
 fn sink(mode: OutputMode) -> Sink {
     Sink {
         mode,
-        color: false,
+        color: crate::output::color::Color::Plain,
         width: None,
     }
 }

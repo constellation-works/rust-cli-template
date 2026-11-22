@@ -1,3 +1,4 @@
+use crate::output::color::Color;
 use crate::output::sink::{
     FormatArg, OutputMode, Sink, SinkEnv, raw_args_request_json, resolve_color, resolve_mode,
 };
@@ -46,21 +47,36 @@ fn env(no_color: Option<&str>, force: Option<&str>, term: Option<&str>) -> SinkE
 
 #[test]
 fn color_needs_a_terminal() {
-    assert!(resolve_color(true, &env(None, None, Some("xterm"))));
-    assert!(!resolve_color(false, &env(None, Some("1"), None)));
+    assert_eq!(
+        resolve_color(true, &env(None, None, Some("xterm"))),
+        Color::Ansi
+    );
+    assert_eq!(
+        resolve_color(false, &env(None, Some("1"), None)),
+        Color::Plain
+    );
 }
 
 #[test]
 fn no_color_disables_color_and_outranks_clicolor_force() {
-    assert!(!resolve_color(true, &env(Some("1"), Some("1"), None)));
+    assert_eq!(
+        resolve_color(true, &env(Some("1"), Some("1"), None)),
+        Color::Plain
+    );
     // An empty NO_COLOR does not count.
-    assert!(resolve_color(true, &env(Some(""), None, None)));
+    assert_eq!(resolve_color(true, &env(Some(""), None, None)), Color::Ansi);
 }
 
 #[test]
 fn term_dumb_disables_color_unless_forced() {
-    assert!(!resolve_color(true, &env(None, None, Some("dumb"))));
-    assert!(resolve_color(true, &env(None, Some("1"), Some("dumb"))));
+    assert_eq!(
+        resolve_color(true, &env(None, None, Some("dumb"))),
+        Color::Plain
+    );
+    assert_eq!(
+        resolve_color(true, &env(None, Some("1"), Some("dumb"))),
+        Color::Ansi
+    );
 }
 
 #[test]

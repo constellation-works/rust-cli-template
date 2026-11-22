@@ -7,7 +7,7 @@
 //! tests pin it. Column widths are measured in terminal display columns
 //! (Unicode East Asian Wide/Fullwidth = 2, zero-width combining/control = 0).
 
-use super::color::{Role, paint};
+use super::color::{Color, Role, paint};
 
 /// The narrowest a truncatable column shrinks to.
 const MIN_TRUNCATED_WIDTH: usize = 8;
@@ -53,16 +53,16 @@ impl Cell {
 }
 
 /// Render `rows` under `columns`, each line ending in `\n`.
-pub(crate) fn render(
+pub(super) fn render(
     columns: &[Column],
     rows: &[Vec<Cell>],
     width: Option<usize>,
-    color: bool,
+    color: Color,
 ) -> String {
     let widths = fit(columns, &natural_widths(columns, rows), width);
     let mut out = String::new();
     let header: Vec<Cell> = columns.iter().map(|c| Cell::plain(c.header)).collect();
-    push_line(&mut out, columns, &widths, &header, false);
+    push_line(&mut out, columns, &widths, &header, Color::Plain);
     for row in rows {
         push_line(&mut out, columns, &widths, row, color);
     }
@@ -202,7 +202,7 @@ fn fit(columns: &[Column], natural: &[usize], width: Option<usize>) -> Vec<usize
     widths
 }
 
-fn push_line(out: &mut String, columns: &[Column], widths: &[usize], cells: &[Cell], color: bool) {
+fn push_line(out: &mut String, columns: &[Column], widths: &[usize], cells: &[Cell], color: Color) {
     let last = columns.len().saturating_sub(1);
     for (i, (col, &w)) in columns.iter().zip(widths).enumerate() {
         let (text, role) = cells
@@ -226,6 +226,7 @@ fn push_line(out: &mut String, columns: &[Column], widths: &[usize], cells: &[Ce
             out.push_str("  ");
         }
     }
+    out.truncate(out.trim_end_matches(' ').len());
     out.push('\n');
 }
 

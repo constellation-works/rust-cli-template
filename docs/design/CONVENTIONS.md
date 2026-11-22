@@ -12,6 +12,11 @@ Orbit's `docs/design/CONVENTIONS.md` (the source this template follows).
 
 ## 1. Folder layout
 
+Copy [`1_scope.md`](_templates/1_scope.md) for a small change to an existing
+mechanism. Add `4_decisions.md` when a decision meets the criteria below.
+
+Use the full track for a subsystem that needs several design documents.
+
 ```
 docs/design/<feature>/
 ├── 1_overview.md     what and why
@@ -25,7 +30,9 @@ docs/design/<feature>/
 Start a feature by copying the scaffold:
 
 ```sh
-cp -r docs/design/_templates docs/design/<feature>
+mkdir -p docs/design/<feature>
+cp docs/design/_templates/{1_overview,2_design,3_vision,4_decisions}.md docs/design/<feature>/
+cp -r docs/design/_templates/{specs,references} docs/design/<feature>/
 mv docs/design/<feature>/specs/_mechanism.md docs/design/<feature>/specs/<mechanism>.md
 ```
 
@@ -36,8 +43,9 @@ roadmap, changelog or tutorial inside a feature folder.
 
 Every numbered doc keeps the frontmatter from `_templates/` (`title` equals
 the H1, `status` is `Draft` until reviewed, then `Accepted`; `doc_role`
-matches the `1_`–`4_` prefix) and ends with a **Task References** section
-listing only the task ids cited in that doc, each with a verb phrase.
+matches the filename). The entry document also carries the delivery `stage`
+and `next` step. Run `make feature-board` after changing either field. A
+document that cites public tasks ends with a **Task References** section.
 
 ## 3. What earns a decision entry
 
@@ -54,7 +62,6 @@ constellation standard is always a decision entry, citing `STD-nn@<version> §Rn
 
 ## 4. Links and ids
 
-Relative links only (`./`, `../`). Task ids are plain bracketed text
-(`[ORB-NNNNN]`), never links, and always come with what the task did.
-Design docs may cite tracker ids; user-facing text (help, output, errors)
-never does.
+Link to repository files with relative paths. Cite public issues and pull
+requests with a phrase describing the change. Use placeholders in examples
+and help text. Private task IDs belong in the tracker.

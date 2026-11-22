@@ -5,7 +5,14 @@
 //! A mismatch fails. After an intentional surface change, regenerate with
 //! `make goldens UPDATE=1` (which sets `UPDATE_GOLDENS=1`) and review the
 //! diff in the PR as a contract change.
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::expect_used,
+        clippy::unwrap_used,
+        reason = "integration tests assert fixture setup"
+    )
+)]
 
 mod support;
 
@@ -90,6 +97,48 @@ fn help_matches_goldens() {
         })
         .collect();
     report(&failures);
+}
+
+#[test]
+fn command_summaries_fit_on_one_line_and_root_commands_are_listed_once() {
+    const MAX_SUMMARY_CHARS: usize = 70;
+    let commands = tmpl_cli::every_command();
+    let (_, root) = commands
+        .first()
+        .expect("the command tree includes the root");
+    let fx = Fixture::new();
+    let help = text(&fx.ok(&["--help"]).stdout);
+
+    for (path, command) in commands.iter().skip(1) {
+        assert_summary(path, command, MAX_SUMMARY_CHARS);
+    }
+    for command in root
+        .get_subcommands()
+        .filter(|command| !command.is_hide_set())
+    {
+        let name = command.get_name();
+        let summary = assert_summary(name, command, MAX_SUMMARY_CHARS);
+        let rows = help.lines().filter(|line| {
+            line.trim_start()
+                .split_once("  ")
+                .is_some_and(|(label, text)| label == name && text.trim() == summary)
+        });
+        assert_eq!(rows.count(), 1, "root help must list {name} once");
+    }
+}
+
+fn assert_summary(path: &str, command: &clap::Command, limit: usize) -> String {
+    let summary = command
+        .get_about()
+        .unwrap_or_else(|| panic!("{path} needs a summary"))
+        .to_string();
+    assert!(
+        !summary.trim().is_empty()
+            && !summary.contains(['\r', '\n'])
+            && summary.chars().count() <= limit,
+        "{path} needs a one-line summary of at most {limit} characters: {summary:?}"
+    );
+    summary
 }
 
 #[test]

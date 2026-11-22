@@ -11,7 +11,7 @@ summary: <one-line hook for agent retrieval — non-empty, single line>
 tags: [<feature-slug>]
 paths: ["crates/<crate>/**"]
 related_features: [<feature-slug>]
-related_artifacts: [ORB-NNNNN]
+related_artifacts: []
 ---
 
 # <Feature> — Decisions
@@ -22,7 +22,7 @@ Record non-obvious decisions here by title. Task references carry provenance; su
 
 ## <short title, noun phrase>
 
-**Recorded:** YYYY-MM · [ORB-NNNNN]
+**Recorded:** YYYY-MM · <public reference>
 **Code anchors:** `crates/<crate>/src/<file>.rs::<symbol>`
 
 ### Context
@@ -40,7 +40,7 @@ Record non-obvious decisions here by title. Task references carry provenance; su
 
 ## <short title, noun phrase>
 
-**Recorded:** YYYY-MM · [ORB-NNNNN]
+**Recorded:** YYYY-MM · <public reference>
 
 ### Context
 
@@ -57,6 +57,6 @@ Record non-obvious decisions here by title. Task references carry provenance; su
 
 ## Task References
 
-- [ORB-NNNNN] — <verb phrase: what the task did>
+- <public reference> — <verb phrase: what the task did>
 
-> Resolve any task above with `orbit task show <ID>` or `git log --grep=<ID>`.
+> List public issues or pull requests cited above.
