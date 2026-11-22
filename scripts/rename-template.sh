@@ -16,9 +16,9 @@
 # about.md with the placeholder card a new codebase starts with (the template's
 # own card describes the template, not the copy), drops the README's
 # template-only note, re-sorts Cargo.lock and re-runs rustfmt for the new name,
-# and removes itself. It never touches .git/, target/ or the vendored
-# docs/standards/, and never commits: review the result, run `make ci`, then
-# commit.
+# and removes itself and its integration test. It never touches .git/,
+# target/ or the vendored docs/standards/, and never commits: review the
+# result, run `make ci`, then commit.
 set -euo pipefail
 
 PH_KEBAB="tmpl-cli"
@@ -48,10 +48,10 @@ esac
 SNAKE="${NAME//-/_}"
 UPPER="$(printf '%s' "$SNAKE" | tr '[:lower:]' '[:upper:]')"
 
-# Delete this script first so neither pass below rewrites or renames it, and
-# drop the README note that only makes sense in the template itself.
-rm -f "$SELF"
-perl -0pi -e 's/<!-- template-only:begin -->.*?<!-- template-only:end -->\n\n?//s' "$ROOT/README.md"
+# Delete this script and its integration test before rewriting the project.
+# Drop the template note and expose the copy's summary placeholder.
+rm -f "$SELF" "$ROOT/crates/$PH_KEBAB/tests/rename_template.rs"
+perl -0pi -e 's/<!-- template-only:begin -->.*?<!-- template-only:end -->\n\n?//s; s/<!-- project-summary: ([^\n]+) -->/_$1_/' "$ROOT/README.md"
 
 # about.md describes the template. A copy gets the placeholder card every new
 # codebase starts with: today's card, with NAME in place of the template name.
@@ -62,7 +62,7 @@ cat >"$ROOT/about.md" <<'CARD'
 ---
 codebase: __NAME__
 owner: daniel
-summary: <one line — what __NAME__ does and for whom; keep in sync with README.md>
+summary: <One line — what __NAME__ does and for whom.>
 status: active
 stack: Rust
 gate: pr

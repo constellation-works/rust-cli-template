@@ -108,7 +108,10 @@ pub(super) fn encode_line(event: &AuditEvent) -> Result<Vec<u8>> {
 
 /// Parse one persisted audit line, upgrading older formats in memory and
 /// refusing newer ones (STD-03 R10, R23).
-#[allow(dead_code)]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "template mechanism for an audit reader")
+)]
 pub(super) fn decode_line(path: &Path, bytes: &[u8]) -> Result<AuditLine> {
     let corrupt = |source| Error::Corrupt {
         path: path.to_path_buf(),

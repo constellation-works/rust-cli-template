@@ -114,7 +114,7 @@ fn has_tracker_id(text: &str) -> Option<String> {
 fn help_text_carries_no_tracker_ids() {
     // STD-01 R23: placeholders like <id>, never real task or friction numbers.
     assert!(
-        has_tracker_id("see ORB-123").is_some(),
+        has_tracker_id("see ABC-123").is_some(),
         "detector must work"
     );
     assert!(
@@ -154,82 +154,4 @@ fn no_subcommand_argument_shares_an_id_with_a_global_one() {
             );
         }
     }
-}
-
-/// Split one documented shell command line into words: whitespace outside
-/// quotes separates, `'…'` and `"…"` group. Enough for documentation.
-fn shell_words(line: &str) -> Vec<String> {
-    let (mut words, mut word, mut in_word, mut quote) = (Vec::new(), String::new(), false, None);
-    for c in line.chars() {
-        match quote {
-            Some(q) if c == q => quote = None,
-            Some(_) => word.push(c),
-            None if c == '\'' || c == '"' => {
-                quote = Some(c);
-                in_word = true;
-            }
-            None if c.is_whitespace() => {
-                if in_word {
-                    words.push(std::mem::take(&mut word));
-                    in_word = false;
-                }
-            }
-            None => {
-                word.push(c);
-                in_word = true;
-            }
-        }
-    }
-    if in_word {
-        words.push(word);
-    }
-    words
-}
-
-/// The `tmpl-cli …` part of a documented line: before a pipe or a comment,
-/// with the `<id>` placeholder filled in.
-fn documented_invocation(line: &str) -> Option<Vec<OsString>> {
-    let line = line.trim_start();
-    if !line.starts_with("tmpl-cli ") {
-        return None;
-    }
-    let command = line.split(" | ").next().unwrap_or(line);
-    let command = command.split("  #").next().unwrap_or(command);
-    let words = shell_words(&command.replace("<id>", "1"));
-    Some(words.into_iter().map(OsString::from).collect())
-}
-
-#[test]
-fn every_documented_command_line_parses() {
-    // STD-04 R14: examples in help and in the README are run through the real
-    // parser, so an example naming a removed flag or value fails here.
-    let mut documented: Vec<(String, String)> = Vec::new();
-    for (path, mut cmd) in every_command() {
-        let help = cmd.render_long_help().to_string();
-        let examples = help.split("Examples:").nth(1).unwrap_or_default();
-        documented.extend(
-            examples
-                .lines()
-                .map(|l| (format!("`{path} --help`"), l.to_owned())),
-        );
-    }
-    let readme = concat!(env!("CARGO_MANIFEST_DIR"), "/../../README.md");
-    let readme = std::fs::read_to_string(readme).expect("README.md next to the workspace");
-    documented.extend(
-        readme
-            .lines()
-            .map(|l| ("README.md".to_owned(), l.to_owned())),
-    );
-
-    let mut parsed = 0;
-    for (source, line) in &documented {
-        let Some(args) = documented_invocation(line) else {
-            continue;
-        };
-        if let Err(err) = Cli::parse_args(&args) {
-            panic!("{source}: `{}` does not parse:\n{err}", line.trim());
-        }
-        parsed += 1;
-    }
-    assert!(parsed >= 10, "only {parsed} documented command lines found");
 }

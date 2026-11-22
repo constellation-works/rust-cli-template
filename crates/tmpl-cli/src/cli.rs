@@ -7,7 +7,7 @@
 use crate::commands::Command;
 use crate::output::FormatArg;
 use clap::error::ErrorKind;
-use clap::{Args, CommandFactory, Parser};
+use clap::{Args, CommandFactory, FromArgMatches, Parser};
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -64,7 +64,9 @@ impl Cli {
     /// `--json`/`--format` conflict is checked here and reported as the same
     /// usage error (exit 2) clap would have produced.
     pub(crate) fn parse_args(args: &[OsString]) -> Result<Self, clap::Error> {
-        let cli = Self::try_parse_from(args)?;
+        let matches = crate::help::with_groups(Self::command(), crate::output::help_width())
+            .try_get_matches_from(args)?;
+        let cli = Self::from_arg_matches(&matches)?;
         if cli.global.json && cli.global.format.is_some_and(|f| f != FormatArg::Json) {
             return Err(Self::command().error(
                 ErrorKind::ArgumentConflict,
@@ -107,7 +109,7 @@ pub fn every_command() -> Vec<(String, clap::Command)> {
             path.pop();
         }
     }
-    let mut root = Cli::command();
+    let mut root = crate::help::with_groups(Cli::command(), None);
     root.build();
     let mut out = Vec::new();
     collect(&root, &mut vec![String::from("tmpl-cli")], &mut out);

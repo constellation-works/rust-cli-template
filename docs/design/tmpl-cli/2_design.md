@@ -11,7 +11,6 @@ summary: How tmpl-cli is layered, how an invocation flows from argv to bytes, ho
 tags: [tmpl-cli, cli, architecture]
 paths: ["crates/**", "scripts/**", "Makefile"]
 related_features: [tmpl-cli]
-related_artifacts: [ORB-13117, ORB-13134]
 ---
 
 # tmpl-cli — Design
@@ -144,22 +143,25 @@ exit code.
 | `check-dependency-direction.sh` | `ci-fast` | crate and module layering (STD-02 R1–R6), file access only in `store/`, no clock-defaulted timestamps (R16), retired paths stay gone (R17) |
 | `check-test-modules.sh` | `ci-fast` | every sibling unit-test file is declared (STD-02 R19) |
 | `check-terminal-guard.sh` | `ci-fast` | one owner for streams, TTY and color env (STD-01 R12, R17) |
+| `check-private-task-ids.sh` | `ci-fast` | public tree excludes private task IDs outside the vendored canon |
+| `check-readme.py` and `generate-feature-board.py --check` | `ci-fast` | README size and local links (STD-09 R2, R12), the design feature board (STD-06 R9) |
 | `docs/standards/check.sh` | `ci-fast` (`standards-check`) | vendored standards (warns until vendored; fails in CI) |
 | `clippy --all-targets -D warnings` with the STD-02 lint table and its adoptable additions | `ci-lint` | no unwrap/expect/print/dbg, no lock across await, no wildcard enum arms, no narrowing `as` |
 | `cargo deny check` | `ci-lint` | advisories, licenses, sources |
 | nextest `--no-tests=fail` (timeouts in `.config/nextest.toml`, no retries), then `cargo test --doc` | `test` | behaviour, and runnable doc examples |
 | help and output goldens from the built binary | `goldens` | the public surface (STD-01 R24) |
 
-Every cargo invocation passes `--locked`. Locally a missing `cargo-deny` or
-`cargo-nextest` warns and the gate skips or falls back; under `CI=true` it
-fails. CI runs `make ci` on Linux and macOS with a 30-minute job timeout,
-with actions pinned by commit SHA and the toolchain and tools by version;
-Dependabot proposes updates to both crate and action pins.
+Cargo builds and tests pass `--locked`. When Cargo's advisory cache is
+read-only, the supply-chain check uses `target/cargo-deny/advisory-dbs`.
+Missing gate tools warn locally and fail under `CI=true`. CI runs
+`make ci` on Linux and macOS with a 30-minute job timeout and pins actions,
+the toolchain and tools. Dependabot proposes crate and action updates.
 
 ## 7. Concerns & Honest Limitations
 
-- Terminal width comes only from `COLUMNS`, which most shells set but do not
-  export, so truncation rarely engages; querying the terminal needs a
+- Terminal width comes from exported `COLUMNS`. It controls table truncation
+  and wrapping of root command summaries on a terminal. Piped help keeps
+  one line per command. Sampling an unexported terminal width needs a
   dependency (`terminal_size`) the template does not take.
 - Usage errors keep clap's multi-line rendering in human mode
   ([4_decisions.md](./4_decisions.md#usage-errors-keep-claps-rendering)).
@@ -170,7 +172,7 @@ Dependabot proposes updates to both crate and action pins.
   only the CI job timeout bounds a hang.
 - Holder information in `.lock` is best effort: it is written just after the
   lock is taken, so a waiter can briefly read the previous holder's line
-  (suppressed as unknown if that pid has already exited), and a failure to
+  (suppressed as unknown if that pid has already exited or the record exceeds 1 KiB), and a failure to
   write it is logged rather than failing the write.
 - The ownership and mode checks are unix-only; on Windows they are no-ops.
 - The audit log grows without bound and has no reader command; rotating or
@@ -182,10 +184,3 @@ Dependabot proposes updates to both crate and action pins.
 - A store holding any bad record remains readable (valid notes plus stderr
   warnings), but writes refuse until the bad record is fixed by hand
   ([4_decisions.md](./4_decisions.md#bad-note-records-are-isolated-on-read-and-block-writes)).
-
-## Task References
-
-- [ORB-13117] — built the Rust CLI template this project was created from.
-- [ORB-13134] — brought the template to STD-01..03 v2 and STD-04/05 v1.
-
-> Resolve any task above with `orbit task show <ID>` or `git log --grep=<ID>`.

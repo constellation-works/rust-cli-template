@@ -8,13 +8,21 @@
 // handles so a closed pipe is an error value, not a panic (STD-01 R13).
 #![deny(clippy::print_stderr, clippy::print_stdout)]
 // Unit tests use unwrap/expect for fixture setup; production call sites remain linted.
-#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::expect_used,
+        clippy::unwrap_used,
+        reason = "unit tests assert fixture setup"
+    )
+)]
 
 mod app;
 mod audit_middleware;
 mod cli;
 mod commands;
 mod error;
+mod help;
 mod output;
 
 pub use cli::every_command;

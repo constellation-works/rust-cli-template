@@ -1,6 +1,12 @@
-//! End-to-end tests for repository scripts: `rename-template.sh`,
-//! `check-test-modules.sh`, and `check-dependency-direction.sh`.
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+//! End-to-end tests for the repository gates.
+#![cfg_attr(
+    test,
+    allow(
+        clippy::expect_used,
+        clippy::unwrap_used,
+        reason = "integration tests assert fixture setup"
+    )
+)]
 #![cfg(unix)]
 
 use std::fs;
@@ -27,57 +33,43 @@ fn copy_script(name: &str, dest_root: &Path) -> PathBuf {
 }
 
 #[test]
-fn rename_template_leaves_git_target_and_standards_untouched() {
+fn deny_uses_a_writable_cache_when_the_cargo_home_is_unusable() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-
-    let script = copy_script("rename-template.sh", root);
-    fs::create_dir_all(root.join("crates/tmpl-cli/src")).unwrap();
-    fs::write(root.join("crates/tmpl-cli/src/main.rs"), "fn main() {}\n").unwrap();
+    for name in ["Makefile", "deny.toml"] {
+        fs::copy(repo_root().join(name), root.join(name)).unwrap();
+    }
+    let cargo = root.join("cargo");
     fs::write(
-        root.join("README.md"),
-        "# tmpl-cli\n\n<!-- template-only:begin -->\nnote\n<!-- template-only:end -->\n\nhello\n",
+        &cargo,
+        r#"#!/bin/sh
+set -eu
+test "$1" = deny
+if [ "$2" = --version ]; then exit 0; fi
+test "$2" = check
+test "$3" = --config
+grep -Fx 'db-path = "target/cargo-deny/advisory-dbs"' "$4"
+grep -Fx 'yanked = "deny"' "$4"
+grep -Fx '[licenses]' "$4"
+"#,
     )
     .unwrap();
-    fs::write(root.join("about.md"), "tmpl-cli\n").unwrap();
-
-    // Protected trees carrying the placeholder in both paths and contents.
-    let git_branch = root.join(".git/refs/heads/tmpl-cli");
-    let target_entry = root.join("target/debug/tmpl-cli");
-    let std_entry = root.join("docs/standards/tmpl-cli-note.md");
-    for path in [&git_branch, &target_entry, &std_entry] {
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, "tmpl-cli placeholder content\n").unwrap();
-    }
-
-    let out = Command::new(&script)
-        .arg("demo-cli")
+    fs::set_permissions(&cargo, fs::Permissions::from_mode(0o755)).unwrap();
+    let cargo_home = root.join("cargo-home");
+    fs::write(&cargo_home, b"not a directory").unwrap();
+    let out = Command::new("make")
+        .args(["deny", "CARGO=./cargo"])
+        .current_dir(root)
         .env_clear()
         .env("PATH", "/usr/bin:/bin")
+        .env("CARGO_HOME", cargo_home)
         .output()
         .unwrap();
-    assert_eq!(
-        out.status.code(),
-        Some(0),
-        "stdout: {}\nstderr: {}",
-        String::from_utf8_lossy(&out.stdout),
+    assert!(
+        out.status.success(),
+        "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-
-    assert!(root.join("crates/demo-cli/src/main.rs").exists());
-    for protected in [&git_branch, &target_entry, &std_entry] {
-        assert!(
-            protected.exists(),
-            "protected path was renamed or removed: {}",
-            protected.display()
-        );
-        assert_eq!(
-            fs::read_to_string(protected).unwrap(),
-            "tmpl-cli placeholder content\n",
-            "protected file contents were modified: {}",
-            protected.display()
-        );
-    }
 }
 
 #[test]

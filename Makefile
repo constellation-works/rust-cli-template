@@ -1,4 +1,4 @@
-.PHONY: help build test goldens fmt fmt-check clippy deny structure standards-check ci-fast ci-lint ci install clean
+.PHONY: help build test goldens fmt fmt-check clippy deny structure standards-check docs-check feature-board ci-fast ci-lint ci install clean
 
 CARGO ?= cargo
 # Every build uses the committed Cargo.lock as is; a stale lock fails instead
@@ -27,12 +27,13 @@ endef
 help:
 	@echo "tmpl-cli make targets"
 	@echo ""
-	@echo "  make ci-fast          Pre-handoff gate, no compile: fmt, structure, standards-check"
+	@echo "  make ci-fast          Pre-handoff gate, no compile: fmt, structure, docs and standards"
 	@echo "  make ci-lint          clippy -D warnings + cargo-deny (skipped locally if not installed)"
 	@echo "  make test             All tests (nextest when installed, else cargo test) + doctests"
 	@echo "  make goldens          Compare --help and output goldens with the built binary"
 	@echo "  make goldens UPDATE=1 Regenerate goldens after an intended surface change"
 	@echo "  make standards-check  Run the vendored standards check (docs/standards/check.sh)"
+	@echo "  make feature-board    Regenerate the design feature board"
 	@echo "  make ci               Everything above; what CI runs"
 	@echo "  make build | fmt | install | clean"
 
@@ -55,14 +56,27 @@ structure:
 	./scripts/check-dependency-direction.sh
 	./scripts/check-test-modules.sh
 	./scripts/check-terminal-guard.sh
+	sh scripts/check-private-task-ids.sh
 
 clippy:
 	$(CARGO) clippy --workspace --all-targets $(LOCKED) -- -D warnings
 
 # Supply chain (STD-02 R23, STD-05 R23/R24): advisories, licenses, sources.
 deny:
-	@if $(CARGO) deny --version >/dev/null 2>&1; then \
-		$(CARGO) deny check; \
+	@set -e; if $(CARGO) deny --version >/dev/null 2>&1; then \
+		advisory_db="$${CARGO_HOME:-$$HOME/.cargo}/advisory-dbs"; \
+		parent="$$advisory_db"; \
+		while [ ! -e "$$parent" ] && [ ! -L "$$parent" ]; do parent=$$(dirname "$$parent"); done; \
+		if [ -d "$$parent" ] && [ -w "$$parent" ] && [ -x "$$parent" ] \
+			&& { [ ! -e "$$advisory_db/db.lock" ] || [ -w "$$advisory_db/db.lock" ]; }; then \
+			$(CARGO) deny check; \
+		else \
+			mkdir -p target/cargo-deny; \
+			config=$$(mktemp target/cargo-deny/config.XXXXXXXX); \
+			trap 'rm "$$config"' EXIT; \
+			awk '{print} /^\[advisories\]$$/ {print "db-path = \"target/cargo-deny/advisory-dbs\""}' deny.toml > "$$config"; \
+			$(CARGO) deny check --config "$$config"; \
+		fi; \
 	else \
 		$(call missing_tool,cargo-deny,the supply-chain check); \
 	fi
@@ -98,17 +112,24 @@ standards-check:
 		sh docs/standards/check.sh; \
 	elif [ "$(STANDARDS_STRICT)" = "1" ]; then \
 		echo "error: standards not vendored yet (no docs/standards/check.sh)." >&2; \
-		echo "       from the constellation root: operations/scripts/sync-standards.sh --adopt STD-01,STD-02,STD-03,STD-04,STD-05 <this repo>" >&2; \
+		echo "       from the constellation root: operations/scripts/sync-standards.sh --adopt STD-01,STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09 <this repo>" >&2; \
 		exit 1; \
 	else \
 		echo "warning: standards not vendored yet (no docs/standards/check.sh); skipping." >&2; \
-		echo "         from the constellation root: operations/scripts/sync-standards.sh --adopt STD-01,STD-02,STD-03,STD-04,STD-05 <this repo>" >&2; \
+		echo "         from the constellation root: operations/scripts/sync-standards.sh --adopt STD-01,STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09 <this repo>" >&2; \
 	fi
 
 # Pre-handoff gate for agents: no compile, and every parity check CI runs
 # that needs no build (STD-04 R12). Goldens need the binary, so they are
 # their own target.
-ci-fast: fmt-check structure standards-check
+docs-check:
+	python3 scripts/check-readme.py
+	python3 scripts/generate-feature-board.py --check
+
+feature-board:
+	python3 scripts/generate-feature-board.py
+
+ci-fast: fmt-check structure standards-check docs-check
 
 ci-lint: clippy deny
 

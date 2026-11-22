@@ -7,6 +7,13 @@
 
 use tmpl_cli_core::Priority;
 
+/// Whether to render semantic roles with ANSI escapes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Color {
+    Ansi,
+    Plain,
+}
+
 /// What a cell's color means.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Role {
@@ -28,13 +35,13 @@ pub(crate) fn role_for_priority(priority: Priority) -> Role {
 }
 
 /// Wrap `text` in the role's escape codes when color is allowed.
-pub(crate) fn paint(text: &str, role: Role, color: bool) -> String {
+pub(super) fn paint(text: &str, role: Role, color: Color) -> String {
     let code = match role {
         Role::Warn => "33",  // yellow
         Role::Muted => "90", // bright black
         Role::Neutral => return text.to_owned(),
     };
-    if color {
+    if color == Color::Ansi && !text.trim().is_empty() {
         format!("\x1b[{code}m{text}\x1b[0m")
     } else {
         text.to_owned()

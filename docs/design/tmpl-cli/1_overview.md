@@ -6,12 +6,13 @@ last_validated: 2026-09-26
 status: Draft
 feature: tmpl-cli
 doc_role: overview
+stage: shipped
+next: —
 type: design
 summary: A small note-keeping CLI whose real job is to be the working example of the constellation CLI, Rust-architecture, process-safety, testing and security standards.
 tags: [tmpl-cli, cli, standards]
 paths: ["crates/**"]
 related_features: [tmpl-cli]
-related_artifacts: [ORB-13117, ORB-13134]
 ---
 
 # tmpl-cli — Overview
@@ -50,25 +51,19 @@ there.
 
 ## 3. At a Glance
 
-| Concern | File | Task |
-|---------|------|------|
-| Root command, global flags, parsing | [crates/tmpl-cli/src/cli.rs](../../../crates/tmpl-cli/src/cli.rs) | [ORB-13117] |
-| Data directory and store construction | [crates/tmpl-cli/src/app.rs](../../../crates/tmpl-cli/src/app.rs) | [ORB-13117] |
-| Dispatch chokepoint, audited-command table | [crates/tmpl-cli/src/commands/mod.rs](../../../crates/tmpl-cli/src/commands/mod.rs) | [ORB-13117] |
-| `note` subcommands, flags, help, handlers, empty-result notice | [crates/tmpl-cli/src/commands/note.rs](../../../crates/tmpl-cli/src/commands/note.rs) | [ORB-13117] |
-| Audit guard around mutating commands | [crates/tmpl-cli/src/audit_middleware.rs](../../../crates/tmpl-cli/src/audit_middleware.rs) | — |
-| Output mode, color, width resolution | [crates/tmpl-cli/src/output/sink.rs](../../../crates/tmpl-cli/src/output/sink.rs) | [ORB-13117] |
-| Rendering, error reporting, closed pipe | [crates/tmpl-cli/src/output/](../../../crates/tmpl-cli/src/output/) | [ORB-13117] |
-| Note types, validation, next-id rule | [crates/tmpl-cli-core/src/note.rs](../../../crates/tmpl-cli-core/src/note.rs) | [ORB-13117] |
-| List selection (filter, count, limit) | [crates/tmpl-cli-core/src/query.rs](../../../crates/tmpl-cli-core/src/query.rs) | [ORB-13117] |
-| Store facade | [crates/tmpl-cli-core/src/store/mod.rs](../../../crates/tmpl-cli-core/src/store/mod.rs) | [ORB-13117] |
-| Persisted format, upgrades; audit record shape | [crates/tmpl-cli-core/src/store/format.rs](../../../crates/tmpl-cli-core/src/store/format.rs), [audit.rs](../../../crates/tmpl-cli-core/src/store/audit.rs) | [ORB-13134] |
-| Atomic write, append, lock, private state | [crates/tmpl-cli-core/src/store/fsio.rs](../../../crates/tmpl-cli-core/src/store/fsio.rs) | [ORB-13117], [ORB-13134] |
-| Goldens of help and output | [crates/tmpl-cli/tests/goldens.rs](../../../crates/tmpl-cli/tests/goldens.rs) | [ORB-13117] |
-
-## Task References
-
-- [ORB-13117] — built the Rust CLI template this project was created from.
-- [ORB-13134] — brought the template to STD-01..03 v2 and STD-04/05 v1.
-
-> Resolve any task above with `orbit task show <ID>` or `git log --grep=<ID>`.
+| Concern | File |
+|---------|------|
+| Grouped root help | [crates/tmpl-cli/src/help.rs](../../../crates/tmpl-cli/src/help.rs) |
+| Root command, global flags, parsing | [crates/tmpl-cli/src/cli.rs](../../../crates/tmpl-cli/src/cli.rs) |
+| Data directory and store construction | [crates/tmpl-cli/src/app.rs](../../../crates/tmpl-cli/src/app.rs) |
+| Dispatch chokepoint, audited-command table | [crates/tmpl-cli/src/commands/mod.rs](../../../crates/tmpl-cli/src/commands/mod.rs) |
+| `note` subcommands, flags, help, handlers, empty-result notice | [crates/tmpl-cli/src/commands/note.rs](../../../crates/tmpl-cli/src/commands/note.rs) |
+| Audit guard around mutating commands | [crates/tmpl-cli/src/audit_middleware.rs](../../../crates/tmpl-cli/src/audit_middleware.rs) |
+| Output mode, color, width resolution | [crates/tmpl-cli/src/output/sink.rs](../../../crates/tmpl-cli/src/output/sink.rs) |
+| Rendering, error reporting, closed pipe | [crates/tmpl-cli/src/output/](../../../crates/tmpl-cli/src/output/) |
+| Note types, validation, next-id rule | [crates/tmpl-cli-core/src/note.rs](../../../crates/tmpl-cli-core/src/note.rs) |
+| List selection (filter, count, limit) | [crates/tmpl-cli-core/src/query.rs](../../../crates/tmpl-cli-core/src/query.rs) |
+| Store facade | [crates/tmpl-cli-core/src/store/mod.rs](../../../crates/tmpl-cli-core/src/store/mod.rs) |
+| Persisted format, upgrades; audit record shape | [crates/tmpl-cli-core/src/store/format.rs](../../../crates/tmpl-cli-core/src/store/format.rs), [audit.rs](../../../crates/tmpl-cli-core/src/store/audit.rs) |
+| Atomic write, append, lock, bounded reads, private state | [crates/tmpl-cli-core/src/store/fsio.rs](../../../crates/tmpl-cli-core/src/store/fsio.rs) |
+| Goldens of help and output | [crates/tmpl-cli/tests/goldens.rs](../../../crates/tmpl-cli/tests/goldens.rs) |

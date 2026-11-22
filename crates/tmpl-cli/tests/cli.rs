@@ -1,7 +1,14 @@
 //! End-to-end tests of the built binary: streams, exit codes, output modes,
 //! pipe behaviour, inputs and effects, and store safety (STD-01 R7–R34,
 //! STD-02 R20, STD-05 R7–R9).
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::expect_used,
+        clippy::unwrap_used,
+        reason = "integration tests assert fixture setup"
+    )
+)]
 
 mod support;
 
@@ -11,6 +18,25 @@ use support::{ChildGuard, Fixture, text};
 
 fn json(bytes: &[u8]) -> serde_json::Value {
     serde_json::from_slice(bytes).expect("one JSON document")
+}
+
+#[test]
+fn piped_root_help_groups_commands_and_ignores_terminal_settings() {
+    let fx = Fixture::new();
+    let wide = fx.ok(&["--help"]);
+    let narrow = fx
+        .cmd(&["--help"])
+        .env("COLUMNS", "12")
+        .env("TERM", "xterm-256color")
+        .output()
+        .unwrap();
+    assert!(narrow.status.success());
+    assert_eq!(wide.stdout, narrow.stdout);
+    assert_eq!(wide.stdout, fx.ok(&["help"]).stdout);
+    assert!(wide.stderr.is_empty() && narrow.stderr.is_empty());
+    let rendered = text(&wide.stdout);
+    assert!(rendered.contains("Notes:\n  note  Add, list and show notes\n"));
+    assert!(rendered.contains("Help:\n  help  Print this message"));
 }
 
 #[test]
@@ -662,5 +688,79 @@ mod unix {
             );
         }
         assert_eq!(snapshot(&root), before);
+    }
+}
+
+/// Split one documented shell command line into words: whitespace outside
+/// quotes separates, `'…'` and `"…"` group. Enough for documentation.
+fn shell_words(line: &str) -> Vec<String> {
+    let (mut words, mut word, mut in_word, mut quote) = (Vec::new(), String::new(), false, None);
+    for c in line.chars() {
+        match quote {
+            Some(q) if c == q => quote = None,
+            Some(_) => word.push(c),
+            None if c == '\'' || c == '"' => {
+                quote = Some(c);
+                in_word = true;
+            }
+            None if c.is_whitespace() => {
+                if in_word {
+                    words.push(std::mem::take(&mut word));
+                    in_word = false;
+                }
+            }
+            None => {
+                word.push(c);
+                in_word = true;
+            }
+        }
+    }
+    if in_word {
+        words.push(word);
+    }
+    words
+}
+
+/// Execute the CLI portion of each example with a seeded store.
+#[test]
+fn documented_examples_run_through_the_binary() {
+    let fx = Fixture::new();
+    fx.seed();
+    let mut sources = Vec::new();
+    for (path, _) in tmpl_cli::every_command() {
+        let mut args: Vec<_> = path.split_whitespace().skip(1).collect();
+        args.push("--help");
+        let help = text(&fx.ok(&args).stdout);
+        if let Some((_, examples)) = help.split_once("Examples:") {
+            sources.push((path, examples.to_owned()));
+        }
+    }
+    for name in ["README.md", "docs/usage.md"] {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(name);
+        sources.push((name.to_owned(), std::fs::read_to_string(path).unwrap()));
+    }
+
+    for (source, text) in sources {
+        let mut checked = 0;
+        for line in text.lines() {
+            let Some(command) = line.trim_start().strip_prefix("tmpl-cli ") else {
+                continue;
+            };
+            let command = command.split(" | ").next().unwrap_or(command);
+            let command = command.split("  #").next().unwrap_or(command);
+            let words = shell_words(&command.replace("<id>", "1"));
+            let args: Vec<_> = words.iter().map(String::as_str).collect();
+            let output = fx.run(&args);
+            assert!(
+                output.status.success(),
+                "{source}: `{}` failed: {}",
+                line.trim(),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            checked += 1;
+        }
+        assert!(checked > 0, "{source} contained no runnable examples");
     }
 }

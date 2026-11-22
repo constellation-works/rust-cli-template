@@ -34,6 +34,9 @@ use time::format_description::well_known::Rfc3339;
 /// forked `sleep` (STD-03 R17).
 const LOCK_POLL: Duration = Duration::from_millis(20);
 
+/// Upper bound for the diagnostic record a lock waiter can read.
+const LOCK_HOLDER_LIMIT: u64 = 1024;
+
 /// Owner-only modes, requested explicitly at creation (STD-05 R8). The
 /// umask can only narrow them.
 #[cfg(unix)]
@@ -97,6 +100,72 @@ fn parent_dir(path: &Path) -> &Path {
     path.parent()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("."))
+}
+
+/// Read at most `limit` bytes, returning an error if the input is larger.
+fn read_bounded(reader: impl Read, limit: u64) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    reader
+        .take(limit.saturating_add(1))
+        .read_to_end(&mut bytes)?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > limit {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("file exceeds {limit} bytes"),
+        ));
+    }
+    Ok(bytes)
+}
+
+/// List the UTF-8 names in a checked store directory in sorted order. A
+/// directory that does not exist yet lists as empty.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "template mechanism for multi-file stores")
+)]
+pub(super) fn list_dir(dir: &Path) -> Result<Vec<String>> {
+    if !inspect_dir(dir)? {
+        return Ok(Vec::new());
+    }
+    let mut names = Vec::new();
+    for item in fs::read_dir(dir).map_err(|e| Error::io("list", dir, e))? {
+        let item = item.map_err(|e| Error::io("list", dir, e))?;
+        if let Ok(name) = item.file_name().into_string() {
+            names.push(name);
+        }
+    }
+    names.sort();
+    Ok(names)
+}
+
+/// Remove a private regular file, syncing the parent directory. A missing
+/// file already satisfies the operation. The caller holds the store lock
+/// and only passes data files, since a lock file must never be removed.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "template mechanism for multi-file stores")
+)]
+pub(super) fn remove_private(path: &Path) -> Result<()> {
+    let parent = parent_dir(path);
+    if !inspect_dir(parent)? {
+        return Ok(());
+    }
+    let meta = match fs::symlink_metadata(path) {
+        Ok(meta) => meta,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(Error::io("inspect", path, e)),
+    };
+    refuse_symlink(path, &meta)?;
+    check_owner_and_mode(path, &meta, "600")?;
+    if !meta.is_file() {
+        return Err(Error::io(
+            "remove",
+            path,
+            io::Error::new(io::ErrorKind::InvalidInput, "expected a regular file"),
+        ));
+    }
+    fs::remove_file(path).map_err(|e| Error::io("remove", path, e))?;
+    sync_dir(parent)
 }
 
 /// Create `dir` and any missing parents, each `0700`.
@@ -253,11 +322,12 @@ fn record_holder(file: &mut File, label: &str) -> io::Result<()> {
 }
 
 fn read_holder(file: &mut File) -> String {
-    let mut text = String::new();
-    let read = file
+    let text = file
         .seek(SeekFrom::Start(0))
-        .and_then(|_| file.read_to_string(&mut text));
-    let Ok(_) = read else {
+        .and_then(|_| read_bounded(file, LOCK_HOLDER_LIMIT))
+        .ok()
+        .and_then(|bytes| String::from_utf8(bytes).ok());
+    let Some(text) = text else {
         return String::from("an unknown process");
     };
     let trimmed = text.trim();

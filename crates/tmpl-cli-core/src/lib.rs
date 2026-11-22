@@ -18,7 +18,14 @@
 // Library code never prints; diagnostics go through `tracing` (STD-02 R15).
 #![deny(clippy::print_stderr, clippy::print_stdout)]
 // Unit tests use unwrap/expect for fixture setup; production call sites remain linted.
-#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::expect_used,
+        clippy::unwrap_used,
+        reason = "unit tests assert fixture setup"
+    )
+)]
 
 mod error;
 mod note;

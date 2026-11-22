@@ -9,9 +9,9 @@ an edge changes this file and that script in the same commit.
 | Tier | Unit | Owns | May depend on |
 |------|------|------|---------------|
 | 1. Business logic | `tmpl-cli-core::note`, `::query`, `::error` | `Note`, `NoteId`, `Title`, `Tag`, `Priority`; validating constructors; serde shapes; the next-id rule; list selection (filter, count, limit); the crate's typed `Error`. No I/O. | nothing internal |
-| 2. Persistence | `tmpl-cli-core::store` | The `Store` facade (list, show, add, record an audit event) over its private parts: `format` (the persisted document, format upgrades), `audit` (the audit record shape) and `fsio` (atomic write, append, advisory lock, owner-only checks; knows nothing about notes). The only core module that touches the filesystem. | tier 1 |
+| 2. Persistence | `tmpl-cli-core::store` | The `Store` facade (list, show, add, record an audit event) over its private parts: `format` (the persisted document, format upgrades), `audit` (the audit record shape) and `fsio` (atomic write, append, advisory lock, bounded reads, directory listing, private removal and owner-only checks; knows nothing about notes). The only core module that touches the filesystem. | tier 1 |
 | 3. Composition | `tmpl-cli::app` | Resolves the data directory (`--root` > `TMPL_CLI_ROOT` > `~/.tmpl-cli`), constructs the `Store`, supplies the clock. | `tmpl-cli-core` |
-| 4. Surface | `tmpl-cli::cli`, `::commands`, `::audit_middleware`, `::output` | Root argument declarations; one module per noun with its flags and handlers (one store call per verb); the audit guard around every mutating command; rendering from payloads; the only stdout/stderr/TTY access. | tiers 1–3 |
+| 4. Surface | `tmpl-cli::cli`, `::commands`, `::audit_middleware`, `::output` | Root argument declarations and grouped help; one module per noun with its flags and handlers (one store call per verb); the audit guard around every mutating command; rendering from payloads; the only stdout/stderr/TTY access. | tiers 1–3 |
 
 ## Crates
 

@@ -11,16 +11,15 @@ summary: Why two crates with persistence as one core module, why commands are on
 tags: [tmpl-cli, decisions]
 paths: ["Cargo.toml", "crates/**", "Makefile"]
 related_features: [tmpl-cli]
-related_artifacts: [ORB-13117, ORB-13134]
 ---
 
 # tmpl-cli — Decisions
 
-Record non-obvious decisions here by title. Task references carry provenance; superseded decisions remain in place so their original reasoning stays legible. See [CONVENTIONS.md §3](../CONVENTIONS.md#3-what-earns-a-decision-entry) for the admission rule and required `Cost:` line.
+Record non-obvious decisions here by title. Superseded decisions remain in place so their original reasoning stays legible. See [CONVENTIONS.md §3](../CONVENTIONS.md#3-what-earns-a-decision-entry) for the admission rule and required `Cost:` line.
 
 ## A domain library crate and a CLI crate
 
-**Recorded:** 2026-09 · [ORB-13117]
+**Recorded:** 2026-09
 **Code anchors:** `Cargo.toml` `[workspace] members`; `scripts/check-dependency-direction.sh::policy`
 
 ### Context
@@ -150,7 +149,7 @@ line within one deadline.
 
 ## --json is the one alias for --format json
 
-**Recorded:** 2026-09 · [ORB-13117]
+**Recorded:** 2026-09
 **Code anchors:** `crates/tmpl-cli/src/cli.rs::GlobalArgs`, `crates/tmpl-cli/src/cli.rs::Cli::parse_args`
 
 ### Context
@@ -178,7 +177,7 @@ checked after parsing in `Cli::parse_args` and reported as a clap usage error
 
 **Superseded** by [A list's JSON is an envelope with total and truncated](#a-lists-json-is-an-envelope-with-total-and-truncated).
 
-**Recorded:** 2026-09 · [ORB-13117]
+**Recorded:** 2026-09
 **Code anchors:** `crates/tmpl-cli/src/output/render.rs::note_list`
 
 ### Context
@@ -201,7 +200,7 @@ is 0. This reads R16's "nothing" as "no records", as Orbit does.
 
 ## The store lock uses std file locks, not a crate
 
-**Recorded:** 2026-09 · [ORB-13117]
+**Recorded:** 2026-09
 **Code anchors:** `crates/tmpl-cli-core/src/store/fsio.rs::LockGuard::acquire`
 
 ### Context
@@ -224,7 +223,7 @@ the need.
 
 ## clap without color or terminal-width features
 
-**Recorded:** 2026-09 · [ORB-13117]
+**Recorded:** 2026-09
 **Code anchors:** `Cargo.toml` `[workspace.dependencies] clap`
 
 ### Context
@@ -242,12 +241,13 @@ is ever wanted, is applied from the sink's decision.
 
 ### Consequences
 
-- Help renders byte-identically on every machine, so goldens are stable.
-- Cost: no colored help and no wrapping of long help lines to the terminal.
+- Piped help is byte-stable for the goldens. The output sink supplies a
+  terminal width for wrapping root command summaries.
+- Cost: help is plain text and flag descriptions keep clap's unwrapped layout.
 
 ## Usage errors keep clap's rendering
 
-**Recorded:** 2026-09 · [ORB-13117]
+**Recorded:** 2026-09
 **Code anchors:** `crates/tmpl-cli/src/output/mod.rs::finish_parse_error`
 
 ### Context
@@ -269,12 +269,15 @@ Command failures follow R19 exactly.
 - Wrappers still branch on exit code 2 and the stable `code`.
 - Cost: a script reading human-mode stderr gets several lines for a usage
   error and one line for a command failure.
-- Update [ORB-13134]: STD-01@2 §R19 allows exactly this rendering, so it is
+- Update: STD-01@2 §R19 allows exactly this rendering, so it is
   no longer a deviation.
+- Deviation from STD-08@2 §R10. Human usage errors retain clap's tips and
+  usage line. Command errors include the resolved note ID or path when
+  those details explain the failure, as required by STD-02 §R26.
 
 ## standards-check warns locally and fails in CI
 
-**Recorded:** 2026-09 · [ORB-13117]
+**Recorded:** 2026-09
 **Code anchors:** `Makefile` `standards-check`; `.github/workflows/ci.yml` `STANDARDS_STRICT`
 
 ### Context
@@ -298,7 +301,7 @@ sets, and then it fails.
 
 ## A list's JSON is an envelope with total and truncated
 
-**Recorded:** 2026-09 · [ORB-13134]
+**Recorded:** 2026-09
 **Code anchors:** `crates/tmpl-cli/src/output/payload.rs::ListPayload`; `crates/tmpl-cli-core/src/query.rs::NoteList`; `crates/tmpl-cli/src/commands/note.rs::list_notice`
 
 ### Context
@@ -326,7 +329,7 @@ matching notes` on stderr in every mode. `--limit` must be at least 1.
 
 ## add names what it wrote on stderr
 
-**Recorded:** 2026-09 · [ORB-13134]
+**Recorded:** 2026-09
 **Code anchors:** `crates/tmpl-cli/src/commands/note.rs::add`
 
 ### Context
@@ -351,7 +354,7 @@ Errors that depend on the data directory name the store file too
 
 ## Store format upgrades are an append-only registry
 
-**Recorded:** 2026-09 · [ORB-13134]
+**Recorded:** 2026-09
 **Code anchors:** `crates/tmpl-cli-core/src/store/format.rs::UPGRADES`, `::FORMAT`
 
 ### Context
@@ -382,7 +385,7 @@ registry ships empty.
 
 ## Store state is owner-only and checked on every load
 
-**Recorded:** 2026-09 · [ORB-13134]
+**Recorded:** 2026-09
 **Code anchors:** `crates/tmpl-cli-core/src/store/fsio.rs::create_private_dir`, `::inspect_dir`, `::inspect_file`, `::LockGuard::acquire`
 
 ### Context
@@ -421,7 +424,7 @@ for Windows, which would need ACLs).
 
 **Superseded** by [Bad note records are isolated on read and block writes](#bad-note-records-are-isolated-on-read-and-block-writes).
 
-**Recorded:** 2026-09 · [ORB-13134]
+**Recorded:** 2026-09
 **Code anchors:** `crates/tmpl-cli-core/src/store/mod.rs::Store::load`, `crates/tmpl-cli-core/src/store/format.rs::decode`
 
 ### Context
@@ -478,24 +481,24 @@ bad record is present (`store_bad_record`), leaving `notes.json` untouched.
 
 ## Missing gate tools warn locally and fail in CI
 
-**Recorded:** 2026-09 · [ORB-13134]
+**Recorded:** 2026-09
 **Code anchors:** `Makefile` `missing_tool`, `test`, `goldens`, `deny`, `ci-fast`
 
 ### Context
 
-STD-04@1 §R10 says a gate whose tool is missing fails, and §R12 puts every
+STD-04@2 §R10 says a gate whose tool is missing fails, and §R12 puts every
 parity check CI runs into the fast local gate, except those that need a
 build. `cargo-nextest` (per-test timeouts, `--no-tests=fail`) and
 `cargo-deny` are not installed everywhere a copy of this template is built.
 
 ### Decision
 
-Deviation from STD-04@1 §R10 for local runs only: without `cargo-deny` the
+Deviation from STD-04@2 §R10 for local runs only: without `cargo-deny` the
 supply-chain check is skipped, and without `cargo-nextest` the tests run
 under `cargo test`, each with a warning naming the install command. Under
 `CI=true` (set by GitHub Actions) either missing tool fails the gate, and CI
 installs both at pinned versions. `ci-fast` runs formatting, the structure
-checks and `standards-check`. Two checks stay out of it under STD-04@1 §R12
+checks and `standards-check`. Two checks stay out of it under STD-04@2 §R12
 because they need a build: the help and output goldens (`make goldens`) and
 Cargo.lock freshness (`--locked` on every cargo build).
 
@@ -507,7 +510,7 @@ Cargo.lock freshness (`--locked` on every cargo build).
 
 ## Environment settings fall back rather than refuse
 
-**Recorded:** 2026-09 · [ORB-13134]
+**Recorded:** 2026-09
 **Code anchors:** `crates/tmpl-cli/src/output/sink.rs::resolve_mode`; `crates/tmpl-cli/src/output/mod.rs::init_logging`
 
 ### Context
@@ -533,11 +536,11 @@ refused as usage errors naming the flag.
 
 ## Standard rules this template does not exercise
 
-**Recorded:** 2026-09 · [ORB-13134]
+**Recorded:** 2026-09
 
 ### Context
 
-The template adopts STD-01@2, STD-02@3, STD-03@2, STD-04@1 and STD-05@1.
+The [adopted standards](../../standards/README.md) are pinned to the canon.
 Some of their rules govern things a three-verb note CLI does not do. A
 project grown from the template must not read their absence as a waiver.
 
@@ -558,7 +561,7 @@ govern. Each binds as soon as it does, and this entry is edited then:
   integrity guards, deletion, remote calls or git automation: STD-03@2
   §R25–§R32.
 - No capability-dependent tests: every test runs on every CI runner, so
-  there is nothing to skip (STD-04@1 §R8).
+  there is nothing to skip (STD-04@2 §R8).
 - No authorization, plugins, credentials, listeners, consent or tokens:
   STD-05@1 §R1–§R5, §R15–§R19, §R21, §R22, §R25. The binary makes no
   network request at all (§R20).
@@ -573,9 +576,23 @@ govern. Each binds as soon as it does, and this entry is edited then:
 - Cost: the list goes stale unless the change that starts doing one of
   these things also edits it.
 
-## Task References
+## Public design documents use public references
 
-- [ORB-13117] — built the Rust CLI template this project was created from.
-- [ORB-13134] — brought the template to STD-01..03 v2 and STD-04/05 v1.
+**Recorded:** 2026-11
 
-> Resolve any task above with `orbit task show <ID>` or `git log --grep=<ID>`.
+### Context
+
+STD-06@1 §R6 and §R13 describe how design records cite tasks. The template
+is public and the Constellation tracker is private.
+
+### Decision
+
+Describe the next step in the feature board and use public issues, pull
+requests or repository paths when a design needs supporting references.
+A design without public task references omits the task references section.
+The tracked-file gate enforces this policy for private Orbit IDs.
+
+### Consequences
+
+- The public references resolve for readers of the repository.
+- Cost: readers need access to Orbit for private tracker provenance.

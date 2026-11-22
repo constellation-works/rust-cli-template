@@ -9,10 +9,13 @@ Loaded as both `AGENTS.md` and `CLAUDE.md` (a symlink). tmpl-cli keeps short not
 This repository adopts these constellation standards, vendored read-only in `docs/standards/` (each a directory: `STD-nn.md` holds the rules, `why.md` and `checks.md` the reasons and gates):
 
 - `STD-01@2` — [docs/standards/STD-01-cli-surface/STD-01.md](docs/standards/STD-01-cli-surface/STD-01.md)
-- `STD-02@3` — [docs/standards/STD-02-rust-architecture-and-errors/STD-02.md](docs/standards/STD-02-rust-architecture-and-errors/STD-02.md)
+- `STD-02@4` — [docs/standards/STD-02-rust-architecture-and-errors/STD-02.md](docs/standards/STD-02-rust-architecture-and-errors/STD-02.md)
 - `STD-03@2` — [docs/standards/STD-03-concurrency-and-process-safety/STD-03.md](docs/standards/STD-03-concurrency-and-process-safety/STD-03.md)
-- `STD-04@1` — [docs/standards/STD-04-testing-and-verification/STD-04.md](docs/standards/STD-04-testing-and-verification/STD-04.md)
+- `STD-04@2` — [docs/standards/STD-04-testing-and-verification/STD-04.md](docs/standards/STD-04-testing-and-verification/STD-04.md)
 - `STD-05@1` — [docs/standards/STD-05-security-boundaries/STD-05.md](docs/standards/STD-05-security-boundaries/STD-05.md)
+- `STD-06@1` — [docs/standards/STD-06-design-docs-and-feature-tracking/STD-06.md](docs/standards/STD-06-design-docs-and-feature-tracking/STD-06.md)
+- `STD-08@2` — [docs/standards/STD-08-economy/STD-08.md](docs/standards/STD-08-economy/STD-08.md)
+- `STD-09@1` — [docs/standards/STD-09-readme/STD-09.md](docs/standards/STD-09-readme/STD-09.md)
 
 Follow them; they are normative. To deviate from a rule, record a decision in `docs/design/<feature>/4_decisions.md` citing `STD-nn@<version> §Rn`; never edit `docs/standards/` (`sh docs/standards/check.sh` enforces this).
 Reviewers check every change against the adopted standards and report violations as `STD-nn §Rn` with file:line evidence.
@@ -24,7 +27,7 @@ Reviewers check every change against the adopted standards and report violations
 - Don't add a crate, or a dependency between crates, without updating [`ARCHITECTURE.md`](ARCHITECTURE.md) and `scripts/check-dependency-direction.sh` in the same change.
 - Update affected docs in the same PR as the code. Stale docs are a review blocker.
 - Don't touch `CHANGELOG.md` during tasks; it is compiled at release time.
-- Every test must exercise behavior. No text-matching tests (`include_str!` plus `contains()` over source or copy).
+- Use integration tests or goldens first (STD-04 R23). Every test must exercise behavior. No text-matching tests (`include_str!` plus `contains()` over source or copy).
 - A fix comes with a regression test through the real entry point (the built binary or the public API), seen failing before the fix.
 - Tests never touch real host state: temp roots, and `HOME`/`TMPL_CLI_*` set on the child command ([`tests/support`](crates/tmpl-cli/tests/support/mod.rs)).
 
@@ -34,11 +37,11 @@ Reviewers check every change against the adopted standards and report violations
 
 ## Gates
 
-`make ci-fast` (fmt, structure, `standards-check`), `make ci-lint` and `make goldens` must pass before a task moves to review. After an intended change to help or output, run `make goldens UPDATE=1` and review the diff as a contract change. `make ci` (everything, including tests and doctests) runs in CI on Linux and macOS.
+`make ci-fast` (fmt, structure, documentation and standards checks), `make ci-lint` and `make goldens` must pass before a task moves to review. After an intended change to help or output, run `make goldens UPDATE=1` and review the diff as a contract change. `make ci` (everything, including tests and doctests) runs in CI on Linux and macOS.
 
 ## Code
 
-- Layers: [`ARCHITECTURE.md`](ARCHITECTURE.md). Design and decisions: [`docs/design/tmpl-cli/`](docs/design/tmpl-cli/); new features copy [`docs/design/_templates/`](docs/design/_templates/).
+- Layers: [`ARCHITECTURE.md`](ARCHITECTURE.md). Design and decisions: [`docs/design/tmpl-cli/`](docs/design/tmpl-cli/); new features follow the [design conventions](docs/design/CONVENTIONS.md).
 - `tmpl-cli-core` is the domain: no clap, no terminal, no environment reads. Business logic (`note.rs`, `query.rs`) does no I/O; everything that touches disk is in `store/`. The CLI crate parses (`cli.rs`), composes (`app.rs`), dispatches (`commands/`, one module per noun holding its flags and handlers; a large noun becomes `commands/<noun>/` with one file per verb), audits (`audit_middleware.rs`) and renders (`output/`).
 - Every mutating command is audited: declare it in `Command::audit` (the match is exhaustive, so a new command must decide). Read-only commands return `None`; they never write. Audit lines carry ids and error codes, never argument values or messages.
 - Lints come from `[workspace.lints]`: no `unwrap`/`expect` in production code, no `print!` (use `tracing`), no lock guard across `.await`, no wildcard arm on an enum, no narrowing `as`. CI runs clippy with `-D warnings`.

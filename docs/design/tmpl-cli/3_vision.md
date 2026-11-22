@@ -11,7 +11,6 @@ summary: Where a project grown from this template is expected to go next, and wh
 tags: [tmpl-cli]
 paths: ["crates/**"]
 related_features: [tmpl-cli]
-related_artifacts: [ORB-13117]
 ---
 
 # tmpl-cli — Vision
@@ -60,11 +59,4 @@ it.
 
 **External**
 
-- Constellation standards STD-01 to STD-05 (vendored under
-  `docs/standards/` once adopted).
-
-## Task References
-
-- [ORB-13117] — built the Rust CLI template this project was created from.
-
-> Resolve any task above with `orbit task show <ID>` or `git log --grep=<ID>`.
+- [Adopted constellation standards](../../standards/README.md).
