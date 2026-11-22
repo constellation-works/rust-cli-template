@@ -5,9 +5,10 @@
 //! module performs no I/O (STD-02 R5); `scripts/check-dependency-direction.sh`
 //! rejects `std::fs`, `std::net` and `std::process` here.
 //!
-//! The serde shapes double as the persisted format (STD-02 R16): never rename
-//! or retype a field, and give a new one a default. Any change to the shape
-//! also bumps the store format with an upgrade step (`store/format.rs::UPGRADES`).
+//! Persisted note records are decoded per record in `store/format.rs`, which
+//! validates every required field through these constructors rather than
+//! letting serde default missing fields or abort the whole store on one bad
+//! record.
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -26,8 +27,8 @@ pub enum NoteError {
     /// The title was longer than [`Title::MAX_CHARS`].
     #[error("title is {0} characters; the limit is {max}", max = Title::MAX_CHARS)]
     TitleTooLong(usize),
-    /// The title contained a tab or line break.
-    #[error("title contains a tab or line break; titles are a single line")]
+    /// The title contained a control character, tab or line break.
+    #[error("title contains a control character or line break; titles are plain single-line text")]
     TitleNotSingleLine,
     /// The body was empty or only whitespace.
     #[error("body is blank: give it some text, or leave the body out")]
@@ -59,20 +60,20 @@ impl NoteId {
     }
 
     /// The id to assign to a note added after `notes`: one past the highest,
-    /// or [`NoteId::FIRST`] when there are none. A business rule, so it lives
-    /// here, not in the store that persists the result.
-    pub(crate) fn next_after(notes: &[Note]) -> Self {
-        notes
-            .iter()
-            .map(|n| n.id)
-            .max()
-            .map_or(Self::FIRST, Self::next)
+    /// or [`NoteId::FIRST`] when there are none, or `None` when the highest id
+    /// is already `u64::MAX`. A business rule, so it lives here, not in the
+    /// store that persists the result.
+    pub(crate) fn next_after(notes: &[Note]) -> Option<Self> {
+        match notes.iter().map(|n| n.id).max() {
+            None => Some(Self::FIRST),
+            Some(max) => max.next(),
+        }
     }
 
-    /// The id after this one. Saturates rather than wrapping: a store would
-    /// need 2^64 notes to reach it.
-    fn next(self) -> Self {
-        Self(self.0.saturating_add(1))
+    /// The id after this one, or `None` at `u64::MAX` so an existing id is
+    /// never handed out again.
+    fn next(self) -> Option<Self> {
+        self.0.checked_add(1).map(Self)
     }
 }
 
@@ -111,11 +112,11 @@ impl fmt::Display for NoteId {
     }
 }
 
-/// A note's title: one non-empty line, trimmed.
+/// A note's title: one non-empty line, trimmed, with no control characters.
 ///
-/// Single-line is load-bearing, not cosmetic: the piped output form is one
-/// tab-separated line per record (STD-01 R9), and a title with a tab or a
-/// newline would split a record across fields or lines.
+/// Single-line without control characters is load-bearing, not cosmetic: the
+/// piped output form is one tab-separated line per record (STD-01 R9), and
+/// control bytes such as ESC would reach terminals or pipes raw.
 ///
 /// ```
 /// use tmpl_cli_core::Title;
@@ -125,8 +126,8 @@ impl fmt::Display for NoteId {
 /// assert!("Buy\tmilk".parse::<Title>().is_err(), "a title is one line");
 /// # Ok::<(), tmpl_cli_core::NoteError>(())
 /// ```
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
 pub struct Title(String);
 
 impl Title {
@@ -148,7 +149,7 @@ impl TryFrom<String> for Title {
         if trimmed.is_empty() {
             return Err(NoteError::EmptyTitle);
         }
-        if trimmed.contains(['\t', '\n', '\r']) {
+        if value.chars().any(char::is_control) {
             return Err(NoteError::TitleNotSingleLine);
         }
         let chars = trimmed.chars().count();
@@ -208,8 +209,8 @@ impl From<Body> for String {
 }
 
 /// A tag: a short lowercase label such as `home` or `follow-up`.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
 pub struct Tag(String);
 
 impl Tag {
@@ -303,20 +304,17 @@ impl fmt::Display for Priority {
 }
 
 /// A stored note.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Note {
     /// Assigned by the store; unique within it.
     pub id: NoteId,
     /// One line of text.
     pub title: Title,
     /// Optional longer text.
-    #[serde(default)]
     pub body: Option<String>,
     /// Labels, sorted and deduplicated.
-    #[serde(default)]
     pub tags: Vec<Tag>,
     /// How much it matters.
-    #[serde(default)]
     pub priority: Priority,
     /// When it was added.
     #[serde(with = "time::serde::rfc3339")]

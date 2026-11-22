@@ -1,11 +1,11 @@
 //! Command dispatch: the noun enum, the one chokepoint every command runs
 //! through, and one module per noun.
 //!
-//! [`run`] is where cross-cutting behaviour attaches, once, for every command
-//! (STD-02 R24): today the audit log, through [`crate::audit_middleware`].
-//! Each noun lives in its own module with its subcommands, flags, help and
-//! handlers (`note.rs`); a noun that outgrows one file becomes a directory
-//! (see `note.rs`).
+//! [`run_with`] is where cross-cutting behaviour attaches, once, for every
+//! command (STD-02 R24): today the audit log, through
+//! [`crate::audit_middleware`]. Each noun lives in its own module with its
+//! subcommands, flags, help and handlers (`note.rs`); a noun that outgrows
+//! one file becomes a directory (see `note.rs`).
 
 mod note;
 
@@ -38,21 +38,28 @@ impl Command {
     }
 }
 
-/// Run one command, auditing it if it is audited.
+/// Run one command, auditing it if it is audited, and pass its outcome to
+/// `finish` before the audit guard drops.
 ///
-/// The guard exists before dispatch and records when it is dropped, so a
-/// command that returns early or panics is still logged, as a failure.
-pub(crate) fn run(command: Command, ctx: &Context) -> Result<Output, CliError> {
-    let mut audit = command
-        .audit()
-        .map(|meta| AuditGuard::start(ctx.store(), meta, ctx.now()));
+/// Creating the guard before dispatch ensures an early return or panic is
+/// still logged as a failure; dropping it after `finish` ensures any
+/// fail-open audit warning reaches stderr after the command's own payload or
+/// JSON error object.
+pub(crate) fn run_with<R>(
+    command: Command,
+    ctx: &Context,
+    finish: impl FnOnce(Result<Output, CliError>) -> R,
+) -> R {
+    let mut audit = command.audit().map(|meta| {
+        AuditGuard::start(ctx.store(), meta, ctx.now(), ctx.actor().map(str::to_owned))
+    });
     let result = match command {
         Command::Note(command) => note::run(command, ctx),
     };
     if let Some(audit) = audit.as_mut() {
         audit.mark_result(&result);
     }
-    result
+    finish(result)
 }
 
 #[cfg(test)]

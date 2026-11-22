@@ -54,10 +54,11 @@ breaking change and shows up as a golden diff.
 
 | Exit | Meaning | stderr |
 |------|---------|--------|
-| 0 | success, including an empty result and a closed stdout | one notice at most: nothing matched, the list was cut, or `added note <id> to <file>` |
+| 0 | success, including an empty result and a closed stdout | warnings for any isolated bad store records, plus one notice at most: nothing matched, the list was cut, or `added note <id> to <file>` |
 | 1 | the command failed | `error: <message>` or `{"error": "...", "code": "..."}` |
 | 2 | usage error | clap's rendering, or `{"error": "...", "code": "usage_error"}` |
 
-Stable codes: `note_not_found`, `io_error`, `store_corrupt`, `store_too_new`,
+Stable codes: `note_not_found`, `io_error`, `encode_error`, `store_corrupt`,
+`store_bad_record`, `store_duplicate_id`, `note_id_exhausted`, `store_too_new`,
 `store_locked`, `store_symlink`, `store_foreign_owner`, `store_permissions`,
 `no_data_dir`, `output_error`, `usage_error`.

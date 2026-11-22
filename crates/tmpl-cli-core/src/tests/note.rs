@@ -29,8 +29,12 @@ fn the_next_id_is_one_past_the_highest_whatever_the_order() {
         }
         .into_note(NoteId::try_from(id).unwrap(), OffsetDateTime::UNIX_EPOCH)
     };
-    assert_eq!(NoteId::next_after(&[]), NoteId::FIRST);
-    assert_eq!(NoteId::next_after(&[at(3), at(1), at(7)]).get(), 8);
+    assert_eq!(NoteId::next_after(&[]), Some(NoteId::FIRST));
+    assert_eq!(
+        NoteId::next_after(&[at(3), at(1), at(7)]).map(NoteId::get),
+        Some(8)
+    );
+    assert_eq!(NoteId::next_after(&[at(u64::MAX)]), None);
 }
 
 #[test]
@@ -45,6 +49,22 @@ fn title_is_trimmed_and_must_be_one_non_empty_line() {
     assert_eq!("   ".parse::<Title>(), Err(NoteError::EmptyTitle));
     assert_eq!("a\tb".parse::<Title>(), Err(NoteError::TitleNotSingleLine));
     assert_eq!("a\nb".parse::<Title>(), Err(NoteError::TitleNotSingleLine));
+    assert_eq!(
+        "\x1b[31mred\x1b[0m".parse::<Title>(),
+        Err(NoteError::TitleNotSingleLine)
+    );
+    assert_eq!(
+        "bell\x07here".parse::<Title>(),
+        Err(NoteError::TitleNotSingleLine)
+    );
+    assert_eq!(
+        "del\x7fchar".parse::<Title>(),
+        Err(NoteError::TitleNotSingleLine)
+    );
+    assert_eq!(
+        "c1\u{009b}csi".parse::<Title>(),
+        Err(NoteError::TitleNotSingleLine)
+    );
     let long = "x".repeat(Title::MAX_CHARS + 1);
     assert_eq!(
         long.parse::<Title>(),

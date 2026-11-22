@@ -84,3 +84,21 @@ fn a_single_record_list_is_still_a_table() {
     assert_eq!(text.lines().count(), 2);
     assert!(text.starts_with("ID"));
 }
+
+#[test]
+fn detail_view_sanitizes_body_control_characters_and_normalizes_crlf() {
+    let mut n = note(1, &[]);
+    n.body = Some(String::from(
+        "first\r\nsecond\rthird\x1b[31mred\x1b[0m\tkept",
+    ));
+    let mut out = Vec::new();
+    note_detail(&mut out, &sink(OutputMode::Table), &n).unwrap();
+    let rendered = String::from_utf8(out).unwrap();
+    assert!(
+        rendered
+            .bytes()
+            .all(|b| b >= 0x20 || b == b'\n' || b == b'\t'),
+        "raw control byte leaked into detail output: {rendered:?}"
+    );
+    assert!(rendered.contains("first\n          second\\rthird\\u{1b}[31mred\\u{1b}[0m\tkept"));
+}

@@ -116,7 +116,7 @@ length (STD-02@3 §R18).
 ## Mutating commands are audited through one guard
 
 **Recorded:** 2026-09-26
-**Code anchors:** `crates/tmpl-cli/src/audit_middleware.rs::AuditGuard`; `crates/tmpl-cli/src/commands/mod.rs::Command::audit`, `::run`
+**Code anchors:** `crates/tmpl-cli/src/audit_middleware.rs::AuditGuard`; `crates/tmpl-cli/src/commands/mod.rs::Command::audit`, `::run_with`
 
 ### Context
 
@@ -130,13 +130,16 @@ would break them on a read-only data directory.
 
 Orbit's pattern: an RAII `AuditGuard` created at the dispatch chokepoint
 (STD-02@3 §R24), starting in the failure state, told the outcome by
-`mark_result`, writing one JSON line to `<root>/audit.jsonl` on drop.
+`mark_result`, writing one JSON line to `<root>/audit.jsonl` on drop after
+`output::finish` flushes the command's payload or error object.
 `Command::audit` declares per command, with an exhaustive match, whether it
 is audited; read-only commands return `None`. A line holds identifiers only
-(command path, note id, status, stable error code, timing), so no free text
-is persisted and no redactor is needed (STD-05@1 §R13). The log is a side
-channel and fails open with a warning (STD-02@3 §R31). Appends hold the store
-lock, so concurrent commands never interleave lines.
+(actor, command path, note id, status, stable error code, timing), so no free
+text is persisted and no redactor is needed (STD-05@1 §R13). The log is a side
+channel and fails open with a warning (STD-02@3 §R31). Appends hold their own
+`.audit.lock` (separate from `.lock`), so concurrent audit lines never
+interleave and a writer that timed out on `.lock` still records its failure
+line within one deadline.
 
 ### Consequences
 
@@ -416,6 +419,8 @@ for Windows, which would need ACLs).
 
 ## One malformed note makes the store corrupt
 
+**Superseded** by [Bad note records are isolated on read and block writes](#bad-note-records-are-isolated-on-read-and-block-writes).
+
 **Recorded:** 2026-09 · [ORB-13134]
 **Code anchors:** `crates/tmpl-cli-core/src/store/mod.rs::Store::load`, `crates/tmpl-cli-core/src/store/format.rs::decode`
 
@@ -438,6 +443,38 @@ per record instead.
 
 - A damaged store is never partially rewritten.
 - Cost: one bad record hides all the good ones until it is fixed by hand.
+
+## Bad note records are isolated on read and block writes
+
+**Recorded:** 2026-11-21
+**Code anchors:** `crates/tmpl-cli-core/src/store/format.rs::decode`, `crates/tmpl-cli-core/src/store/mod.rs::Store`
+
+### Context
+
+Validating `Title` and `Tag` inside serde made one hand-edited note render the
+entire store unreadable, while `#[serde(default)]` silently fabricated missing
+fields (`body`, `tags`, `priority`) that the next write persisted. STD-02@3
+§R32 asks for per-record isolation on reads, while STD-02@3 §R16 and §R31
+forbid silently dropping or defaulting damaged records on write.
+
+### Decision
+
+`store/format.rs::decode` parses the top-level document and then validates
+each note entry at the construction boundary without `#[serde(default)]`.
+Valid notes are returned alongside one typed `BadRecord` per invalid entry
+(naming its id, or 1-based line number when the id is unreadable, and the
+reason). Read commands (`list`, `show` of a good id) succeed with the valid
+notes and emit one stderr warning per bad record in every mode. `show` of a
+bad id fails with `store_bad_record`. Every write command refuses while any
+bad record is present (`store_bad_record`), leaving `notes.json` untouched.
+
+### Consequences
+
+- Good notes stay readable even when one entry was damaged by hand, and a
+  damaged store is never rewritten with dropped or defaulted records.
+- Cost: `Store::list` and `Store::show` return `Loaded<T>` instead of bare
+  values, and `format.rs` validates note fields explicitly rather than
+  deriving `Deserialize` on `Note`.
 
 ## Missing gate tools warn locally and fail in CI
 

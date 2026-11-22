@@ -356,6 +356,183 @@ fn logs_go_to_stderr_and_leave_stdout_as_pure_payload() {
     assert!(!out.stderr.is_empty(), "debug logs should appear on stderr");
 }
 
+#[test]
+fn title_rejects_control_characters_and_piped_output_strips_body_control_bytes() {
+    let fx = Fixture::new();
+    let bad = fx.run(&["note", "add", "\x1b[31mred\x1b[0m"]);
+    assert_eq!(bad.status.code(), Some(2), "ESC in title must be rejected");
+
+    fx.ok(&[
+        "note",
+        "add",
+        "Safe title",
+        "--body",
+        "line1\roverwrite\x1b[31mred\x1b[0m\r\nline2",
+    ]);
+    for args in [
+        &["note", "list"][..],
+        &["note", "list", "--format", "table"][..],
+        &["note", "show", "1"][..],
+        &["note", "show", "1", "--format", "table"][..],
+    ] {
+        let out = fx.ok(args);
+        let bad_byte = out
+            .stdout
+            .iter()
+            .copied()
+            .find(|&b| b < 0x20 && b != b'\n' && b != b'\t');
+        assert_eq!(
+            bad_byte,
+            None,
+            "{args:?} emitted raw control byte in stdout: {:?}",
+            text(&out.stdout)
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn json_error_object_precedes_audit_failure_warning_on_stderr() {
+    use std::os::unix::fs::symlink;
+    let fx = Fixture::new();
+    fx.ok(&["note", "add", "seed"]);
+    std::fs::write(fx.root().join("notes.json"), b"not json").unwrap();
+    let audit = fx.root().join("audit.jsonl");
+    let target = fx.elsewhere("audit-target");
+    std::fs::write(&target, b"").unwrap();
+    std::fs::remove_file(&audit).unwrap();
+    symlink(&target, &audit).unwrap();
+
+    let out = fx.run(&["note", "add", "next", "--json"]);
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = text(&out.stderr);
+    let first_line = stderr.lines().next().expect("stderr has error line");
+    let err: serde_json::Value = serde_json::from_str(first_line).unwrap_or_else(|e| {
+        panic!("first stderr line must be JSON error object ({e}): {stderr:?}")
+    });
+    assert_eq!(err["code"], "store_corrupt");
+}
+
+#[test]
+fn audit_line_records_actor_from_user_or_username_else_null() {
+    let fx = Fixture::new();
+
+    // Neither USER nor USERNAME set (Fixture::cmd clears env) -> null.
+    fx.ok(&["note", "add", "anon"]);
+    // USER set -> USER value.
+    let mut cmd = fx.cmd(&["note", "add", "with-user"]);
+    cmd.env("USER", "alice").env("USERNAME", "bob");
+    assert_eq!(cmd.output().unwrap().status.code(), Some(0));
+    // USER unset, USERNAME set -> USERNAME value.
+    let mut cmd = fx.cmd(&["note", "add", "with-username"]);
+    cmd.env("USERNAME", "bob");
+    assert_eq!(cmd.output().unwrap().status.code(), Some(0));
+
+    let lines = audit_lines(&fx);
+    assert_eq!(lines.len(), 3, "{lines:?}");
+    assert_eq!(lines[0]["format"], 2);
+    assert!(
+        lines[0]
+            .get("actor")
+            .is_some_and(serde_json::Value::is_null),
+        "expected explicit null actor: {:?}",
+        lines[0]
+    );
+    assert_eq!(lines[1]["actor"], "alice");
+    assert_eq!(lines[2]["actor"], "bob");
+}
+
+#[test]
+fn bad_records_warn_on_reads_fail_on_show_and_refuse_writes_without_touching_store() {
+    let fx = Fixture::new();
+    std::fs::create_dir_all(fx.root()).unwrap();
+    support::make_private(&fx.root());
+    let store_path = fx.root().join("notes.json");
+    let raw = r#"{
+  "format": 1,
+  "notes": [
+    {"id": 1, "title": "Good note", "body": null, "tags": ["home"], "priority": "normal", "created_at": "2026-01-02T03:04:05Z"},
+    {"id": 2, "title": "Bad\u001btitle", "body": null, "tags": [], "priority": "normal", "created_at": "2026-01-02T03:04:05Z"},
+    {"id": 3, "title": "Missing priority", "body": null, "tags": [], "created_at": "2026-01-02T03:04:05Z"}
+  ]
+}"#;
+    std::fs::write(&store_path, raw).unwrap();
+    support::make_private(&store_path);
+    let before = std::fs::read(&store_path).unwrap();
+
+    // `note list` (plain): exits 0, lists only good note, 1 warning per bad record on stderr.
+    let list_plain = fx.ok(&["note", "list"]);
+    let stdout = text(&list_plain.stdout);
+    assert_eq!(stdout.lines().count(), 1, "stdout: {stdout:?}");
+    assert!(stdout.contains("Good note"));
+    let stderr = text(&list_plain.stderr);
+    let warn_lines: Vec<&str> = stderr.lines().collect();
+    assert_eq!(warn_lines.len(), 2, "stderr: {stderr:?}");
+    assert!(
+        warn_lines[0].contains("note 2") && warn_lines[0].contains("control character"),
+        "bad title warning: {}",
+        warn_lines[0]
+    );
+    assert!(
+        warn_lines[1].contains("note 3") && warn_lines[1].contains("priority"),
+        "missing field warning: {}",
+        warn_lines[1]
+    );
+
+    // `note list --json`: exits 0, stdout keeps documented envelope, stderr has 1 warning per bad record.
+    let list_json = fx.ok(&["note", "list", "--json"]);
+    let doc = json(&list_json.stdout);
+    assert_eq!(doc["total"], 1);
+    assert_eq!(doc["truncated"], false);
+    assert_eq!(doc["notes"].as_array().map(Vec::len), Some(1));
+    assert_eq!(doc["notes"][0]["id"], 1);
+    assert_eq!(text(&list_json.stderr).lines().count(), 2);
+
+    // `note show <good id>`: exits 0 with good note and stderr warnings.
+    let show_good = fx.ok(&["note", "show", "1", "--json"]);
+    assert_eq!(json(&show_good.stdout)["id"], 1);
+    assert_eq!(text(&show_good.stderr).lines().count(), 2);
+
+    // `note show <bad id>`: fails exit 1 with typed error naming the record.
+    let show_bad = fx.run(&["note", "show", "2", "--json"]);
+    assert_eq!(show_bad.status.code(), Some(1));
+    assert!(show_bad.stdout.is_empty());
+    let err = json(&show_bad.stderr);
+    assert_eq!(err["code"], "store_bad_record");
+    assert!(err["error"].as_str().unwrap().contains("note 2"));
+
+    // `note add`: refuses exit 1 with typed error naming a bad record, file byte-identical.
+    let add_out = fx.run(&["note", "add", "Should not write", "--json"]);
+    assert_eq!(add_out.status.code(), Some(1));
+    assert!(add_out.stdout.is_empty());
+    let err = json(&add_out.stderr);
+    assert_eq!(err["code"], "store_bad_record");
+    assert!(err["error"].as_str().unwrap().contains("note 2"));
+    assert_eq!(
+        std::fs::read(&store_path).unwrap(),
+        before,
+        "store file must remain byte-identical after read and refused write"
+    );
+}
+
+#[test]
+fn help_states_defaults_for_tag_and_json() {
+    let fx = Fixture::new();
+    let root_help = text(&fx.ok(&["--help"]).stdout);
+    let json_line = root_help
+        .lines()
+        .find(|l| l.contains("--json"))
+        .expect("--json line in root --help");
+    assert!(json_line.contains("[default:"), "got {json_line:?}");
+
+    let add_help = text(&fx.ok(&["note", "add", "--help"]).stdout);
+    let tag_line = add_help
+        .lines()
+        .find(|l| l.contains("--tag"))
+        .expect("--tag line in note add --help");
+    assert!(tag_line.contains("[default:"), "got {tag_line:?}");
+}
+
 #[cfg(unix)]
 mod unix {
     //! Modes, links and read-only state (STD-01 R31, STD-05 R7–R9).
@@ -403,6 +580,8 @@ mod unix {
         assert_eq!(mode(&fx.root()), 0o700);
         assert_eq!(mode(&fx.root().join("notes.json")), 0o600);
         assert_eq!(mode(&fx.root().join(".lock")), 0o600);
+        assert_eq!(mode(&fx.root().join("audit.jsonl")), 0o600);
+        assert_eq!(mode(&fx.root().join(".audit.lock")), 0o600);
     }
 
     #[test]

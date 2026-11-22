@@ -1,4 +1,4 @@
-use crate::cli::Cli;
+use crate::cli::{Cli, every_command};
 use crate::commands::{Command, NoteCommand};
 use crate::output::FormatArg;
 use clap::{CommandFactory, Parser};
@@ -51,7 +51,7 @@ fn json_is_shorthand_for_format_json_and_conflicts_with_format() {
     assert!(Cli::parse_args(&redundant).is_ok());
 }
 
-/// Every subcommand path in the tree, including the root.
+/// Every subcommand path in the unbuilt tree, including the root.
 fn all_commands(
     cmd: &clap::Command,
     path: &mut Vec<String>,
@@ -63,14 +63,6 @@ fn all_commands(
         all_commands(sub, path, out);
         path.pop();
     }
-}
-
-fn every_command() -> Vec<(String, clap::Command)> {
-    let mut root = Cli::command();
-    root.build();
-    let mut out = Vec::new();
-    all_commands(&root, &mut vec![String::from("tmpl-cli")], &mut out);
-    out
 }
 
 #[test]
@@ -87,6 +79,14 @@ fn every_command_and_flag_has_help_text() {
                 "`{path}` argument `{}` has no help text",
                 arg.get_id()
             );
+            if !builtin && !arg.is_positional() {
+                let help = arg.get_help().unwrap().to_string();
+                assert!(
+                    help.contains("[default:"),
+                    "`{path}` flag `--{}` help states no default: {help:?}",
+                    arg.get_long().unwrap_or(arg.get_id().as_str())
+                );
+            }
         }
     }
 }

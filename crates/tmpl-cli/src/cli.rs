@@ -51,7 +51,7 @@ pub(crate) struct GlobalArgs {
     #[arg(long, global = true, value_enum, value_name = "FORMAT", help_heading = GLOBAL)]
     pub(crate) format: Option<FormatArg>,
 
-    /// Shorthand for --format json
+    /// Shorthand for --format json [default: false]
     #[arg(long, global = true, help_heading = GLOBAL)]
     pub(crate) json: bool,
 }
@@ -85,4 +85,31 @@ impl GlobalArgs {
             self.format
         }
     }
+}
+
+/// Every command path in the CLI tree, starting with the root (`"tmpl-cli"`),
+/// paired with its built [`clap::Command`]. Used by help and golden tests so a
+/// newly added command cannot be forgotten (STD-01 R22, R24).
+#[must_use]
+pub fn every_command() -> Vec<(String, clap::Command)> {
+    fn collect(
+        cmd: &clap::Command,
+        path: &mut Vec<String>,
+        out: &mut Vec<(String, clap::Command)>,
+    ) {
+        out.push((path.join(" "), cmd.clone()));
+        for sub in cmd.get_subcommands() {
+            if sub.get_name() == "help" {
+                continue;
+            }
+            path.push(sub.get_name().to_owned());
+            collect(sub, path, out);
+            path.pop();
+        }
+    }
+    let mut root = Cli::command();
+    root.build();
+    let mut out = Vec::new();
+    collect(&root, &mut vec![String::from("tmpl-cli")], &mut out);
+    out
 }

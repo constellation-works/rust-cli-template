@@ -23,6 +23,10 @@ pub(crate) struct AppEnv {
     pub(crate) root: Option<OsString>,
     /// `HOME`.
     pub(crate) home: Option<OsString>,
+    /// `USER`.
+    pub(crate) user: Option<OsString>,
+    /// `USERNAME` (fallback when `USER` is unset or empty).
+    pub(crate) username: Option<OsString>,
 }
 
 impl AppEnv {
@@ -31,6 +35,8 @@ impl AppEnv {
         Self {
             root: std::env::var_os(ROOT_ENV),
             home: std::env::var_os("HOME"),
+            user: std::env::var_os("USER"),
+            username: std::env::var_os("USERNAME"),
         }
     }
 }
@@ -39,6 +45,7 @@ impl AppEnv {
 #[derive(Debug)]
 pub(crate) struct Context {
     store: Store,
+    actor: Option<String>,
 }
 
 impl Context {
@@ -46,15 +53,27 @@ impl Context {
     /// `TMPL_CLI_ROOT` > `$HOME/.tmpl-cli`.
     pub(crate) fn resolve(root_flag: Option<&Path>, env: &AppEnv) -> Result<Self, CliError> {
         let root = resolve_root(root_flag, env)?;
+        let actor = resolve_actor(env);
         tracing::debug!(root = %root.display(), "resolved data directory");
         Ok(Self {
             store: Store::open(root),
+            actor,
         })
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_store(store: Store, actor: Option<String>) -> Self {
+        Self { store, actor }
     }
 
     /// The note store.
     pub(crate) fn store(&self) -> &Store {
         &self.store
+    }
+
+    /// The OS user name resolved from `USER`, else `USERNAME`, or `None`.
+    pub(crate) fn actor(&self) -> Option<&str> {
+        self.actor.as_deref()
     }
 
     /// The current time, whole seconds, for records created by this invocation.
@@ -76,4 +95,16 @@ pub(crate) fn resolve_root(root_flag: Option<&Path>, env: &AppEnv) -> Result<Pat
     non_empty(&env.home)
         .map(|home| PathBuf::from(home).join(DEFAULT_DIR))
         .ok_or(CliError::NoDataDir)
+}
+
+/// The actor precedence (`USER`, else `USERNAME`, else `None`), separated so
+/// tests can check it directly without touching the process environment.
+pub(crate) fn resolve_actor(env: &AppEnv) -> Option<String> {
+    let non_empty = |v: &Option<OsString>| {
+        v.as_deref()
+            .and_then(std::ffi::OsStr::to_str)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+    };
+    non_empty(&env.user).or_else(|| non_empty(&env.username))
 }

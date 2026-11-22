@@ -170,4 +170,37 @@ mod private_state {
         assert!(matches!(err, Error::Symlink { .. }), "got {err:?}");
         assert_eq!(fs::read(&target).unwrap(), b"precious");
     }
+
+    #[test]
+    fn a_lock_timeout_does_not_report_a_finished_pid_as_holder() {
+        let dir = crate::store::tests::private_tempdir();
+        let path = dir.path().join(".lock");
+        let mut child = std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg("exit 0")
+            .spawn()
+            .unwrap();
+        let dead_pid = child.id();
+        assert!(child.wait().unwrap().success());
+        fs::write(
+            &path,
+            format!("pid {dead_pid} (finished) since 2026-01-01T00:00:00Z"),
+        )
+        .unwrap();
+        let held = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        held.try_lock().unwrap();
+        let err = LockGuard::acquire(&path, "waiter", Duration::from_millis(60)).unwrap_err();
+        let Error::Locked { holder, .. } = err else {
+            panic!("expected Locked, got {err:?}");
+        };
+        assert!(
+            !holder.contains(&dead_pid.to_string()),
+            "dead pid {dead_pid} must not be reported as holder: {holder:?}"
+        );
+        assert_eq!(holder, "an unknown process");
+    }
 }

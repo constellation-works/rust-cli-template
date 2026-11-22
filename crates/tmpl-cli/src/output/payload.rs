@@ -67,6 +67,8 @@ pub(crate) enum Output {
         /// what was searched when nothing matched (R16), or that the list
         /// was cut (R34).
         notice: Option<String>,
+        /// One stderr warning per bad record isolated while reading the store.
+        warnings: Vec<String>,
     },
     /// A single record (`show`, `add`).
     Note {
@@ -75,5 +77,7 @@ pub(crate) enum Output {
         /// One stderr line when present: for a write, the record and the
         /// file it went to (STD-01 R30).
         notice: Option<String>,
+        /// One stderr warning per bad record isolated while reading the store.
+        warnings: Vec<String>,
     },
 }
