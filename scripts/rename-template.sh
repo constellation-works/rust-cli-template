@@ -12,11 +12,13 @@
 # Run it once, from anywhere, in a repository created with GitHub's "Use this
 # template" (or by the constellation's operations/scripts/new-rust-cli.sh,
 # which calls it). It replaces the placeholder `tmpl-cli` / `tmpl_cli` /
-# `TMPL_CLI` in file contents and in file and directory names, drops the
-# README's template-only note, re-sorts
-# Cargo.lock and re-runs rustfmt for the new name, and removes itself. It
-# never touches .git/, target/ or the vendored docs/standards/, and never
-# commits: review the result, run `make ci`, then commit.
+# `TMPL_CLI` in file contents and in file and directory names, replaces
+# about.md with the placeholder card a new codebase starts with (the template's
+# own card describes the template, not the copy), drops the README's
+# template-only note, re-sorts Cargo.lock and re-runs rustfmt for the new name,
+# and removes itself. It never touches .git/, target/ or the vendored
+# docs/standards/, and never commits: review the result, run `make ci`, then
+# commit.
 set -euo pipefail
 
 PH_KEBAB="tmpl-cli"
@@ -50,6 +52,31 @@ UPPER="$(printf '%s' "$SNAKE" | tr '[:lower:]' '[:upper:]')"
 # drop the README note that only makes sense in the template itself.
 rm -f "$SELF"
 perl -0pi -e 's/<!-- template-only:begin -->.*?<!-- template-only:end -->\n\n?//s' "$ROOT/README.md"
+
+# about.md describes the template. A copy gets the placeholder card every new
+# codebase starts with: today's card, with NAME in place of the template name.
+# It is written from this quoted heredoc (nothing expands here, so the backticks
+# are literal) and __NAME__ is filled in by perl, rather than kept as a second
+# card file in the tree.
+cat >"$ROOT/about.md" <<'CARD'
+---
+codebase: __NAME__
+owner: daniel
+summary: <one line — what __NAME__ does and for whom; keep in sync with README.md>
+status: active
+stack: Rust
+gate: pr
+agents: "—"
+---
+
+# __NAME__ — codebase card
+
+Machine-readable layout entry for **__NAME__**, read by the constellation front-door index
+([`../../operations/scripts/index.sh`](../../operations/scripts/index.sh)) to render the
+Codebases table. The human front door is [`README.md`](README.md) and the agent guide is
+[`AGENTS.md`](AGENTS.md); keep `summary` here in sync with them.
+CARD
+perl -pi -e "s/__NAME__/$NAME/g" "$ROOT/about.md"
 
 # Paths never rewritten: VCS data, build output, and the vendored standards
 # (byte-identical copies checked by docs/standards/check.sh).
