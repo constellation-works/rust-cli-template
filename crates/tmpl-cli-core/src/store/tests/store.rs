@@ -59,22 +59,21 @@ fn record_audit_appends_one_line_per_event_and_creates_the_directory() {
 #[test]
 fn record_audit_succeeds_while_the_store_lock_is_held() {
     // Defect 1: a command that timed out on the store lock must still write
-    // its failure audit line without waiting a second lock deadline.
+    // its failure audit line without waiting on the store lock a second time.
     let dir = super::private_tempdir();
-    let deadline = Duration::from_millis(80);
-    let store = Store::open(dir.path()).with_lock_wait(deadline);
+    let store = Store::open(dir.path()).with_lock_wait(Duration::ZERO);
     let _held =
         LockGuard::acquire(&dir.path().join(".lock"), "test", Duration::from_secs(1)).unwrap();
-    let started = std::time::Instant::now();
     let err = store
         .add(new_note("blocked"), OffsetDateTime::UNIX_EPOCH)
         .unwrap_err();
     assert_eq!(err.code(), "store_locked");
+    assert_eq!(store.contended_lock_waits(), 1);
     store.record_audit(&event("note add")).unwrap();
-    let elapsed = started.elapsed();
-    assert!(
-        elapsed < deadline * 2,
-        "add + record_audit waited more than one deadline: {elapsed:?}"
+    assert_eq!(
+        store.contended_lock_waits(),
+        1,
+        "record_audit must not contend on the held store lock"
     );
     let text = std::fs::read_to_string(store.audit_path()).unwrap();
     assert_eq!(text.lines().count(), 1, "got {text:?}");
@@ -83,7 +82,7 @@ fn record_audit_succeeds_while_the_store_lock_is_held() {
 #[test]
 fn record_audit_waits_for_the_audit_lock() {
     let dir = super::private_tempdir();
-    let store = Store::open(dir.path()).with_lock_wait(Duration::from_millis(60));
+    let store = Store::open(dir.path()).with_lock_wait(Duration::ZERO);
     let _held = LockGuard::acquire(
         &dir.path().join(".audit.lock"),
         "test",
@@ -92,6 +91,7 @@ fn record_audit_waits_for_the_audit_lock() {
     .unwrap();
     let err = store.record_audit(&event("note add")).unwrap_err();
     assert!(matches!(err, Error::Locked { .. }), "got {err:?}");
+    assert_eq!(store.contended_lock_waits(), 1);
     assert!(!store.audit_path().exists());
 }
 

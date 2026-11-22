@@ -256,7 +256,22 @@ impl LockGuard {
     ///
     /// `label` says what the holder is doing; it is recorded with the pid and
     /// time so a writer that times out can say who is in the way.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "unobserved lock helper used by fsio tests")
+    )]
     pub(super) fn acquire(path: &Path, label: &str, wait: Duration) -> Result<Self> {
+        Self::acquire_observing(path, label, wait, || {})
+    }
+
+    /// Take the lock at `path`, invoking `on_contended` once if acquisition
+    /// encounters an active holder (`WouldBlock`).
+    pub(super) fn acquire_observing(
+        path: &Path,
+        label: &str,
+        wait: Duration,
+        on_contended: impl FnOnce(),
+    ) -> Result<Self> {
         // Never create or truncate through a link (STD-05 R7).
         match fs::symlink_metadata(path) {
             Ok(meta) => refuse_symlink(path, &meta)?,
@@ -271,18 +286,23 @@ impl LockGuard {
             .open(path)
             .map_err(|e| Error::io("open lock file", path, e))?;
         let started = Instant::now();
+        let mut on_contended = Some(on_contended);
         loop {
             match file.try_lock() {
                 Ok(()) => break,
-                Err(TryLockError::WouldBlock) if started.elapsed() < wait => {
-                    std::thread::sleep(LOCK_POLL);
-                }
                 Err(TryLockError::WouldBlock) => {
-                    return Err(Error::Locked {
-                        path: path.to_path_buf(),
-                        holder: read_holder(&mut file),
-                        waited_ms: started.elapsed().as_millis(),
-                    });
+                    if let Some(notify) = on_contended.take() {
+                        notify();
+                    }
+                    if started.elapsed() < wait {
+                        std::thread::sleep(LOCK_POLL);
+                    } else {
+                        return Err(Error::Locked {
+                            path: path.to_path_buf(),
+                            holder: read_holder(&mut file),
+                            waited_ms: started.elapsed().as_millis(),
+                        });
+                    }
                 }
                 Err(TryLockError::Error(e)) => return Err(Error::io("lock", path, e)),
             }

@@ -542,6 +542,53 @@ fn bad_records_warn_on_reads_fail_on_show_and_refuse_writes_without_touching_sto
 }
 
 #[test]
+fn bad_record_control_characters_are_escaped_on_stderr() {
+    let fx = Fixture::new();
+    std::fs::create_dir_all(fx.root()).unwrap();
+    support::make_private(&fx.root());
+    let store_path = fx.root().join("notes.json");
+    let raw = r#"{
+  "format": 1,
+  "notes": [
+    {"id": 1, "title": "Good note", "body": null, "tags": ["home"], "priority": "normal", "created_at": "2026-01-02T03:04:05Z"},
+    {"id": 2, "title": "Bad tag", "body": null, "tags": ["bad\u001b[31mtag"], "priority": "normal", "created_at": "2026-01-02T03:04:05Z"},
+    {"id": 3, "title": "Bad\u001b[31mtitle", "body": null, "tags": [], "priority": "normal", "created_at": "2026-01-02T03:04:05Z"},
+    {"id": 4, "title": "Bad priority", "body": null, "tags": [], "priority": "bad\u001b[31mprio", "created_at": "2026-01-02T03:04:05Z"}
+  ]
+}"#;
+    std::fs::write(&store_path, raw).unwrap();
+    support::make_private(&store_path);
+
+    let assert_clean_stderr = |args: &[&str], expected_code: i32| {
+        let out = fx.run(args);
+        assert_eq!(out.status.code(), Some(expected_code), "{args:?}");
+        let bad_byte = out
+            .stderr
+            .iter()
+            .copied()
+            .find(|&b| b < 0x20 && b != b'\n' && b != b'\t');
+        assert_eq!(
+            bad_byte,
+            None,
+            "{args:?} emitted raw control byte in stderr: {:?}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        out
+    };
+
+    let list_plain = assert_clean_stderr(&["note", "list"], 0);
+    assert!(text(&list_plain.stderr).contains("warning:"));
+    assert_clean_stderr(&["note", "list", "--json"], 0);
+    assert_clean_stderr(&["note", "add", "Should not write"], 1);
+    assert_clean_stderr(&["note", "add", "Should not write", "--json"], 1);
+    assert_clean_stderr(&["note", "show", "2"], 1);
+    assert_clean_stderr(&["note", "show", "3"], 1);
+    assert_clean_stderr(&["note", "show", "4"], 1);
+    assert_clean_stderr(&["note", "show", "bad\x1bid"], 2);
+    assert_clean_stderr(&["note", "add", "Bad arg", "--tag", "bad\x1btag"], 2);
+}
+
+#[test]
 fn help_states_defaults_for_tag_and_json() {
     let fx = Fixture::new();
     let root_help = text(&fx.ok(&["--help"]).stdout);

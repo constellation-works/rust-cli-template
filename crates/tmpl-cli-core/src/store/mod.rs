@@ -36,6 +36,8 @@ use format::StoreDocument;
 use fsio::LockGuard;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use time::OffsetDateTime;
 
@@ -68,6 +70,7 @@ pub struct Loaded<T> {
 pub struct Store {
     root: PathBuf,
     lock_wait: Duration,
+    contended_lock_waits: Arc<AtomicUsize>,
 }
 
 impl Store {
@@ -78,6 +81,7 @@ impl Store {
         Self {
             root: root.into(),
             lock_wait: DEFAULT_LOCK_WAIT,
+            contended_lock_waits: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -86,6 +90,13 @@ impl Store {
     pub fn with_lock_wait(mut self, wait: Duration) -> Self {
         self.lock_wait = wait;
         self
+    }
+
+    /// Count of contended lock acquisitions observed through this store handle
+    /// (and clones of it), used by tests instead of timing lock deadlines.
+    #[must_use]
+    pub fn contended_lock_waits(&self) -> usize {
+        self.contended_lock_waits.load(Ordering::Relaxed)
     }
 
     /// The data directory.
@@ -188,11 +199,20 @@ impl Store {
     }
 
     fn lock(&self, label: &str) -> Result<LockGuard> {
-        LockGuard::acquire(&self.root.join(LOCK_FILE), label, self.lock_wait)
+        LockGuard::acquire_observing(&self.root.join(LOCK_FILE), label, self.lock_wait, || {
+            self.contended_lock_waits.fetch_add(1, Ordering::Relaxed);
+        })
     }
 
     fn audit_lock(&self, label: &str) -> Result<LockGuard> {
-        LockGuard::acquire(&self.root.join(AUDIT_LOCK_FILE), label, self.lock_wait)
+        LockGuard::acquire_observing(
+            &self.root.join(AUDIT_LOCK_FILE),
+            label,
+            self.lock_wait,
+            || {
+                self.contended_lock_waits.fetch_add(1, Ordering::Relaxed);
+            },
+        )
     }
 
     fn load(&self) -> Result<StoreDocument> {

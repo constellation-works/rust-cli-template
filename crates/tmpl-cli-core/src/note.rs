@@ -19,7 +19,7 @@ use time::OffsetDateTime;
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NoteError {
     /// The id was not a positive integer.
-    #[error("invalid note id '{0}': expected a positive integer such as 1")]
+    #[error("invalid note id {0:?}: expected a positive integer such as 1")]
     InvalidId(String),
     /// The title was empty or only whitespace.
     #[error("title is empty: pass some text, e.g. \"Buy milk\"")]
@@ -35,12 +35,12 @@ pub enum NoteError {
     EmptyBody,
     /// The tag had characters outside `a-z`, `0-9` and `-`, or a bad length.
     #[error(
-        "invalid tag '{0}': use 1-{max} lowercase letters, digits or '-'",
+        "invalid tag {0:?}: use 1-{max} lowercase letters, digits or '-'",
         max = Tag::MAX_CHARS
     )]
     InvalidTag(String),
     /// The priority was not one of [`Priority::NAMES`].
-    #[error("invalid priority '{0}': expected one of low, normal, high")]
+    #[error("invalid priority {0:?}: expected one of low, normal, high")]
     InvalidPriority(String),
 }
 

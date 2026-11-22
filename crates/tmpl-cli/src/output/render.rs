@@ -95,8 +95,8 @@ pub(crate) fn note_detail(out: &mut dyn Write, sink: &Sink, note: &NotePayload) 
 }
 
 /// Neutralize control characters other than newline and tab so terminal
-/// escape sequences and carriage returns cannot reach stdout raw.
-fn sanitize_for_display(text: &str) -> String {
+/// escape sequences and carriage returns cannot reach stdout or stderr raw.
+pub(super) fn sanitize_for_display(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
     while let Some(c) = chars.next() {

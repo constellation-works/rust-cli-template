@@ -83,7 +83,7 @@ fn lock_timeout_audited_command_waits_one_deadline_and_records_one_failure_line(
     use crate::app::Context;
     use crate::commands::run_with;
     use std::fs::OpenOptions;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
     use tmpl_cli_core::Store;
 
     let dir = tempfile::tempdir().unwrap();
@@ -104,28 +104,26 @@ fn lock_timeout_audited_command_waits_one_deadline_and_records_one_failure_line(
         .unwrap();
     lock_file.try_lock().unwrap();
 
-    let deadline = Duration::from_millis(80);
-    let store = Store::open(dir.path()).with_lock_wait(deadline);
+    let store = Store::open(dir.path()).with_lock_wait(Duration::ZERO);
     let ctx = Context::with_store(store, Some(String::from("alice")));
     let cmd = command(&["tmpl-cli", "note", "add", "blocked"]);
 
-    let started = Instant::now();
     let mut audit_written_before_finish = false;
     let err_code = run_with(cmd, &ctx, |outcome| {
         // The audit guard must not have dropped before finish runs.
         audit_written_before_finish = ctx.store().audit_path().exists();
         outcome.unwrap_err().code()
     });
-    let elapsed = started.elapsed();
 
     assert_eq!(err_code, "store_locked");
     assert!(
         !audit_written_before_finish,
         "finish must run before the audit guard drops"
     );
-    assert!(
-        elapsed >= deadline && elapsed < deadline * 2,
-        "expected roughly one deadline ({deadline:?}), took {elapsed:?}"
+    assert_eq!(
+        ctx.store().contended_lock_waits(),
+        1,
+        "failing audited command must wait on the store lock once, not twice"
     );
 
     let audit_raw = std::fs::read_to_string(ctx.store().audit_path()).unwrap();

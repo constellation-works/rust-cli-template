@@ -91,7 +91,8 @@ pub(crate) fn finish_parse_error(err: &clap::Error, args: &[OsString]) -> ExitCo
         let message = first.strip_prefix("error: ").unwrap_or(first);
         write_json_error(message, "usage_error");
     } else {
-        let _ = io::stderr().lock().write_all(rendered.as_bytes());
+        let sanitized = render::sanitize_for_display(&rendered);
+        let _ = io::stderr().lock().write_all(sanitized.as_bytes());
     }
     ExitCode::from(code)
 }
@@ -108,10 +109,10 @@ fn emit(sink: &Sink, output: &Output) -> io::Result<()> {
         // never fail a command whose payload is fine.
         let mut err = io::stderr().lock();
         for warning in warnings {
-            let _ = writeln!(err, "warning: {warning}");
+            let _ = writeln!(err, "warning: {}", render::sanitize_for_display(warning));
         }
         if let Some(notice) = notice {
-            let _ = writeln!(err, "{notice}");
+            let _ = writeln!(err, "{}", render::sanitize_for_display(notice));
         }
     }
     let mut out = io::stdout().lock();
@@ -139,7 +140,11 @@ fn report_error(json: bool, err: &CliError) {
     if json {
         write_json_error(&message, err.code());
     } else {
-        let _ = writeln!(io::stderr().lock(), "error: {message}");
+        let _ = writeln!(
+            io::stderr().lock(),
+            "error: {}",
+            render::sanitize_for_display(&message)
+        );
     }
 }
 
