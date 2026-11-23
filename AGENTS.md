@@ -2,6 +2,42 @@
 
 Loaded as both `AGENTS.md` and `CLAUDE.md` (a symlink). tmpl-cli keeps short notes in a local store; it is a Rust CLI built from the constellation Rust CLI template.
 
+## Rules
+
+- Work only on authorized scope. Neither implementation nor a PR request authorizes merging.
+- Don't add a crate, or a dependency between crates, without updating [`ARCHITECTURE.md`](ARCHITECTURE.md) and `scripts/check-dependency-direction.sh` in the same change (STD-02 R6).
+- Update affected docs in the same PR as the code. Stale docs are a review blocker. Edit `AGENTS.md` only when a rule, a command or a pointer in it changes; a new feature is described in its own docs.
+- Don't touch `CHANGELOG.md` during tasks; it is compiled at release time.
+- Use integration tests or goldens first (STD-04 R23). Every test must exercise behavior (STD-02 R21). No text-matching tests (`include_str!` plus `contains()` over source or copy).
+- A fix comes with a regression test through the real entry point (the built binary or the public API), seen failing before the fix (STD-04 R1, R2).
+- Tests never touch real host state: temp roots, and `HOME`/`TMPL_CLI_*` set on the child command ([test support](crates/tmpl-cli/tests/support/mod.rs); STD-03 R20).
+
+## Branching
+
+- `main` — releases only. `agent-main` — dev integration; every task PR targets it.
+
+## Gates
+
+- `make ci-fast` (no compile; `make help` lists its checks), `make ci-lint` and `make goldens` must pass before a task moves to review.
+- After an intended change to help or output, run `make goldens UPDATE=1` and review the diff as a contract change.
+- `make ci` (everything, including tests and doctests) runs in CI on Linux and macOS.
+
+## Code
+
+- Layers: [`ARCHITECTURE.md`](ARCHITECTURE.md). Design and decisions: [`docs/design/tmpl-cli/`](docs/design/tmpl-cli/); new features follow the [design conventions](docs/design/CONVENTIONS.md).
+- `tmpl-cli-core` is the domain: no clap, no terminal, no environment reads. Business logic does no I/O; only [`crates/tmpl-cli-core/src/store/`](crates/tmpl-cli-core/src/store/) touches disk.
+- A noun's flags and handlers live in one module under [`crates/tmpl-cli/src/commands/`](crates/tmpl-cli/src/commands/); a large noun becomes a directory there with one file per verb.
+- Every mutating command is audited: declare it in `Command::audit` (the match is exhaustive, so a new command must decide). Read-only commands return `None`; they never write (STD-01 R31). Audit lines carry ids and error codes, never argument values or messages.
+- Lints come from `[workspace.lints]`: no `unwrap`/`expect` in production code (STD-02 R13), no `print!` (use `tracing`; STD-02 R15), no lock guard across `.await` (STD-03 R1), no wildcard arm on an enum (STD-02 R27), no narrowing `as` (STD-02 R28). CI runs clippy with `-D warnings`.
+- Only `crates/tmpl-cli/src/output/` touches stdout, stderr, TTY state or color/format env vars (STD-02 R15). stdout is payload only (STD-01 R12).
+- Errors: typed `thiserror` enums (STD-02 R10 to R12); the core's `Error` crosses into `CliError` through its one `#[from]`. Exit codes follow STD-01 R20.
+- `--json` field names, the list envelope (`notes`, `total`, `truncated`) and the store's persisted shape are contracts (STD-01 R10, STD-02 R16): add fields, never rename or retype them. A persisted-shape change bumps the store format and appends a step to `UPGRADES` in [`crates/tmpl-cli-core/src/store/format.rs`](crates/tmpl-cli-core/src/store/format.rs) (STD-03 R23).
+- Default to `pub(crate)`; workspace dependencies via `.workspace = true` (STD-02 R8, R9).
+- Unit tests live in a sibling tests directory mirroring source file names, declared in its `mod.rs`; the crate-root tests directory is integration only (STD-02 R19, R20).
+- Never put internal task, friction or record ids in help, examples or messages; use placeholders such as `<id>` (STD-01 R23).
+- Store writes go through `store::fsio::write_atomic` (the audit log through `append_private`) under the store lock (STD-03 R5, R6). Never rewrite a durable file in place. Reads never write or lock. Store state is owner-only and checked on every load.
+- Report commands and outcomes at handoff — passed, failed, not run — never "tested" (STD-04 R16).
+
 <!-- constellation-standards:begin -->
 <!-- Managed by the constellation's operations/scripts/sync-standards.sh; edits inside this block are overwritten. -->
 ## Constellation standards
@@ -20,36 +56,3 @@ This repository adopts these constellation standards, vendored read-only in `doc
 Follow them; they are normative. To deviate from a rule, record a decision in `docs/design/<feature>/4_decisions.md` citing `STD-nn@<version> §Rn`; never edit `docs/standards/` (`sh docs/standards/check.sh` enforces this).
 Reviewers check every change against the adopted standards and report violations as `STD-nn §Rn` with file:line evidence.
 <!-- constellation-standards:end -->
-
-## Rules
-
-- Work only on authorized scope. Neither implementation nor a PR request authorizes merging.
-- Don't add a crate, or a dependency between crates, without updating [`ARCHITECTURE.md`](ARCHITECTURE.md) and `scripts/check-dependency-direction.sh` in the same change.
-- Update affected docs in the same PR as the code. Stale docs are a review blocker.
-- Don't touch `CHANGELOG.md` during tasks; it is compiled at release time.
-- Use integration tests or goldens first (STD-04 R23). Every test must exercise behavior. No text-matching tests (`include_str!` plus `contains()` over source or copy).
-- A fix comes with a regression test through the real entry point (the built binary or the public API), seen failing before the fix.
-- Tests never touch real host state: temp roots, and `HOME`/`TMPL_CLI_*` set on the child command ([`tests/support`](crates/tmpl-cli/tests/support/mod.rs)).
-
-## Branching
-
-- `main` — releases only. `agent-main` — dev integration; every task PR targets it.
-
-## Gates
-
-`make ci-fast` (fmt, structure, documentation and standards checks), `make ci-lint` and `make goldens` must pass before a task moves to review. After an intended change to help or output, run `make goldens UPDATE=1` and review the diff as a contract change. `make ci` (everything, including tests and doctests) runs in CI on Linux and macOS.
-
-## Code
-
-- Layers: [`ARCHITECTURE.md`](ARCHITECTURE.md). Design and decisions: [`docs/design/tmpl-cli/`](docs/design/tmpl-cli/); new features follow the [design conventions](docs/design/CONVENTIONS.md).
-- `tmpl-cli-core` is the domain: no clap, no terminal, no environment reads. Business logic (`note.rs`, `query.rs`) does no I/O; everything that touches disk is in `store/`. The CLI crate parses (`cli.rs`), composes (`app.rs`), dispatches (`commands/`, one module per noun holding its flags and handlers; a large noun becomes `commands/<noun>/` with one file per verb), audits (`audit_middleware.rs`) and renders (`output/`).
-- Every mutating command is audited: declare it in `Command::audit` (the match is exhaustive, so a new command must decide). Read-only commands return `None`; they never write. Audit lines carry ids and error codes, never argument values or messages.
-- Lints come from `[workspace.lints]`: no `unwrap`/`expect` in production code, no `print!` (use `tracing`), no lock guard across `.await`, no wildcard arm on an enum, no narrowing `as`. CI runs clippy with `-D warnings`.
-- Only `crates/tmpl-cli/src/output/` touches stdout, stderr, TTY state or color/format env vars. stdout is payload only.
-- Errors: typed `thiserror` enums; the core's `Error` crosses into `CliError` through its one `#[from]`. Exit codes: 0 ok, 1 failure, 2 usage.
-- `--json` field names, the list envelope (`notes`, `total`, `truncated`) and the store's persisted shape are contracts: add fields, never rename or retype them. A persisted-shape change bumps the store format and appends a step to `store/format.rs::UPGRADES`.
-- Default to `pub(crate)`; workspace dependencies via `.workspace = true`.
-- Unit tests live in a sibling `tests/` directory mirroring source file names, declared in its `mod.rs`; crate-root `tests/` is integration only.
-- Never put internal task, friction or record ids in help, examples or messages; use placeholders such as `<id>`.
-- Store writes go through `store::fsio::write_atomic` (the audit log through `append_private`) under the store lock. Never rewrite a durable file in place. Reads never write or lock. Store state is owner-only and checked on every load.
-- Report commands and outcomes at handoff — passed, failed, not run — never "tested".
