@@ -92,10 +92,45 @@ impl NoteApp for Store {
 
 #[test]
 fn a_lock_timeout_omits_an_oversized_holder_record() {
+    // The kit's holder record is one JSON line read back up to 4096 bytes.
+    // The control, the same record with a short label, is named; past the
+    // bound the record is unreadable and the timeout names no holder.
+    let control = timeout_holder(&holder_record("holder"));
+    assert!(
+        matches!(&control, Some(h) if h.pid == std::process::id() && h.label == "holder"),
+        "an in-bound record names its live holder, got {control:?}"
+    );
+    let oversized = timeout_holder(&holder_record(&"x".repeat(4096)));
+    assert!(oversized.is_none(), "got {oversized:?}");
+}
+
+/// A holder record for this process in the kit's format: one JSON line with
+/// the pid, on Linux the process's start time, the time and the label.
+fn holder_record(label: &str) -> String {
+    let pid = std::process::id();
+    let start = process_start().map_or_else(String::new, |s| format!("\"start\":{s},"));
+    format!("{{\"pid\":{pid},{start}\"time\":\"2026-01-02T03:04:05Z\",\"label\":\"{label}\"}}\n")
+}
+
+/// This process's start time from `/proc/self/stat` (field 22), which the
+/// kit checks on Linux before it names a holder.
+#[cfg(target_os = "linux")]
+fn process_start() -> Option<u64> {
+    let stat = std::fs::read_to_string("/proc/self/stat").ok()?;
+    let rest = &stat[stat.rfind(')')? + 1..];
+    rest.split_whitespace().nth(19)?.parse().ok()
+}
+
+#[cfg(not(target_os = "linux"))]
+fn process_start() -> Option<u64> {
+    None
+}
+
+/// The holder a store-lock timeout names while `.lock` holds `record` and is
+/// locked by another open file of this process.
+fn timeout_holder(record: &str) -> Option<cw_fs::Holder> {
     let dir = tempdir();
     let path = dir.path().join(".lock");
-    let lock = std::fs::File::create(&path).unwrap();
-    let record = format!("pid {} ({})", std::process::id(), "x".repeat(4096));
     std::fs::write(&path, record).unwrap();
     // Owner-only, as the store creates it: cw-fs refuses a lock file open
     // to any group or other permission bit before it waits.
@@ -104,14 +139,16 @@ fn a_lock_timeout_omits_an_oversized_holder_record() {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
     }
+    let lock = std::fs::File::open(&path).unwrap();
     lock.try_lock().unwrap();
     let store = Store::open(dir.path()).with_lock_wait(std::time::Duration::ZERO);
     let err = store
         .add(new_note("waiting", &[], Priority::Normal), NOW)
         .unwrap_err();
-    assert!(
-        matches!(store_error(&err), Some(StoreError::Fs(FsError::Locked { holder, .. })) if holder.is_none())
-    );
+    match store_error(&err) {
+        Some(StoreError::Fs(FsError::Locked { holder, .. })) => holder.clone(),
+        other => panic!("expected store_locked, got {other:?}"),
+    }
 }
 
 /// A temporary directory that is owner-only whatever the umask, as a store
