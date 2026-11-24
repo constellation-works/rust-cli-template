@@ -1,13 +1,13 @@
 ---
 title: tmpl-cli — Decisions
 owner: claude
-last_updated: 2026-09-26
+last_updated: 2026-11-24
 last_validated: 2026-09-26
 status: Draft
 feature: tmpl-cli
 doc_role: decisions
 type: design
-summary: Why two crates with persistence as one core module, why commands are one module per noun, why mutating commands are audited through one guard, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, how the store format evolves and stays private, and every recorded standard deviation or rule the template does not exercise.
+summary: Why three crates laid out by app (binary, core with apps, runtime and composition, store with repositories and contracts), why commands are one module per noun, why mutating commands are audited through one guard, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, how the store format evolves and stays private, and every recorded standard deviation or rule the template does not exercise.
 tags: [tmpl-cli, decisions]
 paths: ["Cargo.toml", "crates/**", "Makefile"]
 related_features: [tmpl-cli]
@@ -18,6 +18,8 @@ related_features: [tmpl-cli]
 Record non-obvious decisions here by title. Superseded decisions remain in place so their original reasoning stays legible. See [CONVENTIONS.md §3](../CONVENTIONS.md#3-what-earns-a-decision-entry) for the admission rule and required `Cost:` line.
 
 ## A domain library crate and a CLI crate
+
+**Superseded** by [The template is laid out by app in three crates](#the-template-is-laid-out-by-app-in-three-crates).
 
 **Recorded:** 2026-09
 **Code anchors:** `Cargo.toml` `[workspace] members`; `scripts/check-dependency-direction.sh::policy`
@@ -51,6 +53,8 @@ collapse to one crate with STD-02's single-crate check.
   `pub(crate)`.
 
 ## Persistence is one module inside the core crate
+
+**Superseded** by [The template is laid out by app in three crates](#the-template-is-laid-out-by-app-in-three-crates).
 
 **Recorded:** 2026-09-26
 **Code anchors:** `crates/tmpl-cli-core/src/store/mod.rs`; `scripts/check-dependency-direction.sh` (the `store | tests` loop)
@@ -111,11 +115,16 @@ length (STD-02@3 §R18).
 - Cost: clap declarations are spread across modules, so the whole command
   tree is no longer readable in one file; `--help` goldens stay the review
   surface for it.
+- Update (2026-11-24): the audited-command table and the chokepoint moved
+  into the app (`Command::audit` and `exec` in
+  `crates/tmpl-cli-core/src/apps/note/mod.rs`); a noun's module now maps its
+  arguments to the app's `Command` and its `Outcome` to a payload. See
+  [The template is laid out by app in three crates](#the-template-is-laid-out-by-app-in-three-crates).
 
 ## Mutating commands are audited through one guard
 
 **Recorded:** 2026-09-26
-**Code anchors:** `crates/tmpl-cli/src/audit_middleware.rs::AuditGuard`; `crates/tmpl-cli/src/commands/mod.rs::Command::audit`, `::run_with`
+**Code anchors:** `crates/tmpl-cli-core/src/runtime/audit.rs::AuditGuard`; `crates/tmpl-cli-core/src/apps/note/mod.rs::Command::audit`, `::exec`
 
 ### Context
 
@@ -143,6 +152,9 @@ line within one deadline.
 ### Consequences
 
 - A panic or early return in a handler is logged as a failure.
+- Update (2026-11-24): the guard lives in the core's runtime and the
+  chokepoint is each app's `exec`, which takes the surface's `finish` so the
+  line is still written after the payload or error object is flushed.
 - Cost: every audited command pays a second lock and an `fsync`; a command
   that cannot write its line still succeeds, so the log can miss entries,
   and it grows without rotation.
@@ -201,7 +213,7 @@ is 0. This reads R16's "nothing" as "no records", as Orbit does.
 ## The store lock uses std file locks, not a crate
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli-core/src/store/fsio.rs::LockGuard::acquire`
+**Code anchors:** `crates/tmpl-cli-store/src/db/fsio.rs::LockGuard::acquire`
 
 ### Context
 
@@ -302,7 +314,7 @@ sets, and then it fails.
 ## A list's JSON is an envelope with total and truncated
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli/src/output/payload.rs::ListPayload`; `crates/tmpl-cli-core/src/query.rs::NoteList`; `crates/tmpl-cli/src/commands/note.rs::list_notice`
+**Code anchors:** `crates/tmpl-cli/src/output/payload.rs::ListPayload`; `crates/tmpl-cli-core/src/apps/note/rules.rs::NoteList`; `crates/tmpl-cli/src/commands/note.rs::list_notice`
 
 ### Context
 
@@ -316,7 +328,7 @@ postpones that break to the first project that needs a limit.
 
 `note list --json` is always `{"notes": [...], "total": N, "truncated":
 bool}`, whether or not a limit applied, and an empty result is the same
-envelope with `"notes": []` (§R16). The store filters before it limits
+envelope with `"notes": []` (§R16). The note app filters before it limits
 (§R33) and reports the match count; a cut list also prints `showing N of M
 matching notes` on stderr in every mode. `--limit` must be at least 1.
 
@@ -330,7 +342,7 @@ matching notes` on stderr in every mode. `--limit` must be at least 1.
 ## add names what it wrote on stderr
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli/src/commands/note.rs::add`
+**Code anchors:** `crates/tmpl-cli/src/commands/note.rs::output`; `crates/tmpl-cli-core/src/apps/note/add.rs::add`
 
 ### Context
 
@@ -355,7 +367,7 @@ Errors that depend on the data directory name the store file too
 ## Store format upgrades are an append-only registry
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli-core/src/store/format.rs::UPGRADES`, `::FORMAT`
+**Code anchors:** `crates/tmpl-cli-store/src/db/format.rs::UPGRADES`, `::FORMAT`
 
 ### Context
 
@@ -386,7 +398,7 @@ registry ships empty.
 ## Store state is owner-only and checked on every load
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli-core/src/store/fsio.rs::create_private_dir`, `::inspect_dir`, `::inspect_file`, `::LockGuard::acquire`
+**Code anchors:** `crates/tmpl-cli-store/src/db/fsio.rs::create_private_dir`, `::inspect_dir`, `::inspect_file`, `::LockGuard::acquire`
 
 ### Context
 
@@ -450,7 +462,7 @@ per record instead.
 ## Bad note records are isolated on read and block writes
 
 **Recorded:** 2026-11-21
-**Code anchors:** `crates/tmpl-cli-core/src/store/format.rs::decode`, `crates/tmpl-cli-core/src/store/mod.rs::Store`
+**Code anchors:** `crates/tmpl-cli-store/src/db/format.rs::decode`, `crates/tmpl-cli-store/src/store.rs::Store::write`, `crates/tmpl-cli-store/src/repository/notes.rs::Notes`
 
 ### Context
 
@@ -462,7 +474,7 @@ forbid silently dropping or defaulting damaged records on write.
 
 ### Decision
 
-`store/format.rs::decode` parses the top-level document and then validates
+`db/format.rs::decode` parses the top-level document and then validates
 each note entry at the construction boundary without `#[serde(default)]`.
 Valid notes are returned alongside one typed `BadRecord` per invalid entry
 (naming its id, or 1-based line number when the id is unreadable, and the
@@ -475,9 +487,13 @@ bad record is present (`store_bad_record`), leaving `notes.json` untouched.
 
 - Good notes stay readable even when one entry was damaged by hand, and a
   damaged store is never rewritten with dropped or defaulted records.
-- Cost: `Store::list` and `Store::show` return `Loaded<T>` instead of bare
-  values, and `format.rs` validates note fields explicitly rather than
-  deriving `Deserialize` on `Note`.
+- Cost: reads carry the bad records beside the notes (today the notes
+  repository's `bad_records` and the app's `Outcome`), and `format.rs`
+  validates note fields explicitly rather than deriving `Deserialize` on
+  `Note`.
+- Update (2026-11-24): the write refusal is enforced twice: the note app's
+  `add` refuses on its own read before any side effect, and `Store::write`
+  refuses again under the lock, since a rewrite would drop the bad records.
 
 ## Missing gate tools warn locally and fail in CI
 
@@ -575,6 +591,74 @@ govern. Each binds as soon as it does, and this entry is edited then:
 - A reviewer checks a new feature against this list first.
 - Cost: the list goes stale unless the change that starts doing one of
   these things also edits it.
+
+## The template is laid out by app in three crates
+
+**Recorded:** 2026-11-24
+**Code anchors:** `Cargo.toml` `[workspace] members`; `scripts/check-dependency-direction.sh::policy`; `crates/tmpl-cli-core/src/apps/note/mod.rs::exec`; `crates/tmpl-cli-store/src/store.rs::Store`
+
+### Context
+
+Daniel, 2026-11-24: "can you also update rust-cli-template similarly?
+separate create for store. runtime, composition, apps in core." "Similarly"
+means the layout he approved for scribe the same day: every command is
+parsed by the binary, run by one `exec` in the core, and rendered by the
+binary; everything about one subject is in one app folder; persistence is
+its own crate with one repository per record and the record shapes as its
+contracts.
+
+The two-crate template had the failures that layout removes, at small scale.
+The binary held composition (`app.rs`) and the audit guard, so a second
+surface would have had to copy both. The core mixed the note rules
+(`note.rs`, `query.rs`) with record shapes in one module, and its `store`
+module named its operations after commands (`add`, `list`, `show`) and held
+the next-id rule and list selection inside the facade. A project grown from
+the template would copy those habits.
+
+### Decision
+
+Three crates, `tmpl-cli -> tmpl-cli-core -> tmpl-cli-store`
+([ARCHITECTURE.md](../../../ARCHITECTURE.md)):
+
+- `tmpl-cli` declares arguments, maps them to an app's `Command`, calls
+  `apps::<app>::exec` and renders the `Outcome`; `main` captures the
+  environment into the core's `Env` once. It names only the core.
+- `tmpl-cli-core` holds `apps/<app>/` (`Command`, `Outcome`, `Error`,
+  `exec`, `run`, one flow per command and the app's pure `rules`),
+  `runtime/` (the context a flow receives, the audit guard, the errors every
+  app shares) and `composition.rs` (the only code that reads the
+  environment or picks the data directory, the store and the clock). A flow
+  loads from one `store.read()`, decides with its rules and commits in one
+  `store.write(|tx| …)`.
+- `tmpl-cli-store` holds `db/` (fsio, the persisted document and its
+  upgrades, the audit line, locks), `repository/` (notes, audit) and
+  `contracts/` (`Note`, `NoteId`, `Title`, `Body`, `Tag`, `Priority`,
+  `AuditEvent`). It holds no rule of the note app.
+
+Two departures from scribe's layout, both from the template's size: no
+`tools` crate and no `providers`, since nothing here reads transcripts or
+calls a model. One from the plain `exec(env, command)` shape: `exec` also
+takes the surface's `finish`, because the audit line must be written after
+the payload or error object is flushed (the integration test
+`json_error_object_precedes_audit_failure_warning_on_stderr` holds that
+order). STD-02@4 §R7 asks a new crate for a dependency edge that must be
+enforceable; the store crate is one: the core cannot reach a file primitive
+or the persisted format, only the repositories.
+
+### Consequences
+
+- A new subject is a new app folder in the core, a repository and a contract
+  in the store if it persists something, and a noun module in the binary;
+  nothing else moves.
+- A second surface (an MCP server, a desktop app) calls the same `exec` and
+  gets composition and auditing with it.
+- Tests that need a pinned clock or a short lock wait run an app through the
+  core's `test-support` feature (`Ctx`, `note_run`) instead of `exec`.
+- Cost: three manifests; record shapes are `pub` across a crate boundary;
+  STD-02@4 §R5's I/O-free contract unit is the `contracts` module, kept free
+  of I/O by grep, inside a crate that does I/O, which is weaker than a crate
+  edge; and `exec` carries a `finish` callback instead of returning the
+  outcome.
 
 ## Public design documents use public references
 

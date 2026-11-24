@@ -3,5 +3,5 @@
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    tmpl_cli::run()
+    tmpl_cli::run(tmpl_cli_core::Env::from_process())
 }

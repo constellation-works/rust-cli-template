@@ -84,7 +84,7 @@ deny:
 # nextest enforces per-test timeouts (.config/nextest.toml, STD-03 R21/R22)
 # and fails a selection that matches no test (STD-04 R10); plain cargo test
 # does neither, so the fallback says so. nextest does not run doctests, so
-# they are a second leg; the core crate carries at least one (STD-04 R14).
+# they are a second leg; the store crate carries at least one (STD-04 R14).
 test:
 	@if $(CARGO) nextest --version >/dev/null 2>&1; then \
 		$(CARGO) nextest run --workspace --all-targets $(LOCKED) --no-tests=fail; \

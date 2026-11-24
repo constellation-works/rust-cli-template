@@ -1,7 +1,7 @@
 ---
 title: tmpl-cli — Design
 owner: claude
-last_updated: 2026-09-26
+last_updated: 2026-11-24
 last_validated: 2026-09-26
 status: Draft
 feature: tmpl-cli
@@ -23,21 +23,25 @@ and the gates. The output and store contracts are specified in
 
 ## 1. Layering
 
-Two crates (why: [4_decisions.md](./4_decisions.md#a-domain-library-crate-and-a-cli-crate)).
-`tmpl-cli-core` holds business logic with no I/O (`note`: the types and the
-next-id rule; `query`: list selection; `error`) and one persistence module,
-`store`, which is the only code that touches disk (why a module, not a crate:
-[4_decisions.md](./4_decisions.md#persistence-is-one-module-inside-the-core-crate)).
-Inside it, the `Store` facade sits over `format` (the persisted document and
-its upgrades), `audit` (the audit record shape) and `fsio` (durable writes,
-appends, locking, private-state checks; mechanism only). The core has no clap,
-no terminal access and never reads the environment. `tmpl-cli` holds
-composition (`app`) and the surface: `cli` (the root flags), `commands` (one
-module per noun, holding its subcommands, flags, help and handlers),
-`audit_middleware` and `output`. The tier table and module rules are in
+Three crates laid out by app (why:
+[4_decisions.md](./4_decisions.md#the-template-is-laid-out-by-app-in-three-crates)).
+`tmpl-cli` is the surface: `cli` (the root flags), `commands` (one module
+per noun, holding its subcommands, flags and help, and mapping its arguments
+to an app's `Command` and the `Outcome` to a payload) and `output`.
+`tmpl-cli-core` holds the apps (`apps/note/`: `Command`, `Outcome`, `Error`,
+`exec`, one flow per command and the pure `rules`: the next id and list
+selection), the `runtime` they share (the context, the audit guard, the
+common errors) and `composition` (the only code that reads the environment
+or picks the data directory, the store and the clock). `tmpl-cli-store` is
+the only code that touches disk: the `Store` facade (one read, one locked
+write) over `db/` (`format`: the persisted document and its upgrades;
+`audit`: the persisted audit line; `fsio`: durable writes, appends, locking,
+private-state checks, mechanism only), one repository per record (`notes`,
+`audit`) and the record shapes in `contracts/`. Neither library has clap or
+terminal access. The crate and module rules are in
 [ARCHITECTURE.md](../../../ARCHITECTURE.md), and
-`scripts/check-dependency-direction.sh` enforces both from source text alone,
-so it runs in `make ci-fast` without compiling.
+`scripts/check-dependency-direction.sh` enforces them from source text
+alone, so it runs in `make ci-fast` without compiling.
 
 ## 2. The life of an invocation
 
@@ -48,16 +52,21 @@ so it runs in `make ci-fast` without compiling.
    > auto), color (`NO_COLOR`, `CLICOLOR_FORCE`, `TERM`, TTY) and width
    (`COLUMNS`, terminals only). Nothing else in the program asks these
    questions; `scripts/check-terminal-guard.sh` rejects any attempt.
-3. `app::Context::resolve` picks the data directory, resolves the OS actor
-   (`USER`, else `USERNAME`, else `None`), and constructs the store.
-4. `commands::run_with` is the one chokepoint. If the command is audited it
-   starts an `AuditGuard` (section 5); then the noun's handler makes one
-   store call and wraps the result in a payload (`Output::Notes` or
-   `Output::Note`) with an optional stderr notice and any bad-record warnings.
-   Core errors cross into `CliError` through its single `#[from]`. The guard is
-   told the outcome, `output::finish` renders the payload or error, and then
-   the guard drops and writes its line so any fail-open audit warning reaches
-   stderr after the payload or JSON error object.
+3. The noun's handler maps the parsed arguments to the app's `Command` and
+   calls `apps::note::exec` with the environment `main` captured (`Env`, plus
+   `--root`). `exec` starts the runtime: composition picks the data
+   directory, resolves the OS actor (`USER`, else `USERNAME`, else `None`),
+   and opens the store.
+4. `exec` is the one chokepoint. If the command is audited it starts an
+   `AuditGuard` (section 5); then the command's flow loads from the store,
+   decides with the app's rules and commits in one write. The handler turns
+   the `Outcome` into a payload (`Output::Notes` or `Output::Note`) with an
+   optional stderr notice and any bad-record warnings; app errors cross into
+   `CliError` through its single `#[from]`. The guard is told the outcome,
+   `output::finish` renders the payload or error inside the `finish` that
+   `exec` was given, and then the guard drops and writes its line, so any
+   fail-open audit warning reaches stderr after the payload or JSON error
+   object.
 5. `output::finish` renders the payload for the sink (writing any bad-record
    warnings and notices to stderr in every mode), or reports the error
    (`error: …` line, or `{"error","code"}` in JSON mode) and returns exit 1.
@@ -97,13 +106,15 @@ required field is isolated as a `BadRecord` (`store_bad_record`) naming its id
 the valid notes plus per-record warnings, `show <bad id>` fails with that
 record's error, and `add` refuses while any bad record exists so nothing is
 ever dropped or defaulted. Duplicate note ids are refused on load
-(`store_duplicate_id`). `add` loads once before touching anything, so a
-refused store leaves nothing behind; it then creates the data directory
-(`0700`), takes `.lock` (`0600`, never through a link; an OS advisory lock
+(`store_duplicate_id`). The `add` flow reads the store once before touching
+anything, so a refused store leaves nothing behind; it then calls
+`Store::write`, which creates the data directory (`0700`), takes `.lock` (`0600`, never through a link; an OS advisory lock
 with a 10-second deadline, and a timeout names the holder's pid, label and
-start time only while that pid is still alive), re-reads under the lock,
-assigns the next id (`NoteId::next_after`: checked max id + 1, refusing with
-`note_id_exhausted` at `u64::MAX`), and writes through `fsio::write_atomic` (a
+start time only while that pid is still alive), re-reads under the lock and
+refuses a store with bad records; inside the write the flow assigns the next
+id (`rules::next_id`: checked max id + 1, refusing with `note_id_exhausted`
+at `u64::MAX`) and puts the note, and the store writes through
+`fsio::write_atomic` (a
 `0600` temp file in the same directory, `fsync`, rename, `fsync` of the
 directory). The temp file removes itself on every failure path. A file
 declaring a newer format is refused for reads and writes; an older one is
@@ -113,23 +124,23 @@ and persisted by the next write.
 ## 5. The audit log
 
 Every command that changes durable state is audited; today that is `note
-add`. `Command::audit` declares it per command with an exhaustive match, so a
+add`. The app's `Command::audit` declares it per command with an exhaustive match, so a
 new command does not compile until it decides. Read-only commands are not
 audited, because they must not write (STD-01 R31).
 
-`AuditGuard` (in `audit_middleware.rs`, modelled on Orbit's) is created
-before dispatch in the failure state, so an early return or a panic is
+`AuditGuard` (in the core's `runtime/audit.rs`, modelled on Orbit's) is
+created by `exec` before the flow runs, in the failure state, so an early return or a panic is
 recorded as a failure, never as success. `mark_result` sets the outcome, the
 note id on success and the stable error code on failure; `Drop` runs after
 `output::finish` and appends one line to `<root>/audit.jsonl` through
-`Store::record_audit`, which checks the data directory like any write, holds
+the audit repository (`Store::audit().append`), which checks the data directory like any write, holds
 `.audit.lock` (separate from `.lock` so a lock timeout on a note write still
 records its failure line within one deadline) and creates the file `0600`.
 Each line is `{"format": 2, "at", "actor", "command", "status", "target",
 "error_code", "duration_ms"}`: identifiers only, never argument values or
-error text (STD-05 R13). `actor` is the OS user name read once in `AppEnv`
+error text (STD-05 R13). `actor` is the OS user name read once in `Env`
 from `USER`, else `USERNAME`, serialized as `null` when neither is set; older
-format-1 lines without `actor` upgrade in memory via `store/audit.rs::UPGRADES`
+format-1 lines without `actor` upgrade in memory via `db/audit.rs::UPGRADES`
 with `"actor": null`. The log is a side channel, so it fails open (STD-02
 R31): a line that cannot be written is a `warn` on stderr (after the command's
 own output or JSON error object) and never changes the command's result or
@@ -140,7 +151,7 @@ exit code.
 | Gate | Make target | Holds |
 |------|-------------|-------|
 | `cargo fmt --check` | `ci-fast` | formatting |
-| `check-dependency-direction.sh` | `ci-fast` | crate and module layering (STD-02 R1–R6), file access only in `store/`, no clock-defaulted timestamps (R16), retired paths stay gone (R17) |
+| `check-dependency-direction.sh` | `ci-fast` | crate and module layering (STD-02 R1–R6), file access only in the store's `db/`, environment reads only in the core's `composition.rs`, no clock-defaulted timestamps (R16), retired paths stay gone (R17) |
 | `check-test-modules.sh` | `ci-fast` | every sibling unit-test file is declared (STD-02 R19) |
 | `check-terminal-guard.sh` | `ci-fast` | one owner for streams, TTY and color env (STD-01 R12, R17) |
 | `check-private-task-ids.sh` | `ci-fast` | public tree excludes private task IDs outside the vendored canon |

@@ -1,6 +1,6 @@
 [package]
 name = "tmpl-cli-core"
-description = "The tmpl-cli note store as a library: business logic, persistence, errors. No terminal, no argument parsing."
+description = "The tmpl-cli apps as a library: one exec per app, the runtime they share, and composition. No terminal, no argument parsing."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,20 +11,23 @@ repository.workspace = true
 name = "tmpl_cli_core"
 path = "src/lib.rs"
 
+[features]
+# Exposes the runtime context and each app's `run` (exec without the runtime
+# start) to tests that need a pinned clock or a short lock wait.
+test-support = []
+
 # Domain dependencies only. scripts/check-dependency-direction.sh rejects
 # clap, tracing-subscriber and any other surface crate here.
 [dependencies]
-serde = { workspace = true }
-serde_json = { workspace = true }
-tempfile = { workspace = true }
+tmpl-cli-store = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
 tracing = { workspace = true }
 
-[target.'cfg(unix)'.dependencies]
-rustix = { workspace = true }
-
 [dev-dependencies]
+# The crate's own integration tests run the apps through `test-support`.
+tmpl-cli-core = { path = ".", features = ["test-support"] }
+serde_json = { workspace = true }
 tempfile = { workspace = true }
 time = { workspace = true, features = ["macros"] }
 

@@ -1,0 +1,32 @@
+[package]
+name = "tmpl-cli-store"
+description = "The tmpl-cli data directory: the persisted document, one repository per record, and the record shapes. No rules, no terminal, no argument parsing."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "tmpl_cli_store"
+path = "src/lib.rs"
+
+# Persistence dependencies only. scripts/check-dependency-direction.sh rejects
+# clap, tracing-subscriber and any other surface crate here.
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+tracing = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+time = { workspace = true, features = ["macros"] }
+
+[lints]
+workspace = true

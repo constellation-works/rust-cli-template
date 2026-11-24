@@ -5,7 +5,7 @@
 //! Only the roles this CLI uses exist. Add `Ok`, `Error` or `Active` when a
 //! value needs one, not before.
 
-use tmpl_cli_core::Priority;
+use tmpl_cli_core::contracts::Priority;
 
 /// Whether to render semantic roles with ANSI escapes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

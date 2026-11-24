@@ -1,5 +1,6 @@
 //! The `note` noun: its subcommands, their flags and help, and their
-//! handlers. Each verb makes one store call and wraps the result in a payload
+//! handlers. A handler maps the parsed arguments to the `note` app's
+//! `Command`, calls `apps::note::exec`, and turns the `Outcome` into a payload
 //! (STD-02 R2); rendering happens later, in `output`, from the payload alone.
 //!
 //! A noun this small is one file. When a noun grows (more verbs, or verbs with
@@ -9,14 +10,14 @@
 //! `note/support.rs` for what they share, and `note/tests/` beside them.
 //! STD-02 R18: split along responsibilities, not by length alone.
 
-use crate::app::Context;
-use crate::audit_middleware::AuditMeta;
 use crate::error::CliError;
 use crate::output::{NotePayload, Output};
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::{ArgAction, Args, Subcommand};
 use std::num::NonZeroUsize;
-use tmpl_cli_core::{Body, ListFilter, NewNote, NoteId, NoteList, Priority, Tag, Title};
+use tmpl_cli_core::Env;
+use tmpl_cli_core::apps::note::{self, ListFilter, NewNote, NoteList, Outcome};
+use tmpl_cli_core::contracts::{Body, NoteId, Priority, Tag, Title};
 
 pub(super) const NOTE_EXAMPLES: &str = "\
 Examples:
@@ -106,71 +107,64 @@ fn priority_parser() -> impl TypedValueParser<Value = Priority> {
     PossibleValuesParser::new(Priority::NAMES).try_map(|s| s.parse::<Priority>())
 }
 
-impl NoteCommand {
-    /// The audit entry for this verb, or `None` for a read-only one
-    /// (STD-01 R31). See [`super::Command::audit`].
-    pub(super) fn audit(&self) -> Option<AuditMeta> {
-        match self {
-            Self::Add(_) => Some(AuditMeta {
-                command: "note add",
-            }),
-            Self::List(_) | Self::Show(_) => None,
-        }
-    }
+/// Run one `note` verb through the `note` app and pass the payload to
+/// `finish`.
+pub(super) fn run<R>(
+    command: NoteCommand,
+    env: &Env,
+    finish: impl FnOnce(Result<Output, CliError>) -> R,
+) -> R {
+    note::exec(env, app_command(command), |outcome| {
+        finish(outcome.map(output).map_err(CliError::from))
+    })
 }
 
-/// Run one `note` verb.
-pub(super) fn run(command: NoteCommand, ctx: &Context) -> Result<Output, CliError> {
+/// The parsed arguments as the app's command.
+fn app_command(command: NoteCommand) -> note::Command {
     match command {
-        NoteCommand::Add(args) => add(args, ctx),
-        NoteCommand::List(args) => list(args, ctx),
-        NoteCommand::Show(args) => show(&args, ctx),
+        NoteCommand::Add(args) => note::Command::Add(NewNote {
+            title: args.title,
+            body: args.body,
+            tags: args.tags,
+            priority: args.priority.unwrap_or_default(),
+        }),
+        NoteCommand::List(args) => note::Command::List(ListFilter {
+            tag: args.tag,
+            priority: args.priority,
+            limit: args.limit,
+        }),
+        NoteCommand::Show(args) => note::Command::Show(args.id),
     }
 }
 
-fn add(args: AddArgs, ctx: &Context) -> Result<Output, CliError> {
-    let new = NewNote {
-        title: args.title,
-        body: args.body,
-        tags: args.tags,
-        priority: args.priority.unwrap_or_default(),
-    };
-    let note = ctx.store().add(new, ctx.now())?;
-    tracing::info!(id = %note.id, "note added");
-    // Name what was written and where (STD-01 R30); `id` is in the payload.
-    let notice = format!("added note {} to {}", note.id, ctx.store().path().display());
-    Ok(Output::Note {
-        note: NotePayload::from(&note),
-        notice: Some(notice),
-        warnings: Vec::new(),
-    })
-}
-
-fn list(args: ListArgs, ctx: &Context) -> Result<Output, CliError> {
-    let filter = ListFilter {
-        tag: args.tag,
-        priority: args.priority,
-        limit: args.limit,
-    };
-    let loaded = ctx.store().list(&filter)?;
-    let listed = loaded.value;
-    let warnings = loaded.bad_records.iter().map(ToString::to_string).collect();
-    Ok(Output::Notes {
-        notes: listed.notes.iter().map(NotePayload::from).collect(),
-        total: listed.total,
-        notice: list_notice(&filter, &listed),
-        warnings,
-    })
-}
-
-fn show(args: &ShowArgs, ctx: &Context) -> Result<Output, CliError> {
-    let loaded = ctx.store().show(args.id)?;
-    let warnings = loaded.bad_records.iter().map(ToString::to_string).collect();
-    Ok(Output::Note {
-        note: NotePayload::from(&loaded.value),
-        notice: None,
-        warnings,
-    })
+/// The app's outcome as the payload every output mode renders.
+fn output(outcome: Outcome) -> Output {
+    match outcome {
+        Outcome::Added { note, path } => {
+            // Name what was written and where (STD-01 R30); `id` is in the payload.
+            let notice = format!("added note {} to {}", note.id, path.display());
+            Output::Note {
+                note: NotePayload::from(&note),
+                notice: Some(notice),
+                warnings: Vec::new(),
+            }
+        }
+        Outcome::Listed {
+            list,
+            filter,
+            bad_records,
+        } => Output::Notes {
+            notes: list.notes.iter().map(NotePayload::from).collect(),
+            total: list.total,
+            notice: list_notice(&filter, &list),
+            warnings: bad_records.iter().map(ToString::to_string).collect(),
+        },
+        Outcome::Shown { note, bad_records } => Output::Note {
+            note: NotePayload::from(&note),
+            notice: None,
+            warnings: bad_records.iter().map(ToString::to_string).collect(),
+        },
+    }
 }
 
 /// The stderr line for a list, if it needs one: nothing matched (STD-01

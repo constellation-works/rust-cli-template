@@ -5,8 +5,8 @@
 # Usage: scripts/rename-template.sh NAME
 #
 #   NAME  lowercase kebab-case project name (e.g. `demo-cli`); becomes the
-#         binary, the crate names (`NAME`, `NAME-core`), the Rust paths
-#         (`NAME_core`), the env-var prefix (`NAME_ROOT`, upper snake case) and
+#         binary, the crate names (`NAME`, `NAME-core`, `NAME-store`), the
+#         Rust paths (`NAME_core`, `NAME_store`), the env-var prefix (`NAME_ROOT`, upper snake case) and
 #         the design-doc folder.
 #
 # Run it once, from anywhere, in a repository created with GitHub's "Use this

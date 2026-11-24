@@ -55,15 +55,17 @@ there.
 |---------|------|
 | Grouped root help | [crates/tmpl-cli/src/help.rs](../../../crates/tmpl-cli/src/help.rs) |
 | Root command, global flags, parsing | [crates/tmpl-cli/src/cli.rs](../../../crates/tmpl-cli/src/cli.rs) |
-| Data directory and store construction | [crates/tmpl-cli/src/app.rs](../../../crates/tmpl-cli/src/app.rs) |
-| Dispatch chokepoint, audited-command table | [crates/tmpl-cli/src/commands/mod.rs](../../../crates/tmpl-cli/src/commands/mod.rs) |
-| `note` subcommands, flags, help, handlers, empty-result notice | [crates/tmpl-cli/src/commands/note.rs](../../../crates/tmpl-cli/src/commands/note.rs) |
-| Audit guard around mutating commands | [crates/tmpl-cli/src/audit_middleware.rs](../../../crates/tmpl-cli/src/audit_middleware.rs) |
+| Environment capture, data directory, store and clock | [crates/tmpl-cli-core/src/composition.rs](../../../crates/tmpl-cli-core/src/composition.rs) |
+| Noun dispatch | [crates/tmpl-cli/src/commands/mod.rs](../../../crates/tmpl-cli/src/commands/mod.rs) |
+| `note` subcommands, flags, help, mapping to the app, empty-result notice | [crates/tmpl-cli/src/commands/note.rs](../../../crates/tmpl-cli/src/commands/note.rs) |
 | Output mode, color, width resolution | [crates/tmpl-cli/src/output/sink.rs](../../../crates/tmpl-cli/src/output/sink.rs) |
 | Rendering, error reporting, closed pipe | [crates/tmpl-cli/src/output/](../../../crates/tmpl-cli/src/output/) |
-| Note types, validation, next-id rule | [crates/tmpl-cli-core/src/note.rs](../../../crates/tmpl-cli-core/src/note.rs) |
-| List selection (filter, count, limit) | [crates/tmpl-cli-core/src/query.rs](../../../crates/tmpl-cli-core/src/query.rs) |
-| Store facade | [crates/tmpl-cli-core/src/store/mod.rs](../../../crates/tmpl-cli-core/src/store/mod.rs) |
-| Persisted format, upgrades; audit record shape | [crates/tmpl-cli-core/src/store/format.rs](../../../crates/tmpl-cli-core/src/store/format.rs), [audit.rs](../../../crates/tmpl-cli-core/src/store/audit.rs) |
-| Atomic write, append, lock, bounded reads, private state | [crates/tmpl-cli-core/src/store/fsio.rs](../../../crates/tmpl-cli-core/src/store/fsio.rs) |
+| The `note` app: `exec`, audited-command table, flows | [crates/tmpl-cli-core/src/apps/note/](../../../crates/tmpl-cli-core/src/apps/note/) |
+| Next-id rule, list selection (filter, count, limit) | [crates/tmpl-cli-core/src/apps/note/rules.rs](../../../crates/tmpl-cli-core/src/apps/note/rules.rs) |
+| Runtime context; audit guard around mutating commands | [crates/tmpl-cli-core/src/runtime/](../../../crates/tmpl-cli-core/src/runtime/) |
+| Note and audit record shapes, validation | [crates/tmpl-cli-store/src/contracts/](../../../crates/tmpl-cli-store/src/contracts/) |
+| Store facade: read, write transaction | [crates/tmpl-cli-store/src/store.rs](../../../crates/tmpl-cli-store/src/store.rs) |
+| Repositories: notes, audit | [crates/tmpl-cli-store/src/repository/](../../../crates/tmpl-cli-store/src/repository/) |
+| Persisted format, upgrades; audit line | [crates/tmpl-cli-store/src/db/format.rs](../../../crates/tmpl-cli-store/src/db/format.rs), [audit.rs](../../../crates/tmpl-cli-store/src/db/audit.rs) |
+| Atomic write, append, lock, bounded reads, private state | [crates/tmpl-cli-store/src/db/fsio.rs](../../../crates/tmpl-cli-store/src/db/fsio.rs) |
 | Goldens of help and output | [crates/tmpl-cli/tests/goldens.rs](../../../crates/tmpl-cli/tests/goldens.rs) |

@@ -52,8 +52,8 @@ leave unparseable state.
 - `format` greater than this build's is refused (`store_too_new`) for reads
   and writes; the file is left untouched. Format 0 is `store_corrupt`.
 - Every change to the persisted shape bumps `format` and appends one step
-  to `UPGRADES` (`store/format.rs` for notes, `store/audit.rs` for audit
-  lines); shipped steps never change. Reads upgrade an older document or line
+  to `UPGRADES` in `tmpl-cli-store` (`db/format.rs` for notes, `db/audit.rs`
+  for audit lines); shipped steps never change. Reads upgrade an older document or line
   in memory; the next write persists the current format. Format-1 audit lines
   without `actor` upgrade with `"actor": null`.
 - Duplicate note ids in `notes.json` are refused on load (`store_duplicate_id`).
