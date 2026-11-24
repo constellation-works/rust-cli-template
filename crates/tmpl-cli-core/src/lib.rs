@@ -4,14 +4,14 @@
 //!   (today `note`), each with its `Command`, `Outcome`, `Error`, one `exec`,
 //!   its flows and its pure rules;
 //! - `runtime`: the context an app runs against, the one chokepoint every
-//!   app's `exec` forwards to, the audit guard and the errors every app
-//!   shares ([`Error`]);
+//!   app's `exec` forwards to and the audit guard;
 //! - `composition`: the one place that reads the host — the captured
 //!   environment ([`Env`]), the data directory, the store and the clock.
 //!
 //! Persistence is the `tmpl-cli-store` crate; the record shapes it defines
-//! are re-exported as [`contracts`] so a surface renders them without a
-//! second dependency. This crate never parses arguments and never touches
+//! are re-exported as [`contracts`]. The one error type is the foundation's,
+//! `tmpl-cli-common`, re-exported as [`Error`] and [`Kind`]. A surface so
+//! names only this crate. This crate never parses arguments and never touches
 //! the terminal. Anything another surface (an MCP server, a desktop app)
 //! would need to see the same notes belongs here, not in the CLI crate.
 
@@ -34,7 +34,7 @@ mod runtime;
 pub mod test_support;
 
 pub use composition::Env;
-pub use runtime::Error;
+pub use tmpl_cli_common::{Error, Kind};
 pub use tmpl_cli_store::contracts;
 
 #[cfg(test)]

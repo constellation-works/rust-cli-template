@@ -17,12 +17,12 @@
 //! listing returns and when a command is refused are the note app's rules.
 
 use crate::db::format::{self, StoreDocument};
-use crate::db::fsio::{self, LockGuard};
 use crate::db::{AUDIT_LOCK_FILE, LOCK_FILE, STORE_FILE, audit};
 use crate::error::{Error, Result};
 use crate::repository::{Audit, Snapshot, Tx};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use tmpl_cli_common::fs::{self as fsio, LockGuard};
 
 /// How long a writer waits for another writer before refusing (STD-03 R7).
 const DEFAULT_LOCK_WAIT: Duration = Duration::from_secs(10);
@@ -94,7 +94,7 @@ impl Store {
     where
         E: From<Error>,
     {
-        fsio::create_private_dir(&self.root)?;
+        fsio::create_private_dir(&self.root).map_err(Error::from)?;
         let _lock = self.lock(label)?;
         // Re-read under the lock: anything read before it may be stale.
         let mut doc = self.load()?;
@@ -103,7 +103,7 @@ impl Store {
         }
         let value = apply(&mut Tx::new(&mut doc))?;
         let path = self.path();
-        fsio::write_atomic(&path, &format::encode(&doc)?)?;
+        fsio::write_atomic(&path, &format::encode(&doc)?).map_err(Error::from)?;
         Ok(value)
     }
 
@@ -114,11 +114,19 @@ impl Store {
     }
 
     pub(crate) fn lock(&self, label: &str) -> Result<LockGuard> {
-        LockGuard::acquire(&self.root.join(LOCK_FILE), label, self.lock_wait)
+        Ok(LockGuard::acquire(
+            &self.root.join(LOCK_FILE),
+            label,
+            self.lock_wait,
+        )?)
     }
 
     pub(crate) fn audit_lock(&self, label: &str) -> Result<LockGuard> {
-        LockGuard::acquire(&self.root.join(AUDIT_LOCK_FILE), label, self.lock_wait)
+        Ok(LockGuard::acquire(
+            &self.root.join(AUDIT_LOCK_FILE),
+            label,
+            self.lock_wait,
+        )?)
     }
 
     fn load(&self) -> Result<StoreDocument> {

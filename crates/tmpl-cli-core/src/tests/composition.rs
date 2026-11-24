@@ -1,5 +1,5 @@
+use crate::composition::Error;
 use crate::composition::{Env, resolve_actor, resolve_root};
-use crate::runtime::Error;
 use std::path::{Path, PathBuf};
 
 fn env(root: Option<&str>, home: Option<&str>) -> Env {

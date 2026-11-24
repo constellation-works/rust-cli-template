@@ -19,6 +19,7 @@ test-support = []
 # Domain dependencies only. scripts/check-dependency-direction.sh rejects
 # clap, tracing-subscriber and any other surface crate here.
 [dependencies]
+tmpl-cli-common = { workspace = true }
 tmpl-cli-store = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }

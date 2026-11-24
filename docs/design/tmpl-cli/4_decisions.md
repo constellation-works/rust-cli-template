@@ -7,7 +7,7 @@ status: Draft
 feature: tmpl-cli
 doc_role: decisions
 type: design
-summary: Why three crates laid out by app (binary, core with apps, runtime and composition, store with repositories and contracts), why commands are one module per noun, why mutating commands are audited through one guard, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, how the store format evolves and stays private, and every recorded standard deviation or rule the template does not exercise.
+summary: Why three crates laid out by app over a foundation crate (binary, core with apps, runtime and composition, store with repositories and contracts; the one error type and file access in the foundation), why commands are one module per noun, why mutating commands are audited through one guard, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, how the store format evolves and stays private, and every recorded standard deviation or rule the template does not exercise.
 tags: [tmpl-cli, decisions]
 paths: ["Cargo.toml", "crates/**", "Makefile"]
 related_features: [tmpl-cli]
@@ -214,7 +214,7 @@ is 0. This reads R16's "nothing" as "no records", as Orbit does.
 ## The store lock uses std file locks, not a crate
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli-store/src/db/fsio.rs::LockGuard::acquire`
+**Code anchors:** `crates/tmpl-cli-common/src/fs/fsio.rs::LockGuard::acquire`
 
 ### Context
 
@@ -399,7 +399,7 @@ registry ships empty.
 ## Store state is owner-only and checked on every load
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli-store/src/db/fsio.rs::create_private_dir`, `::inspect_dir`, `::inspect_file`, `::LockGuard::acquire`
+**Code anchors:** `crates/tmpl-cli-common/src/fs/fsio.rs::create_private_dir`, `::inspect_dir`, `::inspect_file`, `::LockGuard::acquire`
 
 ### Context
 
@@ -632,7 +632,7 @@ Three crates, `tmpl-cli -> tmpl-cli-core -> tmpl-cli-store`
   loads from one `store.read()`, decides with its rules and commits in one
   `store.write(|tx| …)`.
 - `tmpl-cli-store` holds `db/` (fsio, the persisted document and its
-  upgrades, the audit line, locks), `repository/` (notes, audit) and
+  upgrades, the audit line, locks; `fsio` later moved to the foundation), `repository/` (notes, audit) and
   `contracts/` (`Note`, `NoteId`, `Title`, `Body`, `Tag`, `Priority`,
   `AuditEvent`). It holds no rule of the note app.
 
@@ -671,6 +671,109 @@ or the persisted format, only the repositories.
   of I/O by grep, inside a crate that does I/O, which is weaker than a crate
   edge; and `exec` carries a `finish` callback instead of returning the
   outcome.
+- Update (2026-11-24): the error type and the file mechanism (`db/fsio.rs`)
+  moved to a fourth crate, the foundation `tmpl-cli-common`, so the store
+  names no file primitive. The record shapes stay in the store. See
+  [One error type and file access live in a foundation crate](#one-error-type-and-file-access-live-in-a-foundation-crate).
+
+## One error type and file access live in a foundation crate
+
+**Recorded:** 2026-11-24
+**Code anchors:** `crates/tmpl-cli-common/src/error/mod.rs::Error`; `crates/tmpl-cli-common/src/error/kind.rs::Kind`; `crates/tmpl-cli-common/src/fs/mod.rs`; `crates/tmpl-cli-common/src/fs/error.rs::Error`; `crates/tmpl-cli-store/src/error.rs` (`impl From<Error> for tmpl_cli_common::Error`); `crates/tmpl-cli-core/src/apps/note/mod.rs::Error`; `crates/tmpl-cli/src/error.rs::exit_code`; `scripts/check-dependency-direction.sh::policy`
+
+### Context
+
+With three crates the errors nested: the store's `Error` inside a runtime
+`Error` inside each app's `Error` inside the binary's `CliError`. `?`
+converts one step, so every app wrote a `From<store::Error>` by hand to
+cross two, the binary matched an app's variant to choose a remedy, and each
+app's `exec` returned a different error type. Daniel, 2026-11-24, on that
+hand-written conversion: "what is this"; then: "we are going to make the
+best version possible now. This repo will serve as the basis for all future
+projects, so we need to get the first footing right. what do you think about
+creating a leaf node, tmpl-cli-common, and we can port the global errors
+there". While it was built: "no flat layers in the common crate. any common
+types/contracts can go there too"; "fs utils can go there in common"; and,
+after the record shapes had been moved there: "actually, contracts can stay
+in store - core is importing store anyways".
+
+The typed enums cannot simply move down: the runtime's error wrapped the
+store's, so a crate holding it would depend on the store and not be a leaf,
+and the store's variants (corrupt, bad record, newer format) are the
+store's own vocabulary. A single enum of every unit's variants in the leaf,
+as Orbit's `OrbitError` is, would make every new app edit the foundation.
+
+### Decision
+
+A fourth crate, `tmpl-cli-common`, that names no other crate of the
+workspace. It is grouped by subject, one folder each:
+
+- `error/`: one `Error` for the whole workspace (STD-02@4 §R11). It wraps a
+  unit's typed error whole and adds a `Kind` and the stable code. Its
+  `Display` and source chain are the typed error's own. `Kind` names what
+  the caller can do: `NotFound`, `Refused`, `Busy`, `Corrupt`,
+  `Incompatible`, `Config`, `Io`, `Internal`.
+- `fs/`: file access for a private data directory (atomic write, append,
+  advisory lock, owner-only checks), moved from the store's `db/fsio.rs`,
+  with its own typed `Error`. It knows no record and no file name, and it is
+  the only code in the workspace that names `std::fs`. The store wraps its
+  error as `Error::Fs` and gives each variant the store's stable code, so
+  no code changed.
+
+The record shapes (`contracts/`) stay in the store: the core imports the
+store already, so a lower home would serve no unit that cannot reach them.
+
+Each unit keeps its typed `thiserror` enum for its own matching (§R10) and
+has one translator, a `From` impl beside the enum, that states the kind and
+the code (§R12, the case where the owning unit can name the surface type).
+The store's `Error`, composition's `Error` (no data directory) and the note
+app's `Error` each have one. An app's enum is its own refusals plus one
+`Store(#[from] …)` variant; the runtime's error enum is gone. Every app's
+`exec` returns `Result<Outcome, tmpl_cli_common::Error>`, so the runtime's
+`App` trait asks an app for no error code, and the audit line reads the
+code from the one type. `run` still returns the app's typed error.
+
+The binary has no error enum. It decides the exit code from `Kind` in one
+exhaustive match, keeps the remedy text (spelled in its own commands) keyed
+on the app's typed error through `downcast_ref`, and builds its one failure
+(output that could not be written) as the same type. It still names only
+the core, which re-exports `Error`, `Kind` and the store's `contracts`.
+
+Three readings of the standard are deliberate. STD-02@4 §R10 says library
+code never returns `Box<dyn Error>`: `Error` holds one inside a typed
+struct, the typed enum stays intact behind it, and classification is by
+`Kind` and code, never by message. §R11 asks `#[non_exhaustive]` of the
+surface error type: `Error` carries it; `Kind` and `fs::Error` do not, so
+that adding a kind or a file failure breaks every match that must decide
+about it. §R7 starts a CLI at two crates and asks a dependency reason for
+each further one: the store and the core must both name the error type, and
+the store cannot depend on the core, so it has to sit below both.
+
+### Consequences
+
+- A new app writes no error conversion by hand, and a surface handles one
+  type whatever the app.
+- "Only one place touches a file" is a crate fact for the store and the
+  core: neither depends on a file crate, and the guard rejects `std::fs` in
+  both. A later unit that owns a file of its own uses the same mechanism
+  without depending on the store.
+- The guard keeps the foundation grouped by subject (no file beside
+  `lib.rs`, no folder named for no responsibility) and keeps `error/` free
+  of I/O and of the clock.
+- STD-02@4 §R5's I/O-free contract unit is still the store's `contracts`
+  module, kept so by grep; the store crate itself now names no file
+  primitive either.
+- Cost: four manifests. A surface matches on `Kind` and code instead of an
+  app's variants, and reaches a variant only by `downcast_ref`. A test
+  through `exec` asserts on the code; a test through `run` keeps the typed
+  enum. `error/` has no unit test of its own: `Error` is exercised through
+  the binary's error tests and goldens.
+- Cost: today only the store uses `fs/`, so it is in the foundation for the
+  projects grown from this template, not for a second user here.
+- Cost: `common` is a name for no responsibility. A later version of the
+  standard than this repository pins (STD-02@6 §R43) allows that name in
+  the foundation only. What keeps it from collecting code is its section in
+  [ARCHITECTURE.md](../../../ARCHITECTURE.md) and the guard, not its name.
 
 ## Public design documents use public references
 

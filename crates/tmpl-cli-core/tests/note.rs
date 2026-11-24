@@ -16,6 +16,7 @@ use std::path::Path;
 use std::sync::Arc;
 use time::OffsetDateTime;
 use time::macros::datetime;
+use tmpl_cli_common::fs::Error as FsError;
 use tmpl_cli_core::apps::note::{Command, Error, ListFilter, NewNote, NoteList, Outcome};
 use tmpl_cli_core::contracts::{Note, NoteId, Priority, Tag};
 use tmpl_cli_core::test_support::{Ctx, note_run};
@@ -27,7 +28,7 @@ const NOW: OffsetDateTime = datetime!(2026-01-02 03:04:05 UTC);
 
 /// The store failure behind an app error, when there is one.
 fn store_error(err: &Error) -> Option<&StoreError> {
-    if let Error::Runtime(tmpl_cli_core::Error::Store(e)) = err {
+    if let Error::Store(e) = err {
         Some(e)
     } else {
         None
@@ -102,7 +103,7 @@ fn a_lock_timeout_omits_an_oversized_holder_record() {
         .add(new_note("waiting", &[], Priority::Normal), NOW)
         .unwrap_err();
     assert!(
-        matches!(store_error(&err), Some(StoreError::Locked { holder, .. }) if holder == "an unknown process")
+        matches!(store_error(&err), Some(StoreError::Fs(FsError::Locked { holder, .. })) if holder == "an unknown process")
     );
 }
 

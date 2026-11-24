@@ -1,5 +1,6 @@
 use crate::apps::note::{self, Command, NewNote};
-use crate::runtime::{AuditGuard, AuditMeta, Ctx, Error};
+use crate::composition::Error;
+use crate::runtime::{AuditGuard, AuditMeta, Ctx};
 use std::path::PathBuf;
 use time::OffsetDateTime;
 use time::macros::datetime;

@@ -6,11 +6,44 @@
 //! Nothing else in the core reads an environment variable or discovers a
 //! path (`scripts/check-dependency-direction.sh`).
 
-use crate::runtime::Error;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
+use tmpl_cli_common::Kind;
 use tmpl_cli_store::Store;
+
+/// Why composition could not resolve what an app runs against.
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub(crate) enum Error {
+    /// No data directory could be resolved.
+    #[error("no data directory: pass --root <dir> or set TMPL_CLI_ROOT (HOME is not set either)")]
+    NoDataDir,
+}
+
+impl Error {
+    /// A stable `snake_case` code for this failure, for machine output
+    /// (STD-01 R19). Adding a code is fine; changing one is a breaking change.
+    pub(crate) fn code(&self) -> &'static str {
+        match self {
+            Self::NoDataDir => "no_data_dir",
+        }
+    }
+
+    /// How this failure is classified.
+    pub(crate) fn kind(&self) -> Kind {
+        match self {
+            Self::NoDataDir => Kind::Config,
+        }
+    }
+}
+
+/// Composition's one translator into the workspace's error type
+/// (STD-02 R12).
+impl From<Error> for tmpl_cli_common::Error {
+    fn from(err: Error) -> Self {
+        Self::new(err.kind(), err.code(), err)
+    }
+}
 
 /// Environment variable naming the data directory.
 const ROOT_ENV: &str = "TMPL_CLI_ROOT";

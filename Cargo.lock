@@ -394,6 +394,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tmpl-cli-common"
+version = "0.1.0"
+dependencies = [
+ "rustix",
+ "tempfile",
+ "thiserror",
+ "time",
+ "tracing",
+]
+
+[[package]]
 name = "tmpl-cli-core"
 version = "0.1.0"
 dependencies = [
@@ -401,6 +412,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "time",
+ "tmpl-cli-common",
  "tmpl-cli-core",
  "tmpl-cli-store",
  "tracing",
@@ -410,12 +422,12 @@ dependencies = [
 name = "tmpl-cli-store"
 version = "0.1.0"
 dependencies = [
- "rustix",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror",
  "time",
+ "tmpl-cli-common",
  "tracing",
 ]
 

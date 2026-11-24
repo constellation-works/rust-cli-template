@@ -23,22 +23,26 @@ and the gates. The output and store contracts are specified in
 
 ## 1. Layering
 
-Three crates laid out by app (why:
-[4_decisions.md](./4_decisions.md#the-template-is-laid-out-by-app-in-three-crates)).
+Three crates laid out by app over one foundation crate (why:
+[4_decisions.md](./4_decisions.md#the-template-is-laid-out-by-app-in-three-crates),
+[the foundation](./4_decisions.md#one-error-type-and-file-access-live-in-a-foundation-crate)).
 `tmpl-cli` is the surface: `cli` (the root flags), `commands` (one module
 per noun, holding its subcommands, flags and help, and mapping its arguments
 to an app's `Command` and the `Outcome` to a payload) and `output`.
 `tmpl-cli-core` holds the apps (`apps/note/`: `Command`, `Outcome`, `Error`,
 `exec`, one flow per command and the pure `rules`: the next id and list
 selection), the `runtime` they share (the context, the one chokepoint every
-app's `exec` forwards to, the audit guard, the common errors) and `composition` (the only code that reads the environment
-or picks the data directory, the store and the clock). `tmpl-cli-store` is
-the only code that touches disk: the `Store` facade (one read, one locked
-write) over `db/` (`format`: the persisted document and its upgrades;
-`audit`: the persisted audit line; `fsio`: durable writes, appends, locking,
-private-state checks, mechanism only), one repository per record (`notes`,
-`audit`) and the record shapes in `contracts/`. Neither library has clap or
-terminal access. The crate and module rules are in
+app's `exec` forwards to, the audit guard) and `composition` (the only code
+that reads the environment or picks the data directory, the store and the
+clock). `tmpl-cli-store` owns
+the data directory: the `Store` facade (one read, one locked write) over
+`db/` (`format`: the persisted document and its upgrades; `audit`: the
+persisted audit line), one repository per record (`notes`, `audit`) and
+the record shapes in `contracts/`. `tmpl-cli-common` is the foundation both
+libraries name: `error/` (the one error type every unit translates its
+typed error into, with its `Kind` and stable code) and `fs/` (durable writes,
+appends, locking and private-state checks, mechanism only, and the only
+code that names `std::fs`). No library has clap or terminal access. The crate and module rules are in
 [ARCHITECTURE.md](../../../ARCHITECTURE.md), and
 `scripts/check-dependency-direction.sh` enforces them from source text
 alone, so it runs in `make ci-fast` without compiling.
@@ -63,8 +67,9 @@ alone, so it runs in `make ci-fast` without compiling.
    audited it starts an `AuditGuard` (section 5); then the command's flow loads from the store,
    decides with the app's rules and commits in one write. The handler turns
    the `Outcome` into a payload (`Output::Notes` or `Output::Note`) with an
-   optional stderr notice and any bad-record warnings; app errors cross into
-   `CliError` through its single `#[from]`. The guard is told the outcome,
+   optional stderr notice and any bad-record warnings; an app's typed error has already
+   crossed into the one error type through the app's translator, inside the
+   runtime's `exec`. The guard is told the outcome,
    `output::finish` renders the payload or error inside the `finish` that
    `exec` was given, and then the guard drops and writes its line, so any
    fail-open audit warning reaches stderr after the payload or JSON error
@@ -116,7 +121,7 @@ start time only while that pid is still alive), re-reads under the lock and
 refuses a store with bad records; inside the write the flow assigns the next
 id (`rules::next_id`: checked max id + 1, refusing with `note_id_exhausted`
 at `u64::MAX`) and puts the note, and the store writes through
-`fsio::write_atomic` (a
+the foundation's `fs::write_atomic` (a
 `0600` temp file in the same directory, `fsync`, rename, `fsync` of the
 directory). The temp file removes itself on every failure path. A file
 declaring a newer format is refused for reads and writes; an older one is

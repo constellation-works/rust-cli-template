@@ -1,5 +1,5 @@
-use crate::db::fsio::{LockGuard, list_dir, remove_private, write_atomic};
-use crate::error::Error;
+use crate::fs::Error;
+use crate::fs::{LockGuard, list_dir, remove_private, write_atomic};
 use std::time::Duration;
 
 #[test]
@@ -15,7 +15,7 @@ fn write_atomic_replaces_the_file_and_leaves_no_temp_files() {
 
 #[test]
 fn listing_and_removing_private_records_leaves_the_other_records_intact() {
-    let dir = crate::db::tests::private_tempdir();
+    let dir = crate::fs::tests::private_tempdir();
     let _lock = LockGuard::acquire(&dir.path().join(".lock"), "remove", Duration::ZERO).unwrap();
     let first = dir.path().join("a");
     let last = dir.path().join("z");
@@ -30,7 +30,7 @@ fn listing_and_removing_private_records_leaves_the_other_records_intact() {
 
 #[test]
 fn listing_a_directory_that_does_not_exist_yields_no_names() {
-    let dir = crate::db::tests::private_tempdir();
+    let dir = crate::fs::tests::private_tempdir();
     let absent = dir.path().join("not-created-yet");
     assert!(list_dir(&absent).unwrap().is_empty());
     assert!(!absent.exists(), "listing must not create the directory");
@@ -73,11 +73,11 @@ fn dropping_the_guard_releases_the_lock() {
 mod private_state {
     //! STD-05 R7–R9: owner-only creation, and refusal of links, foreign
     //! owners and loose modes on load.
-    use crate::db::fsio::{
+    use crate::fs::Error;
+    use crate::fs::{
         LockGuard, append_private, create_private_dir, inspect_dir, inspect_file, list_dir,
         remove_private, write_atomic,
     };
-    use crate::error::Error;
     use std::fs::{self, Permissions};
     use std::os::unix::fs::{PermissionsExt, symlink};
     use std::path::Path;
@@ -102,7 +102,7 @@ mod private_state {
 
     #[test]
     fn missing_state_is_absent_not_an_error() {
-        let dir = crate::db::tests::private_tempdir();
+        let dir = crate::fs::tests::private_tempdir();
         assert!(!inspect_dir(&dir.path().join("none")).unwrap());
         assert!(!inspect_file(&dir.path().join("none.json")).unwrap());
         assert!(inspect_dir(dir.path()).unwrap());
@@ -175,7 +175,7 @@ mod private_state {
 
     #[test]
     fn private_remove_refuses_links_and_writable_files() {
-        let dir = crate::db::tests::private_tempdir();
+        let dir = crate::fs::tests::private_tempdir();
         let _lock =
             LockGuard::acquire(&dir.path().join(".lock"), "remove", Duration::ZERO).unwrap();
         let target = dir.path().join("target");
@@ -194,7 +194,7 @@ mod private_state {
 
     #[test]
     fn listing_refuses_a_directory_writable_by_others() {
-        let dir = crate::db::tests::private_tempdir();
+        let dir = crate::fs::tests::private_tempdir();
         fs::set_permissions(dir.path(), Permissions::from_mode(0o777)).unwrap();
         let result = list_dir(dir.path());
         fs::set_permissions(dir.path(), Permissions::from_mode(0o700)).unwrap();
@@ -203,7 +203,7 @@ mod private_state {
 
     #[test]
     fn append_private_creates_the_log_owner_only_and_appends_in_order() {
-        let dir = crate::db::tests::private_tempdir();
+        let dir = crate::fs::tests::private_tempdir();
         let log = dir.path().join("audit.jsonl");
         append_private(&log, b"one\n").unwrap();
         append_private(&log, b"two\n").unwrap();
@@ -213,7 +213,7 @@ mod private_state {
 
     #[test]
     fn append_private_never_follows_a_link() {
-        let dir = crate::db::tests::private_tempdir();
+        let dir = crate::fs::tests::private_tempdir();
         let target = dir.path().join("elsewhere");
         fs::write(&target, b"precious").unwrap();
         let link = dir.path().join("audit.jsonl");
@@ -225,7 +225,7 @@ mod private_state {
 
     #[test]
     fn a_lock_timeout_does_not_report_a_finished_pid_as_holder() {
-        let dir = crate::db::tests::private_tempdir();
+        let dir = crate::fs::tests::private_tempdir();
         let path = dir.path().join(".lock");
         let mut child = std::process::Command::new("/bin/sh")
             .arg("-c")

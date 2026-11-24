@@ -24,21 +24,30 @@ err() { echo "dependency-direction: $*" >&2; fail=1; }
 # policy <crate>  -> sets ALLOWED (internal deps) and BANNED (external deps)
 policy() {
   case "$1" in
-    tmpl-cli-store)
+    tmpl-cli-common)
+      # The foundation names no other crate of the workspace: no terminal,
+      # parser or log-subscriber crate, and no byte format (serde_json
+      # belongs to whoever persists or renders). tempfile and rustix serve
+      # its fs/ module only (module rules below).
       ALLOWED=""
+      BANNED="clap tracing-subscriber serde_json anstream anstyle termcolor terminal_size crossterm owo-colors colored"
+      ;;
+    tmpl-cli-store)
+      ALLOWED="tmpl-cli-common"
       # Persistence never parses arguments, draws on a terminal or installs a
-      # log subscriber: those belong to surfaces.
-      BANNED="clap tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored"
+      # log subscriber: those belong to surfaces. It reaches files only
+      # through the foundation's fs module, so it needs no file crate.
+      BANNED="clap tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored tempfile rustix"
       ;;
     tmpl-cli-core)
-      ALLOWED="tmpl-cli-store"
+      ALLOWED="tmpl-cli-common tmpl-cli-store"
       # The apps reach files only through the store, so they need no file or
       # process crate either.
       BANNED="clap tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored tempfile rustix"
       ;;
     tmpl-cli)
       # The binary names only the core; the core re-exports the record shapes
-      # it renders.
+      # it renders and the one error type.
       ALLOWED="tmpl-cli-core"
       BANNED=""
       ;;
@@ -176,38 +185,55 @@ ban_import() {
   fi
 }
 
+COMMON=crates/tmpl-cli-common/src
 STORE=crates/tmpl-cli-store/src
 CORE=crates/tmpl-cli-core/src
 CLI=crates/tmpl-cli/src
 
-# Store: only db/ touches the filesystem (R5). fsio is mechanism with no
-# knowledge of records; the format and audit-line modules convert bytes and
-# do no I/O; contracts are shapes that know nothing of how they are stored and
-# hold no rule (R4).
-for path in "$STORE"/*; do
+# Foundation: the error type and file access. Only fs/ names a file, process
+# or clock; error/ is a shape and never imports fs/. fs/ is mechanism (R4):
+# the foundation names no other crate, so it cannot know a record. Nothing
+# here reads the environment (R3). It is grouped by subject, one folder each: no
+# file beside lib.rs, and no folder named for no responsibility.
+ban "$COMMON"        'std::env::|home_dir|current_dir'                     "the foundation reads no environment and discovers no path"
+ban_import "$COMMON" 'std' 'env'                                           "the foundation reads no environment and discovers no path"
+for path in "$COMMON"/*; do
   name=$(basename "$path")
-  case "$name" in db | tests) continue ;; esac
-  ban "$path" 'std::(fs|net|process)|tempfile::|rustix::' "store/$name must reach files through db/"
-  ban_import "$path" 'std' 'fs|net|process'               "store/$name must reach files through db/"
+  case "$name" in
+    lib.rs | fs) continue ;;
+    *.rs) err "common/src/$name: the foundation is grouped by subject; put it in a folder (error/, fs/)"; continue ;;
+    util | utils | helpers | misc | shared | types | models) err "common/src/$name: name the folder for what it owns"; continue ;;
+  esac
+  ban "$path" 'std::(fs|net|process)|tempfile::|rustix::|crate::fs\b'     "common/$name holds shapes; only fs/ touches a file"
+  ban_import "$path" 'std' 'fs|net|process'                                "common/$name holds shapes; only fs/ touches a file"
+  ban_import "$path" 'crate' 'fs'                                          "common/$name holds shapes; only fs/ touches a file"
+  ban "$path" 'fn check_|now_utc|SystemTime'                               "common/$name holds shapes only: no checks across records and no clock"
 done
-ban "$STORE/db/fsio.rs" 'crate::(contracts|repository|db|store)|super::' "db/fsio.rs is mechanism only; it must not know records or the store"
-ban_import "$STORE/db/fsio.rs" 'crate' 'contracts|repository|db|store|Store' "db/fsio.rs is mechanism only; it must not know records or the store"
+
+# Store: no code here names a file, process or network primitive; it reaches
+# the data directory through the foundation's fs module. db/ holds the file
+# names and converts bytes; contracts are shapes that know nothing of how
+# they are stored and hold no rule (R4).
+ban "$STORE"         'std::(fs|net|process)|tempfile::|rustix::'           "the store reaches files through tmpl_cli_common::fs"
+ban_import "$STORE"  'std' 'fs|net|process'                                "the store reaches files through tmpl_cli_common::fs"
 for file in format audit; do
-  ban "$STORE/db/$file.rs" 'std::fs|super::fsio|crate::db::fsio' "db/$file.rs converts bytes; it must not do I/O"
-  ban_import "$STORE/db/$file.rs" 'std' 'fs'                     "db/$file.rs converts bytes; it must not do I/O"
-  ban_import "$STORE/db/$file.rs" 'super' 'fsio'                 "db/$file.rs converts bytes; it must not do I/O"
+  ban "$STORE/db/$file.rs" 'tmpl_cli_common::fs'                           "db/$file.rs converts bytes; it must not do I/O"
+  ban_import "$STORE/db/$file.rs" 'tmpl_cli_common' 'fs'                   "db/$file.rs converts bytes; it must not do I/O"
 done
-ban "$STORE/contracts" 'crate::(db|repository|store|Store)|super::super::' "contracts are record shapes; they must not import db, repository or the store"
+ban "$STORE/contracts" 'crate::(db|repository|store|Store)|super::super::|tmpl_cli_common::fs' "contracts are record shapes; they must not import db, repository, the store or file access"
 ban_import "$STORE/contracts" 'crate' 'db|repository|store|Store'           "contracts are record shapes; they must not import db, repository or the store"
+ban_import "$STORE/contracts" 'tmpl_cli_common' 'fs'                        "contracts are record shapes; they must not import file access"
 ban "$STORE/contracts" 'fn check_|now_utc|SystemTime'                      "contracts hold shapes only: no checks across records and no clock"
+[[ -e "$STORE/db/fsio.rs" ]] && err "store/db/fsio.rs: file access lives in tmpl-cli-common/src/fs"
 # The store receives a resolved root (R3).
 ban "$STORE"         'std::env::|home_dir|current_dir'                     "the store crate must not read the environment or discover paths"
 ban_import "$STORE"  'std' 'env'                                           "the store crate must not read the environment or discover paths"
 
 # Core: apps, runtime and composition. Nothing in the core touches a file or
 # a process; it reaches the data directory through the store (R5).
-ban "$CORE"          'std::(fs|net|process)|tempfile::|rustix::'           "the core reaches files only through tmpl-cli-store"
+ban "$CORE"          'std::(fs|net|process)|tempfile::|rustix::|tmpl_cli_common::fs' "the core reaches files only through tmpl-cli-store"
 ban_import "$CORE"   'std' 'fs|net|process'                                "the core reaches files only through tmpl-cli-store"
+ban_import "$CORE"   'tmpl_cli_common' 'fs'                                "the core reaches files only through tmpl-cli-store"
 # Only composition reads the host: environment variables and paths (R3).
 for path in "$CORE"/*; do
   name=$(basename "$path")
@@ -238,7 +264,7 @@ done
 
 # Binary: argument declarations, the mapping to an app, rendering (R2). It
 # names only the core, and its handlers open no store and read no environment.
-ban "crates/tmpl-cli" 'tmpl_cli_store'                                     "the binary names only tmpl-cli-core"
+ban "crates/tmpl-cli" 'tmpl_cli_(store|common)'                            "the binary names only tmpl-cli-core"
 ban "$CLI/commands"  'std::(env|fs)|Store\b|Runtime|Ctx\b'               "a command handler maps arguments to an app command; it reads no environment and opens no store"
 ban_import "$CLI/commands" 'std' 'env|fs'                                  "a command handler maps arguments to an app command; it reads no environment and opens no store"
 # Rendering is derived from payloads only; it never reaches back up (R1).
@@ -266,7 +292,9 @@ for retired in \
   crates/tmpl-cli-core/src/fsio.rs \
   crates/tmpl-cli-core/src/store.rs \
   crates/tmpl-cli-core/src/tests/fsio.rs \
-  crates/tmpl-cli-core/src/tests/store.rs; do
+  crates/tmpl-cli-core/src/tests/store.rs \
+  crates/tmpl-cli-core/src/runtime/errors.rs \
+  crates/tmpl-cli-store/src/db/tests/fsio.rs; do
   [[ -e "$retired" ]] && err "retired path exists again: $retired"
 done
 

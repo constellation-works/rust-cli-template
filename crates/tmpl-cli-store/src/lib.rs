@@ -1,13 +1,16 @@
 //! The tmpl-cli data directory as a library.
 //!
 //! - `db`: the files under the data directory (the persisted notes document
-//!   and its format upgrades, the audit line, durable writes, locks and
-//!   owner-only checks); the only module that touches the filesystem;
+//!   and its format upgrades, the audit line); bytes only, no I/O;
 //! - [`repository`]: one repository per record (notes, audit), read through a
 //!   [`Snapshot`] and written through a [`Tx`] inside [`Store::write`];
 //! - [`contracts`]: the record shapes ([`contracts::Note`] and its field
 //!   types, [`contracts::AuditEvent`]);
-//! - the crate's typed [`Error`].
+//! - the crate's typed [`Error`], and its one translator into the
+//!   workspace's error type.
+//!
+//! It reaches the data directory only through `tmpl_cli_common::fs`: no code
+//! in this crate names `std::fs`.
 //!
 //! The store holds no rule of any app: no next-id rule, no list selection,
 //! no validation beyond what a contract type enforces on itself. It never

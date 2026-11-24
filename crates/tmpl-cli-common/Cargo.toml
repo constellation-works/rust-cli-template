@@ -1,0 +1,29 @@
+[package]
+name = "tmpl-cli-common"
+description = "The tmpl-cli foundation: the one error type every unit translates into, and file access for a private data directory. No internal dependency."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "tmpl_cli_common"
+path = "src/lib.rs"
+
+# scripts/check-dependency-direction.sh rejects every internal crate and every
+# terminal, parser or logging crate here; tempfile and rustix serve fs/ only.
+[dependencies]
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+tracing = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

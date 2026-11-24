@@ -1,18 +1,16 @@
 //! What every app runs against: the context, the chokepoint each app's
-//! `exec` forwards to, the audit guard and the errors all apps share.
+//! `exec` forwards to and the audit guard.
 //!
 //! [`Runtime::start`] calls composition once and owns what it resolved; a
 //! flow receives the borrowed [`Ctx`]. Only [`exec`] starts the runtime and
-//! the audit guard. The binary never sees this module. It holds those four
+//! the audit guard. The binary never sees this module. It holds those three
 //! subjects and no others: "two apps use it" is not a reason for code to
 //! live here.
 
 mod audit;
-mod errors;
 mod exec;
 
 pub(crate) use audit::AuditMeta;
-pub use errors::Error;
 #[cfg(test)]
 pub(crate) use exec::run_with;
 pub(crate) use exec::{App, exec};
@@ -32,7 +30,7 @@ pub(crate) struct Runtime {
 
 impl Runtime {
     /// Resolve the data directory, open the store and name the actor.
-    pub(crate) fn start(env: &Env) -> Result<Self, Error> {
+    pub(crate) fn start(env: &Env) -> Result<Self, composition::Error> {
         let composed = composition::compose(env)?;
         Ok(Self {
             store: composed.store,

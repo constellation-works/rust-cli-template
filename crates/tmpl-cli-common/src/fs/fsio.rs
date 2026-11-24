@@ -22,7 +22,7 @@
 //!   open that follows; a process of the same user is not a boundary
 //!   (STD-05 R5). Windows has no mode bits, so there the checks are no-ops.
 
-use crate::error::{Error, Result};
+use super::error::{Error, Result};
 use std::fs::{self, File, Metadata, OpenOptions, TryLockError};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -45,7 +45,7 @@ const PRIVATE_DIR_MODE: u32 = 0o700;
 const PRIVATE_FILE_MODE: u32 = 0o600;
 
 /// Replace `path` with `bytes` atomically and durably. The file is `0600`.
-pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     let parent = parent_dir(path);
     // Same directory as the target, so the rename cannot cross filesystems.
     // tempfile creates the file 0600 on unix and the rename keeps that mode.
@@ -62,7 +62,7 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
 }
 
 /// Read a whole file the caller has already checked with [`inspect_file`].
-pub(crate) fn read(path: &Path) -> Result<Vec<u8>> {
+pub fn read(path: &Path) -> Result<Vec<u8>> {
     fs::read(path).map_err(|e| Error::io("read", path, e))
 }
 
@@ -70,7 +70,7 @@ pub(crate) fn read(path: &Path) -> Result<Vec<u8>> {
 /// `0600` if it is missing. An existing file is checked like any store file
 /// first, so a link is refused, not followed (STD-05 R7), and a new file's
 /// directory entry is synced too.
-pub(crate) fn append_private(path: &Path, bytes: &[u8]) -> Result<()> {
+pub fn append_private(path: &Path, bytes: &[u8]) -> Result<()> {
     let existed = inspect_file(path)?;
     let mut options = OpenOptions::new();
     options.create(true).append(true);
@@ -124,11 +124,7 @@ fn read_bounded(reader: impl Read, limit: u64) -> io::Result<Vec<u8>> {
 
 /// List the UTF-8 names in a checked store directory in sorted order. A
 /// directory that does not exist yet lists as empty.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "template mechanism for multi-file stores")
-)]
-pub(crate) fn list_dir(dir: &Path) -> Result<Vec<String>> {
+pub fn list_dir(dir: &Path) -> Result<Vec<String>> {
     if !inspect_dir(dir)? {
         return Ok(Vec::new());
     }
@@ -146,11 +142,7 @@ pub(crate) fn list_dir(dir: &Path) -> Result<Vec<String>> {
 /// Remove a private regular file, syncing the parent directory. A missing
 /// file already satisfies the operation. The caller holds the store lock
 /// and only passes data files, since a lock file must never be removed.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "template mechanism for multi-file stores")
-)]
-pub(crate) fn remove_private(path: &Path) -> Result<()> {
+pub fn remove_private(path: &Path) -> Result<()> {
     let parent = parent_dir(path);
     if !inspect_dir(parent)? {
         return Ok(());
@@ -174,7 +166,7 @@ pub(crate) fn remove_private(path: &Path) -> Result<()> {
 }
 
 /// Create `dir` and any missing parents, each `0700`.
-pub(crate) fn create_private_dir(dir: &Path) -> Result<()> {
+pub fn create_private_dir(dir: &Path) -> Result<()> {
     let mut builder = fs::DirBuilder::new();
     builder.recursive(true);
     #[cfg(unix)]
@@ -188,7 +180,7 @@ pub(crate) fn create_private_dir(dir: &Path) -> Result<()> {
 ///
 /// The directory is followed if it is a link: the operator may name the data
 /// directory through one, and what is checked is the directory itself.
-pub(crate) fn inspect_dir(dir: &Path) -> Result<bool> {
+pub fn inspect_dir(dir: &Path) -> Result<bool> {
     match fs::metadata(dir) {
         Ok(meta) => check_owner_and_mode(dir, &meta, "700").map(|()| true),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
@@ -198,7 +190,7 @@ pub(crate) fn inspect_dir(dir: &Path) -> Result<bool> {
 
 /// Check an existing store file; `Ok(false)` when it does not exist. A file
 /// reached through a symbolic link is refused, not followed.
-pub(crate) fn inspect_file(path: &Path) -> Result<bool> {
+pub fn inspect_file(path: &Path) -> Result<bool> {
     let meta = match fs::symlink_metadata(path) {
         Ok(meta) => meta,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(false),
@@ -251,7 +243,7 @@ fn check_owner_and_mode(_path: &Path, _meta: &Metadata, _fix: &'static str) -> R
 /// holds the old one.
 #[must_use = "the lock is released as soon as the guard is dropped"]
 #[derive(Debug)]
-pub(crate) struct LockGuard {
+pub struct LockGuard {
     file: File,
     path: PathBuf,
 }
@@ -261,7 +253,7 @@ impl LockGuard {
     ///
     /// `label` says what the holder is doing; it is recorded with the pid and
     /// time so a writer that times out can say who is in the way.
-    pub(crate) fn acquire(path: &Path, label: &str, wait: Duration) -> Result<Self> {
+    pub fn acquire(path: &Path, label: &str, wait: Duration) -> Result<Self> {
         // Never create or truncate through a link (STD-05 R7).
         match fs::symlink_metadata(path) {
             Ok(meta) => refuse_symlink(path, &meta)?,

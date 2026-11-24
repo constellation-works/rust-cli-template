@@ -10,14 +10,13 @@
 //! `note/support.rs` for what they share, and `note/tests/` beside them.
 //! STD-02 R18: split along responsibilities, not by length alone.
 
-use crate::error::CliError;
 use crate::output::{NotePayload, Output};
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::{ArgAction, Args, Subcommand};
 use std::num::NonZeroUsize;
-use tmpl_cli_core::Env;
 use tmpl_cli_core::apps::note::{self, ListFilter, NewNote, NoteList, Outcome};
 use tmpl_cli_core::contracts::{Body, NoteId, Priority, Tag, Title};
+use tmpl_cli_core::{Env, Error};
 
 pub(super) const NOTE_EXAMPLES: &str = "\
 Examples:
@@ -112,10 +111,10 @@ fn priority_parser() -> impl TypedValueParser<Value = Priority> {
 pub(super) fn run<R>(
     command: NoteCommand,
     env: &Env,
-    finish: impl FnOnce(Result<Output, CliError>) -> R,
+    finish: impl FnOnce(Result<Output, Error>) -> R,
 ) -> R {
     note::exec(env, app_command(command), |outcome| {
-        finish(outcome.map(output).map_err(CliError::from))
+        finish(outcome.map(output))
     })
 }
 

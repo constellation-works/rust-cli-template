@@ -1,10 +1,12 @@
 [workspace]
 resolver = "3"
-# Three crates laid out by app, and why: docs/design/tmpl-cli/4_decisions.md
-# ("The template is laid out by app in three crates"). A new member needs a
-# policy entry in scripts/check-dependency-direction.sh and a row in
-# ARCHITECTURE.md.
+# Four crates laid out by app over one foundation, and why:
+# docs/design/tmpl-cli/4_decisions.md ("The template is laid out by app in
+# three crates", "One error type and file access live in a foundation
+# crate"). A new member needs a policy entry in
+# scripts/check-dependency-direction.sh and a row in ARCHITECTURE.md.
 members = [
+    "crates/tmpl-cli-common",
     "crates/tmpl-cli-store",
     "crates/tmpl-cli-core",
     "crates/tmpl-cli",
@@ -20,6 +22,7 @@ license = "MIT"
 repository = "https://github.com/constellation-works/tmpl-cli"
 
 [workspace.dependencies]
+tmpl-cli-common = { path = "crates/tmpl-cli-common" }
 tmpl-cli-store = { path = "crates/tmpl-cli-store" }
 tmpl-cli-core = { path = "crates/tmpl-cli-core" }
 # No `color` or `wrap_help`: both make clap query the terminal itself, and the

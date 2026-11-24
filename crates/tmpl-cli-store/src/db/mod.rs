@@ -1,20 +1,17 @@
-//! The data directory's files and the mechanisms that touch them.
+//! The data directory's files: their names and their persisted formats.
 //!
 //! - `format`: the persisted notes document, its format versions and upgrades;
-//! - `audit`: the audit log's persisted line and its upgrades;
-//! - `fsio`: durable writes, appends, locks and private-state checks,
-//!   mechanism only, with no knowledge of notes.
+//! - `audit`: the audit log's persisted line and its upgrades.
 //!
-//! Only this module touches the filesystem; repositories and the [`Store`]
-//! facade reach a file through it. `format` and `audit` do no I/O of their
-//! own, and `fsio` imports nothing else from the crate but its error type
+//! Both convert bytes and do no I/O. No code in this crate names `std::fs`:
+//! the [`Store`] facade and the repositories reach a file through the
+//! foundation's `tmpl_cli_common::fs`
 //! (`scripts/check-dependency-direction.sh`).
 //!
 //! [`Store`]: crate::Store
 
 pub(crate) mod audit;
 pub(crate) mod format;
-pub(crate) mod fsio;
 
 /// The store file's name under the data directory.
 pub const STORE_FILE: &str = "notes.json";

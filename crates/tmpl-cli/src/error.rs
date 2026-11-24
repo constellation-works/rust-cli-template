@@ -1,48 +1,52 @@
-//! The surface error type: every failure a command can end with.
+//! What the surface decides about a failure: the exit code, the remedy to
+//! print, and its own one failure (output that could not be written).
 //!
-//! App errors arrive through the one translator, `#[from]` on
-//! [`CliError::Note`] (STD-02 R12); nothing matches core variants ad hoc. Usage errors never reach this type: clap reports them
-//! and exits 2 before a command runs.
+//! Every failure a command can end with is the workspace's one error type,
+//! `tmpl_cli_core::Error` (STD-02 R11). Units translate into it beside their
+//! own typed errors (STD-02 R12), so nothing here converts one. Usage errors
+//! never reach it: clap reports them and exits 2 before a command runs.
 
 use std::io;
 use tmpl_cli_core::apps::note;
+use tmpl_cli_core::{Error, Kind};
 
-/// Why a command failed. Every variant exits 1 (STD-01 R20).
+/// Writing the result to stdout failed for a reason other than a closed pipe.
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum CliError {
-    /// The `note` app refused or failed, including a data directory it
-    /// could not resolve.
-    #[error(transparent)]
-    Note(#[from] note::Error),
-    /// Writing the result to stdout failed for a reason other than a closed pipe.
-    #[error("cannot write output")]
-    Output(#[source] io::Error),
+#[error("cannot write output")]
+struct OutputError(#[source] io::Error);
+
+/// The surface's one translator: an output failure as the workspace's error
+/// type (STD-02 R12).
+pub(crate) fn output_error(source: io::Error) -> Error {
+    Error::new(Kind::Io, "output_error", OutputError(source))
 }
 
-impl CliError {
-    /// Stable `snake_case` code for the JSON error object (STD-01 R19).
-    pub(crate) fn code(&self) -> &'static str {
-        match self {
-            Self::Note(e) => e.code(),
-            Self::Output(_) => "output_error",
-        }
+/// The process exit code. Every kind of command failure exits 1; only usage
+/// errors (clap's) exit 2 (STD-01 R20). Exhaustive, so a new kind decides
+/// here, and a further code would need documenting in the command's help.
+pub(crate) fn exit_code(err: &Error) -> u8 {
+    match err.kind() {
+        Kind::NotFound
+        | Kind::Refused
+        | Kind::Busy
+        | Kind::Corrupt
+        | Kind::Incompatible
+        | Kind::Config
+        | Kind::Io
+        | Kind::Internal => 1,
     }
+}
 
-    /// The process exit code. Only usage errors (clap's) exit 2.
-    pub(crate) fn exit_code(&self) -> u8 {
-        1
-    }
-
-    /// The fix, where it is known and not already in the message (STD-01
-    /// R21). A remedy must be runnable as written (STD-02 R26), so this one
-    /// reminds the reader to keep the same data directory.
-    pub(crate) fn hint(&self) -> Option<&'static str> {
-        match self {
-            Self::Note(note::Error::NotFound { .. }) => {
-                Some("run 'tmpl-cli note list' with the same --root to see existing ids")
-            }
-            // The core enum is #[non_exhaustive], so it needs this arm.
-            Self::Note(_) | Self::Output(_) => None,
+/// The fix, where it is known and not already in the message (STD-01 R21).
+/// It is spelled in this surface's commands, so it lives here, keyed on the
+/// app's typed error. A remedy must be runnable as written (STD-02 R26), so
+/// this one reminds the reader to keep the same data directory.
+pub(crate) fn hint(err: &Error) -> Option<&'static str> {
+    match err.downcast_ref::<note::Error>() {
+        Some(note::Error::NotFound { .. }) => {
+            Some("run 'tmpl-cli note list' with the same --root to see existing ids")
         }
+        // The app's enum is #[non_exhaustive], so it needs this arm.
+        Some(_) | None => None,
     }
 }

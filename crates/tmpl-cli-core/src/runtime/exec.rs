@@ -3,12 +3,17 @@
 //! Starting the runtime, wrapping a mutating command in the audit guard,
 //! telling the guard the outcome and handing the result to the surface are
 //! written here once. An app supplies only what differs, through [`App`]:
-//! whether a command is audited, its dispatch, and how its outcome and error
-//! appear in the audit line. A new app cannot run a command outside the
+//! whether a command is audited, its dispatch, and the record its outcome
+//! names for the audit line. A new app cannot run a command outside the
 //! guard, because it has no other way to start the runtime.
+//!
+//! Every app's failure leaves here as the workspace's one [`Error`]: the
+//! app's typed error crosses through its own translator (STD-02 R12), and so
+//! does a runtime that could not start.
 
-use super::{AuditGuard, AuditMeta, Ctx, Error, Runtime};
+use super::{AuditGuard, AuditMeta, Ctx, Runtime};
 use crate::composition::Env;
+use tmpl_cli_common::Error;
 
 /// What an app supplies to run through the chokepoint.
 pub(crate) trait App {
@@ -16,8 +21,9 @@ pub(crate) trait App {
     type Command;
     /// What a command produced.
     type Outcome;
-    /// Why a command failed. A runtime that cannot start is reported as one.
-    type Error: From<Error>;
+    /// Why a command failed, as the app's own typed error; its translator
+    /// turns it into the workspace's [`Error`].
+    type Error: Into<Error>;
 
     /// What the audit log records for `command`, or `None` when it is not
     /// audited (a read-only command; STD-01 R31).
@@ -28,9 +34,6 @@ pub(crate) trait App {
 
     /// The id of the record `outcome` acted on, if it names one.
     fn target(outcome: &Self::Outcome) -> Option<String>;
-
-    /// The stable code of `error` (STD-01 R19).
-    fn code(error: &Self::Error) -> &'static str;
 }
 
 /// Run one command of app `A` against the environment `env` and pass its
@@ -44,7 +47,7 @@ pub(crate) trait App {
 pub(crate) fn exec<A: App, R>(
     env: &Env,
     command: A::Command,
-    finish: impl FnOnce(Result<A::Outcome, A::Error>) -> R,
+    finish: impl FnOnce(Result<A::Outcome, Error>) -> R,
 ) -> R {
     match Runtime::start(env) {
         Ok(runtime) => run_with::<A, R>(&runtime.ctx(), command, finish),
@@ -56,14 +59,14 @@ pub(crate) fn exec<A: App, R>(
 pub(crate) fn run_with<A: App, R>(
     ctx: &Ctx<'_>,
     command: A::Command,
-    finish: impl FnOnce(Result<A::Outcome, A::Error>) -> R,
+    finish: impl FnOnce(Result<A::Outcome, Error>) -> R,
 ) -> R {
     let mut audit = A::audit(&command).map(|meta| {
         AuditGuard::start(ctx.store(), meta, ctx.now(), ctx.actor().map(str::to_owned))
     });
-    let result = A::run(ctx, command);
+    let result = A::run(ctx, command).map_err(Into::into);
     if let Some(audit) = audit.as_mut() {
-        audit.mark_result(result.as_ref().map(A::target).map_err(A::code));
+        audit.mark_result(result.as_ref().map(A::target).map_err(Error::code));
     }
     finish(result)
 }

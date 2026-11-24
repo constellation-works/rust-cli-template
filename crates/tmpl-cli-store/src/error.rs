@@ -3,12 +3,14 @@
 //! Callers branch on the variant (or on [`Error::code`]), never on the message
 //! (STD-02 R10). `Display` carries only this layer's sentence; the underlying
 //! cause stays on [`std::error::Error::source`], so a surface can print the
-//! whole chain once without repeating it.
+//! whole chain once without repeating it. The one translator into the
+//! workspace's error type is the `From` impl at the end of this file
+//! (STD-02 R12).
 
 use crate::contracts::{NoteError, NoteId};
 use std::fmt;
-use std::io;
 use std::path::PathBuf;
+use tmpl_cli_common::{Kind, fs};
 
 /// Where a bad record sits in the store file: its note id when readable,
 /// otherwise its 1-based line number in the file.
@@ -75,17 +77,10 @@ pub struct BadRecord {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
-    /// A filesystem operation failed.
-    #[error("cannot {action} {}", path.display())]
-    Io {
-        /// What was being attempted, as a verb phrase ("read", "create directory").
-        action: &'static str,
-        /// The path it was attempted on.
-        path: PathBuf,
-        /// The operating-system error.
-        #[source]
-        source: io::Error,
-    },
+    /// A file operation on the data directory failed, was refused, or timed
+    /// out on the lock.
+    #[error(transparent)]
+    Fs(#[from] fs::Error),
     /// Serializing a store document or audit event failed before any file was touched.
     #[error("cannot encode {what}")]
     Encode {
@@ -129,55 +124,6 @@ pub enum Error {
         /// The newest format this build understands.
         supported: u32,
     },
-    /// Another writer held the store lock past the deadline (STD-03 R7).
-    #[error(
-        "{} is locked by {holder} (waited {waited_ms} ms); retry when it finishes",
-        path.display()
-    )]
-    Locked {
-        /// The lock file.
-        path: PathBuf,
-        /// Who holds it, as the holder recorded it (pid, label, time).
-        holder: String,
-        /// How long this call waited before giving up.
-        waited_ms: u128,
-    },
-    /// A store file is a symbolic link (STD-05 R7, R9).
-    #[error(
-        "refusing {}: it is a symbolic link, and the store uses only regular files; replace the link with the file it points to",
-        path.display()
-    )]
-    Symlink {
-        /// The link.
-        path: PathBuf,
-    },
-    /// Store state belongs to another user (STD-05 R9).
-    #[error(
-        "refusing {}: it is owned by uid {owner}, but this process runs as uid {uid}",
-        path.display()
-    )]
-    ForeignOwner {
-        /// The directory or file.
-        path: PathBuf,
-        /// Its owner.
-        owner: u32,
-        /// This process's effective uid.
-        uid: u32,
-    },
-    /// Store state is writable by other users (STD-05 R9).
-    #[error(
-        "refusing {}: mode {mode:o} lets other users write it; fix with: chmod {fix} {}",
-        path.display(),
-        path.display()
-    )]
-    Permissions {
-        /// The directory or file.
-        path: PathBuf,
-        /// Its permission bits.
-        mode: u32,
-        /// The owner-only mode to set: `700` for a directory, `600` for a file.
-        fix: &'static str,
-    },
 }
 
 impl Error {
@@ -186,25 +132,37 @@ impl Error {
     #[must_use]
     pub fn code(&self) -> &'static str {
         match self {
-            Self::Io { .. } => "io_error",
+            // The file mechanism's failures get the store's codes here.
+            Self::Fs(fs::Error::Io { .. }) => "io_error",
+            Self::Fs(fs::Error::Locked { .. }) => "store_locked",
+            Self::Fs(fs::Error::Symlink { .. }) => "store_symlink",
+            Self::Fs(fs::Error::ForeignOwner { .. }) => "store_foreign_owner",
+            Self::Fs(fs::Error::Permissions { .. }) => "store_permissions",
             Self::Encode { .. } => "encode_error",
             Self::Corrupt { .. } => "store_corrupt",
             Self::BadRecord(_) => "store_bad_record",
             Self::DuplicateId { .. } => "store_duplicate_id",
             Self::NewerFormat { .. } => "store_too_new",
-            Self::Locked { .. } => "store_locked",
-            Self::Symlink { .. } => "store_symlink",
-            Self::ForeignOwner { .. } => "store_foreign_owner",
-            Self::Permissions { .. } => "store_permissions",
         }
     }
 
-    pub(crate) fn io(action: &'static str, path: impl Into<PathBuf>, source: io::Error) -> Self {
-        Self::Io {
-            action,
-            path: path.into(),
-            source,
+    /// How this failure is classified, for the workspace's error type.
+    /// Exhaustive, so a new variant decides (STD-02 R27).
+    #[must_use]
+    pub fn kind(&self) -> Kind {
+        match self {
+            Self::Fs(e) => e.kind(),
+            Self::Encode { .. } => Kind::Internal,
+            Self::Corrupt { .. } | Self::BadRecord(_) | Self::DuplicateId { .. } => Kind::Corrupt,
+            Self::NewerFormat { .. } => Kind::Incompatible,
         }
+    }
+}
+
+/// The store's one translator into the workspace's error type (STD-02 R12).
+impl From<Error> for tmpl_cli_common::Error {
+    fn from(err: Error) -> Self {
+        Self::new(err.kind(), err.code(), err)
     }
 }
 

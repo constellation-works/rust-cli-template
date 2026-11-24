@@ -16,6 +16,7 @@ pub use rules::{ListFilter, NewNote, NoteList};
 use crate::composition::Env;
 use crate::runtime::{self, App, AuditMeta, Ctx};
 use std::path::PathBuf;
+use tmpl_cli_common::Kind;
 use tmpl_cli_store::BadRecord;
 use tmpl_cli_store::contracts::{Note, NoteId};
 
@@ -86,10 +87,12 @@ impl Outcome {
     }
 }
 
-/// Why a `note` command failed.
+/// Why a `note` command failed, as the app's own typed error.
 ///
-/// `#[non_exhaustive]`: this is the library's public boundary (STD-02 R11).
-/// Surfaces map it through [`Error::code`] instead of matching variants.
+/// [`exec`] returns the workspace's error type; this enum crosses into it
+/// through the one translator below (STD-02 R12), and a caller that knows the
+/// app reads it back with `downcast_ref`. `#[non_exhaustive]`: it is public
+/// (STD-02 R11).
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
@@ -112,15 +115,9 @@ pub enum Error {
         /// The store file.
         path: PathBuf,
     },
-    /// The runtime could not start, or the store refused or failed.
+    /// The store refused or failed.
     #[error(transparent)]
-    Runtime(#[from] runtime::Error),
-}
-
-impl From<tmpl_cli_store::Error> for Error {
-    fn from(err: tmpl_cli_store::Error) -> Self {
-        Self::Runtime(runtime::Error::Store(err))
-    }
+    Store(#[from] tmpl_cli_store::Error),
 }
 
 impl Error {
@@ -131,7 +128,32 @@ impl Error {
         match self {
             Self::NotFound { .. } => "note_not_found",
             Self::IdExhausted { .. } => "note_id_exhausted",
-            Self::Runtime(e) => e.code(),
+            Self::Store(e) => e.code(),
+        }
+    }
+
+    /// How this failure is classified. Exhaustive, so a new variant decides
+    /// (STD-02 R27).
+    #[must_use]
+    pub fn kind(&self) -> Kind {
+        match self {
+            Self::NotFound { .. } => Kind::NotFound,
+            Self::IdExhausted { .. } => Kind::Refused,
+            Self::Store(e) => e.kind(),
+        }
+    }
+}
+
+/// The `note` app's one translator into the workspace's error type
+/// (STD-02 R12). A store failure crosses as the store's own error, so its
+/// typed form stays reachable.
+impl From<Error> for tmpl_cli_common::Error {
+    fn from(err: Error) -> Self {
+        match err {
+            Error::Store(store) => store.into(),
+            err @ (Error::NotFound { .. } | Error::IdExhausted { .. }) => {
+                Self::new(err.kind(), err.code(), err)
+            }
         }
     }
 }
@@ -143,7 +165,11 @@ impl Error {
 /// audit guard, and `finish` runs before the guard writes its line, so a
 /// fail-open audit warning reaches stderr after the command's own payload or
 /// error object. A runtime that cannot start is reported to `finish`.
-pub fn exec<R>(env: &Env, command: Command, finish: impl FnOnce(Result<Outcome, Error>) -> R) -> R {
+pub fn exec<R>(
+    env: &Env,
+    command: Command,
+    finish: impl FnOnce(Result<Outcome, tmpl_cli_common::Error>) -> R,
+) -> R {
     runtime::exec::<NoteApp, R>(env, command, finish)
 }
 
@@ -166,10 +192,6 @@ impl App for NoteApp {
 
     fn target(outcome: &Outcome) -> Option<String> {
         outcome.target()
-    }
-
-    fn code(error: &Error) -> &'static str {
-        error.code()
     }
 }
 

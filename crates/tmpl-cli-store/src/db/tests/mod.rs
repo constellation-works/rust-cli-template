@@ -2,7 +2,6 @@
 
 mod audit;
 mod format;
-mod fsio;
 
 /// A temporary directory that is owner-only whatever the umask, as a store
 /// directory must be (STD-05 R9). `tempfile` leaves the mode to the umask.

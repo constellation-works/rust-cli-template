@@ -2,8 +2,9 @@
 
 use crate::Store;
 use crate::contracts::AuditEvent;
-use crate::db::{audit, fsio};
+use crate::db::audit;
 use crate::error::Result;
+use tmpl_cli_common::fs as fsio;
 
 /// The audit log of one store.
 #[derive(Clone, Copy, Debug)]
@@ -28,6 +29,7 @@ impl<'a> Audit<'a> {
             fsio::create_private_dir(self.store.root())?;
         }
         let _lock = self.store.audit_lock("audit")?;
-        fsio::append_private(&path, &line)
+        fsio::append_private(&path, &line)?;
+        Ok(())
     }
 }

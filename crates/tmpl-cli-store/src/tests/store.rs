@@ -1,9 +1,9 @@
 use crate::Store;
 use crate::contracts::{AuditEvent, AuditStatus, Note, NoteId, Priority};
-use crate::db::fsio::LockGuard;
 use crate::error::Error;
 use std::time::Duration;
 use time::OffsetDateTime;
+use tmpl_cli_common::fs::{Error as FsError, LockGuard};
 
 fn new_note(title: &str) -> Note {
     Note {
@@ -44,7 +44,7 @@ fn add_refuses_when_another_writer_holds_the_lock_and_writes_nothing() {
         LockGuard::acquire(&dir.path().join(".lock"), "test", Duration::from_secs(1)).unwrap();
     let err = add(&store, new_note("blocked")).unwrap_err();
     assert_eq!(err.code(), "store_locked", "got {err:?}");
-    assert!(matches!(err, Error::Locked { .. }));
+    assert!(matches!(err, Error::Fs(FsError::Locked { .. })));
     assert!(!dir.path().join(crate::STORE_FILE).exists());
 }
 
@@ -97,7 +97,10 @@ fn record_audit_waits_for_the_audit_lock() {
     )
     .unwrap();
     let err = store.audit().append(&event("note add")).unwrap_err();
-    assert!(matches!(err, Error::Locked { .. }), "got {err:?}");
+    assert!(
+        matches!(err, Error::Fs(FsError::Locked { .. })),
+        "got {err:?}"
+    );
     assert!(!store.audit_path().exists());
 }
 
