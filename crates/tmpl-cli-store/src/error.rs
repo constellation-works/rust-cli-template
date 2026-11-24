@@ -67,13 +67,24 @@ pub struct BadRecord {
     pub reason: BadRecordReason,
 }
 
+impl BadRecord {
+    /// This record as the store's refusal (`store_bad_record`), in the
+    /// workspace's error type: what an app returns when a command would
+    /// read or rewrite it.
+    #[must_use]
+    pub fn refusal(&self) -> cw_base::Error {
+        Error::BadRecord(self.clone()).into()
+    }
+}
+
 /// Everything a [`crate::Store`] operation can fail with. Failures of an
 /// app's own rules (an unknown id, an exhausted id space) are the app's
 /// errors in `tmpl-cli-core`, not variants here.
 ///
-/// `#[non_exhaustive]`: this is the library's public boundary (STD-02 R11), so
-/// adding a variant is not a breaking change. Callers map it through
-/// [`Error::code`] instead of matching variants.
+/// It never leaves the crate as itself: every public operation returns
+/// `cw_base::Error`, translated by the `From` impl below, and a caller that
+/// needs a variant gets it back with `downcast_ref::<Error>()`.
+/// `#[non_exhaustive]`, so adding a variant is not a breaking change.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {

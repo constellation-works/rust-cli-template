@@ -2,7 +2,6 @@
 
 use super::{Error, Outcome};
 use crate::runtime::Ctx;
-use tmpl_cli_store::Error as StoreError;
 use tmpl_cli_store::contracts::NoteId;
 
 /// The note with this id, plus any bad records isolated from other entries
@@ -13,7 +12,7 @@ pub(super) fn show(ctx: &Ctx<'_>, id: NoteId) -> Result<Outcome, Error> {
     let snapshot = store.read()?;
     let notes = snapshot.notes();
     if let Some(bad) = notes.bad_record(id) {
-        return Err(StoreError::BadRecord(bad.clone()).into());
+        return Err(bad.refusal().into());
     }
     let note = notes.get(id).cloned().ok_or_else(|| Error::NotFound {
         id,

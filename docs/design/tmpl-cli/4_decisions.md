@@ -832,6 +832,10 @@ is deleted, and the template keeps three crates.
   list and fails a `cw-*` dependency outside it.
 - Each unit keeps its typed `thiserror` enum and its one `From` impl into
   `cw_base::Error`, naming the `Kind` and the template's own stable code.
+  What crosses a crate boundary is `cw_base::Error`: the store's public
+  operations return it, so the core never sees the store's typed error
+  except by `downcast_ref`, and a note app's store failure is
+  `Store(cw_base::Error)`.
   `cw_fs::Error` carries a kind and no code: the store wraps it as
   `Error::Fs` and names a code for every variant. The existing codes are
   unchanged; the kit's three further refusals get `store_not_regular`,

@@ -21,7 +21,16 @@ impl<'a> Audit<'a> {
     /// lines never interleave and a store-lock timeout can still record its
     /// failure line immediately. An unsafe data directory is refused as for
     /// any write.
-    pub fn append(&self, event: &AuditEvent) -> Result<()> {
+    ///
+    /// # Errors
+    ///
+    /// The store's typed `Error`, translated into `cw_base::Error` here at
+    /// the crate's boundary.
+    pub fn append(&self, event: &AuditEvent) -> std::result::Result<(), cw_base::Error> {
+        Ok(self.append_line(event)?)
+    }
+
+    fn append_line(&self, event: &AuditEvent) -> Result<()> {
         let path = self.store.audit_path();
         let line = audit::encode_line(event)?;
         if !cw_fs::inspect_dir(self.store.root())? {

@@ -92,8 +92,11 @@ test_support.rs      behind the `test-support` feature: Ctx and each app's run
   `Error`, composition's, the store's) and translates it into
   `cw_base::Error` in one `From` impl beside the enum, naming its `Kind` and
   its stable code. `exec` returns that type, whatever the app; `run` returns the app's typed one. An
-  app's enum holds its own refusals and one `Store(#[from] …)` variant, so a
-  flow uses `?` on a store call with no hand-written conversion.
+  app's enum holds its own refusals and one `Store(#[from] cw_base::Error)`
+  variant, so a flow uses `?` on a store call with no hand-written
+  conversion. What crosses a crate boundary is `cw_base::Error`: every public
+  store operation returns it, translated at the store's edge, and a caller
+  that needs the store's variant gets it back with `downcast_ref`.
 - `composition.rs` is the only place in the core that reads an environment
   variable or discovers a path. Nothing in the core touches a file: the data
   directory is reached through the store.

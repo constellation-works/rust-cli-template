@@ -3,7 +3,6 @@
 use super::rules::{self, NewNote};
 use super::{Error, Outcome};
 use crate::runtime::Ctx;
-use tmpl_cli_store::Error as StoreError;
 
 /// Load the notes, refuse what can be refused before any side effect, then
 /// assign the next id and store the note in one write.
@@ -16,7 +15,7 @@ pub(super) fn add(ctx: &Ctx<'_>, new: NewNote) -> Result<Outcome, Error> {
     let snapshot = store.read()?;
     let notes = snapshot.notes();
     if let Some(bad) = notes.bad_records().first() {
-        return Err(StoreError::BadRecord(bad.clone()).into());
+        return Err(bad.refusal().into());
     }
     if rules::next_id(notes.all()).is_none() {
         return Err(Error::IdExhausted { path: store.path() });

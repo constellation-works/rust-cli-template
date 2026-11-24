@@ -73,7 +73,12 @@ impl Store {
 
     /// Everything the store holds, read once. A missing store reads as an
     /// empty one. Takes no lock and writes nothing.
-    pub fn read(&self) -> Result<Snapshot> {
+    ///
+    /// # Errors
+    ///
+    /// The store's typed [`Error`], translated into `cw_base::Error` here at
+    /// the crate's boundary; `downcast_ref::<Error>()` gives it back.
+    pub fn read(&self) -> std::result::Result<Snapshot, cw_base::Error> {
         Ok(Snapshot::new(self.load()?))
     }
 
@@ -87,25 +92,43 @@ impl Store {
     /// (STD-02 R16, R31). Checks a caller wants made before the directory or
     /// lock file is created belong in its own read before this call
     /// (STD-02 R34).
+    ///
+    /// # Errors
+    ///
+    /// `apply`'s own error, or the store's typed [`Error`] translated into
+    /// `cw_base::Error` here at the crate's boundary, which `E` converts
+    /// from.
     pub fn write<T, E>(
         &self,
         label: &str,
         apply: impl FnOnce(&mut Tx<'_>) -> std::result::Result<T, E>,
     ) -> std::result::Result<T, E>
     where
-        E: From<Error>,
+        E: From<cw_base::Error>,
     {
-        cw_fs::create_private_dir(&self.root).map_err(Error::from)?;
-        let _lock = self.lock(label)?;
-        // Re-read under the lock: anything read before it may be stale.
-        let mut doc = self.load()?;
-        if let Some(bad) = doc.bad_records.first() {
-            return Err(Error::BadRecord(bad.clone()).into());
-        }
+        let (_lock, mut doc) = self.begin(label).map_err(cw_base::Error::from)?;
         let value = apply(&mut Tx::new(&mut doc))?;
-        let path = self.path();
-        cw_fs::write_atomic(&path, &format::encode(&doc)?).map_err(Error::from)?;
+        self.commit(&doc).map_err(cw_base::Error::from)?;
         Ok(value)
+    }
+
+    /// Everything a write does before `apply`: create the data directory,
+    /// take the lock, and re-read the store under it, refusing bad records.
+    fn begin(&self, label: &str) -> Result<(Lock, StoreDocument)> {
+        cw_fs::create_private_dir(&self.root)?;
+        let lock = self.lock(label)?;
+        // Re-read under the lock: anything read before it may be stale.
+        let doc = self.load()?;
+        if let Some(bad) = doc.bad_records.first() {
+            return Err(Error::BadRecord(bad.clone()));
+        }
+        Ok((lock, doc))
+    }
+
+    /// Replace the store file with `doc`.
+    fn commit(&self, doc: &StoreDocument) -> Result<()> {
+        cw_fs::write_atomic(&self.path(), &format::encode(doc)?)?;
+        Ok(())
     }
 
     /// The audit log's repository.

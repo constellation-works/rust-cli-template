@@ -53,7 +53,7 @@ fn new_note(title: &str) -> Note {
 }
 
 /// Store one note in one write, as the note app's add does.
-fn add(store: &Store, note: Note) -> Result<(), Error> {
+fn add(store: &Store, note: Note) -> Result<(), cw_base::Error> {
     store.write("note add", |tx| {
         tx.notes().put(note);
         Ok(())
@@ -79,7 +79,10 @@ fn add_refuses_when_another_writer_holds_the_lock_and_writes_nothing() {
     let _held = hold_elsewhere(&dir.path().join(".lock"));
     let err = add(&store, new_note("blocked")).unwrap_err();
     assert_eq!(err.code(), "store_locked", "got {err:?}");
-    assert!(matches!(err, Error::Fs(FsError::Locked { .. })));
+    assert!(matches!(
+        err.downcast_ref::<Error>(),
+        Some(Error::Fs(FsError::Locked { .. }))
+    ));
     assert!(!dir.path().join(crate::STORE_FILE).exists());
 }
 
@@ -127,7 +130,10 @@ fn record_audit_waits_for_the_audit_lock() {
     let _held = hold_elsewhere(&dir.path().join(".audit.lock"));
     let err = store.audit().append(&event("note add")).unwrap_err();
     assert!(
-        matches!(err, Error::Fs(FsError::Locked { .. })),
+        matches!(
+            err.downcast_ref::<Error>(),
+            Some(Error::Fs(FsError::Locked { .. }))
+        ),
         "got {err:?}"
     );
     assert!(!store.audit_path().exists());
@@ -141,7 +147,10 @@ fn record_audit_encode_failure_is_not_io_and_names_no_path() {
     let mut bad_event = event("note add");
     bad_event.at = OffsetDateTime::new_utc(bad_date, time::Time::MIDNIGHT);
     let err = store.audit().append(&bad_event).unwrap_err();
-    assert!(matches!(err, Error::Encode { .. }), "got {err:?}");
+    assert!(
+        matches!(err.downcast_ref::<Error>(), Some(Error::Encode { .. })),
+        "got {err:?}"
+    );
     assert_eq!(err.code(), "encode_error");
     let msg = err.to_string();
     assert!(

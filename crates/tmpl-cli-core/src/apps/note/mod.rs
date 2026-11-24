@@ -115,9 +115,10 @@ pub enum Error {
         /// The store file.
         path: PathBuf,
     },
-    /// The store refused or failed.
+    /// The store refused or failed: the store's typed error, already in the
+    /// workspace's error type, as every store operation returns it.
     #[error(transparent)]
-    Store(#[from] tmpl_cli_store::Error),
+    Store(#[from] cw_base::Error),
 }
 
 impl Error {
@@ -150,7 +151,7 @@ impl Error {
 impl From<Error> for cw_base::Error {
     fn from(err: Error) -> Self {
         match err {
-            Error::Store(store) => store.into(),
+            Error::Store(store) => store,
             err @ (Error::NotFound { .. } | Error::IdExhausted { .. }) => {
                 Self::new(err.kind(), err.code(), err)
             }

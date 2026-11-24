@@ -29,7 +29,7 @@ const NOW: OffsetDateTime = datetime!(2026-01-02 03:04:05 UTC);
 /// The store failure behind an app error, when there is one.
 fn store_error(err: &Error) -> Option<&StoreError> {
     if let Error::Store(e) = err {
-        Some(e)
+        e.downcast_ref::<StoreError>()
     } else {
         None
     }
