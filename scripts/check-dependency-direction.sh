@@ -226,7 +226,7 @@ ban_import "$STORE/contracts" 'tmpl_cli_common' 'fs'                        "con
 ban "$STORE/contracts" 'fn check_|now_utc|SystemTime'                      "contracts hold shapes only: no checks across records and no clock"
 [[ -e "$STORE/db/fsio.rs" ]] && err "store/db/fsio.rs: file access lives in tmpl-cli-common/src/fs"
 # The store receives a resolved root (R3).
-ban "$STORE"         'std::env::|home_dir|current_dir'                     "the store crate must not read the environment or discover paths"
+ban "$STORE"         'std::env\b|home_dir|current_dir'                      "the store crate must not read the environment or discover paths"
 ban_import "$STORE"  'std' 'env'                                           "the store crate must not read the environment or discover paths"
 
 # Core: apps, runtime and composition. Nothing in the core touches a file or
@@ -238,7 +238,7 @@ ban_import "$CORE"   'tmpl_cli_common' 'fs'                                "the 
 for path in "$CORE"/*; do
   name=$(basename "$path")
   case "$name" in composition.rs | tests) continue ;; esac
-  ban "$path" 'std::env::|home_dir|current_dir'                            "core/$name: only composition.rs reads the environment or discovers paths"
+  ban "$path" 'std::env\b|home_dir|current_dir'                             "core/$name: only composition.rs reads the environment or discovers paths"
   ban_import "$path" 'std' 'env'                                           "core/$name: only composition.rs reads the environment or discovers paths"
 done
 # The runtime sits below the apps; apps depend on it, never the reverse (R1).
