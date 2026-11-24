@@ -22,8 +22,8 @@ fn only_note_add_is_audited() {
 
 #[test]
 fn lock_timeout_audited_command_waits_one_deadline_and_records_one_failure_line() {
-    use crate::apps::note::run_with;
-    use crate::runtime::Ctx;
+    use crate::apps::note::NoteApp;
+    use crate::runtime::{Ctx, run_with};
     use std::fs::OpenOptions;
     use std::time::{Duration, Instant};
     use tmpl_cli_store::Store;
@@ -54,7 +54,7 @@ fn lock_timeout_audited_command_waits_one_deadline_and_records_one_failure_line(
 
     let started = Instant::now();
     let mut audit_written_before_finish = false;
-    let err_code = run_with(&ctx, cmd, |outcome| {
+    let err_code = run_with::<NoteApp, _>(&ctx, cmd, |outcome| {
         // The audit guard must not have dropped before finish runs.
         audit_written_before_finish = ctx.store().audit_path().exists();
         outcome.unwrap_err().code()

@@ -218,6 +218,13 @@ done
 # The runtime sits below the apps; apps depend on it, never the reverse (R1).
 ban "$CORE/runtime"  'crate::apps'                                         "runtime must not import an app"
 ban_import "$CORE/runtime" 'crate' 'apps'                                  "runtime must not import an app"
+# One chokepoint (R24): only runtime/exec.rs starts the runtime and the audit
+# guard. An app's exec forwards to it and supplies its parts through `App`.
+ban "$CORE/apps"     'AuditGuard|Runtime::start'                           "an app runs through runtime::exec; it must not start the runtime or the audit guard"
+for app in "$CORE"/apps/*/mod.rs; do
+  [[ -e "$app" ]] || continue
+  grep -q 'runtime::exec::<' "$app" || err "${app#"$CORE"/}: exec must forward to runtime::exec"
+done
 # There is no shared app: code two apps need goes to the lower app or the runtime.
 for shared in common shared util; do
   [[ -e "$CORE/apps/$shared" || -e "$CORE/apps/$shared.rs" ]] && err "core/apps/$shared: put shared code in the lower app or in runtime/"

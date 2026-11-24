@@ -1,7 +1,7 @@
 //! The audit guard: one audit-log line per mutating command.
 //!
-//! [`AuditGuard`] wraps a command's execution at the one chokepoint, each
-//! app's `exec` (STD-02 R24). It is created before the flow runs, told the
+//! [`AuditGuard`] wraps a command's execution at the one chokepoint, the
+//! runtime's `exec` (STD-02 R24). It is created before the flow runs, told the
 //! outcome with [`AuditGuard::mark_result`], and writes the line when it is
 //! dropped, after the caller has rendered the outcome. It starts out
 //! recording a failure, so a command that returns early or panics is logged

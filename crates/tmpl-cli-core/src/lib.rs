@@ -3,8 +3,9 @@
 //! - [`apps`]: one module per subject a user names on the command line
 //!   (today `note`), each with its `Command`, `Outcome`, `Error`, one `exec`,
 //!   its flows and its pure rules;
-//! - `runtime`: the context an app runs against, the audit guard and the
-//!   errors every app shares ([`Error`]);
+//! - `runtime`: the context an app runs against, the one chokepoint every
+//!   app's `exec` forwards to, the audit guard and the errors every app
+//!   shares ([`Error`]);
 //! - `composition`: the one place that reads the host — the captured
 //!   environment ([`Env`]), the data directory, the store and the clock.
 //!

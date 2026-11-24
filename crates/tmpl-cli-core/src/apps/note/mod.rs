@@ -1,9 +1,10 @@
 //! The `note` app: add, list and show notes.
 //!
-//! [`exec`] starts the runtime, runs the command inside the audit guard when
-//! it mutates, and hands the result to the caller's `finish` before the guard
-//! writes its line. Each command is one flow file (`add.rs`, `list.rs`,
-//! `show.rs`); the rules they share are in `rules.rs`.
+//! [`exec`] forwards to the runtime's chokepoint, which starts the runtime,
+//! runs the command inside the audit guard when it mutates, and hands the
+//! result to the caller's `finish` before the guard writes its line. The app
+//! supplies what differs through [`NoteApp`]. Each command is one flow file
+//! (`add.rs`, `list.rs`, `show.rs`); the rules they share are in `rules.rs`.
 
 mod add;
 mod list;
@@ -13,7 +14,7 @@ mod show;
 pub use rules::{ListFilter, NewNote, NoteList};
 
 use crate::composition::Env;
-use crate::runtime::{self, AuditGuard, AuditMeta, Ctx, Runtime};
+use crate::runtime::{self, App, AuditMeta, Ctx};
 use std::path::PathBuf;
 use tmpl_cli_store::BadRecord;
 use tmpl_cli_store::contracts::{Note, NoteId};
@@ -138,32 +139,38 @@ impl Error {
 /// Run one `note` command against the environment `env` and pass its result
 /// to `finish`.
 ///
-/// A mutating command runs inside the audit guard, created before the flow so
-/// an early return or panic is still logged as a failure, and dropped after
-/// `finish` so a fail-open audit warning reaches stderr after the command's
-/// own payload or error object. A runtime that cannot start is reported to
-/// `finish` and audits nothing, since there is no store to audit to.
+/// The runtime's chokepoint does the work: a mutating command runs inside the
+/// audit guard, and `finish` runs before the guard writes its line, so a
+/// fail-open audit warning reaches stderr after the command's own payload or
+/// error object. A runtime that cannot start is reported to `finish`.
 pub fn exec<R>(env: &Env, command: Command, finish: impl FnOnce(Result<Outcome, Error>) -> R) -> R {
-    match Runtime::start(env) {
-        Ok(runtime) => run_with(&runtime.ctx(), command, finish),
-        Err(err) => finish(Err(err.into())),
-    }
+    runtime::exec::<NoteApp, R>(env, command, finish)
 }
 
-/// [`exec`] against an already started runtime.
-pub(crate) fn run_with<R>(
-    ctx: &Ctx<'_>,
-    command: Command,
-    finish: impl FnOnce(Result<Outcome, Error>) -> R,
-) -> R {
-    let mut audit = command.audit().map(|meta| {
-        AuditGuard::start(ctx.store(), meta, ctx.now(), ctx.actor().map(str::to_owned))
-    });
-    let result = run(ctx, command);
-    if let Some(audit) = audit.as_mut() {
-        audit.mark_result(result.as_ref().map(Outcome::target).map_err(Error::code));
+/// The `note` app as the runtime's chokepoint sees it.
+#[derive(Debug)]
+pub(crate) struct NoteApp;
+
+impl App for NoteApp {
+    type Command = Command;
+    type Outcome = Outcome;
+    type Error = Error;
+
+    fn audit(command: &Command) -> Option<AuditMeta> {
+        command.audit()
     }
-    finish(result)
+
+    fn run(ctx: &Ctx<'_>, command: Command) -> Result<Outcome, Error> {
+        run(ctx, command)
+    }
+
+    fn target(outcome: &Outcome) -> Option<String> {
+        outcome.target()
+    }
+
+    fn code(error: &Error) -> &'static str {
+        error.code()
+    }
 }
 
 /// Run one command without the runtime start or the audit guard.

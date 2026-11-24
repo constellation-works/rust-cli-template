@@ -47,11 +47,12 @@ environment into `Env` once; `output/` alone reads the presentation variables
 lib.rs               pub mod apps; Env; Error; contracts (re-exported from the store)
 apps/
   note/
-    mod.rs           Command, Outcome, Error, exec, run: dispatch only
+    mod.rs           Command, Outcome, Error, exec (forwards to runtime::exec), run: dispatch only
     add.rs list.rs show.rs   one flow per command
     rules.rs         the note rules: the next id, a stored note from a new one, list selection
 runtime/
   mod.rs             Runtime (started from composition), Ctx (what a flow receives)
+  exec.rs            the one chokepoint: the App trait and exec, which every app's exec forwards to
   audit.rs           the audit guard around a mutating command
   errors.rs          Error: what every app can fail with (no data directory, a store failure)
 composition.rs       Env, the data directory, the Store, the actor, the clock
@@ -59,17 +60,22 @@ test_support.rs      behind the `test-support` feature: Ctx and each app's run
 ```
 
 - An app's public surface is `Command`, `Outcome`, `Error` and
-  `exec(env, command, finish)`. `exec` starts the runtime, runs the command
-  inside the audit guard when it mutates, and passes the result to `finish`
-  before the guard writes its line. `run(ctx, command)` is the same without
-  the runtime start or the guard; tests call it.
+  `exec(env, command, finish)`. `exec` is one line: it forwards to
+  `runtime::exec`, the one chokepoint, which starts the runtime, runs the
+  command inside the audit guard when it mutates, and passes the result to
+  `finish` before the guard writes its line. The app supplies what differs
+  by implementing the runtime's `App` trait: whether a command is audited,
+  its dispatch, and its outcome's record id and its error's code for the
+  audit line. No app starts the runtime or the guard itself
+  (`scripts/check-dependency-direction.sh`). `run(ctx, command)` is the
+  dispatch without the runtime start or the guard; tests call it.
 - A flow loads from one `store.read()`, decides with the app's pure `rules`,
   and commits in one `store.write(|tx| …)`, re-checking inside the closure
   anything that must be atomic with the write.
 - An app may call another only through that app's `run` or what its `mod.rs`
   exports. There is no `apps/common`, `apps/shared` or `apps/util`: code two
   apps need goes to the lower app, or to `runtime` when it is about the
-  context, the audit guard or errors.
+  context, the chokepoint, the audit guard or errors.
 - `runtime` is crate-private and imports no app.
 - `composition.rs` is the only place in the core that reads an environment
   variable or discovers a path. Nothing in the core touches a file: the data

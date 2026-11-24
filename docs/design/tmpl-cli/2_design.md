@@ -30,8 +30,8 @@ per noun, holding its subcommands, flags and help, and mapping its arguments
 to an app's `Command` and the `Outcome` to a payload) and `output`.
 `tmpl-cli-core` holds the apps (`apps/note/`: `Command`, `Outcome`, `Error`,
 `exec`, one flow per command and the pure `rules`: the next id and list
-selection), the `runtime` they share (the context, the audit guard, the
-common errors) and `composition` (the only code that reads the environment
+selection), the `runtime` they share (the context, the one chokepoint every
+app's `exec` forwards to, the audit guard, the common errors) and `composition` (the only code that reads the environment
 or picks the data directory, the store and the clock). `tmpl-cli-store` is
 the only code that touches disk: the `Store` facade (one read, one locked
 write) over `db/` (`format`: the persisted document and its upgrades;
@@ -54,11 +54,13 @@ alone, so it runs in `make ci-fast` without compiling.
    questions; `scripts/check-terminal-guard.sh` rejects any attempt.
 3. The noun's handler maps the parsed arguments to the app's `Command` and
    calls `apps::note::exec` with the environment `main` captured (`Env`, plus
-   `--root`). `exec` starts the runtime: composition picks the data
+   `--root`). The app's `exec` forwards to the runtime's `exec`
+   (`runtime/exec.rs`), which starts the runtime: composition picks the data
    directory, resolves the OS actor (`USER`, else `USERNAME`, else `None`),
    and opens the store.
-4. `exec` is the one chokepoint. If the command is audited it starts an
-   `AuditGuard` (section 5); then the command's flow loads from the store,
+4. The runtime's `exec` is the one chokepoint, written once for every app;
+   the app supplies its parts through the `App` trait. If the command is
+   audited it starts an `AuditGuard` (section 5); then the command's flow loads from the store,
    decides with the app's rules and commits in one write. The handler turns
    the `Outcome` into a payload (`Output::Notes` or `Output::Note`) with an
    optional stderr notice and any bad-record warnings; app errors cross into
@@ -129,7 +131,7 @@ new command does not compile until it decides. Read-only commands are not
 audited, because they must not write (STD-01 R31).
 
 `AuditGuard` (in the core's `runtime/audit.rs`, modelled on Orbit's) is
-created by `exec` before the flow runs, in the failure state, so an early return or a panic is
+created by the runtime's `exec` before the flow runs, in the failure state, so an early return or a panic is
 recorded as a failure, never as success. `mark_result` sets the outcome, the
 note id on success and the stable error code on failure; `Drop` runs after
 `output::finish` and appends one line to `<root>/audit.jsonl` through

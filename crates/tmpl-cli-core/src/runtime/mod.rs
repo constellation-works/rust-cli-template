@@ -1,16 +1,23 @@
-//! What every app runs against: the context, the audit guard and the errors
-//! all apps share.
+//! What every app runs against: the context, the chokepoint each app's
+//! `exec` forwards to, the audit guard and the errors all apps share.
 //!
 //! [`Runtime::start`] calls composition once and owns what it resolved; a
-//! flow receives the borrowed [`Ctx`]. The binary never sees this module.
-//! It holds those three subjects and no others: "two apps use it" is not a
-//! reason for code to live here.
+//! flow receives the borrowed [`Ctx`]. Only [`exec`] starts the runtime and
+//! the audit guard. The binary never sees this module. It holds those four
+//! subjects and no others: "two apps use it" is not a reason for code to
+//! live here.
 
 mod audit;
 mod errors;
+mod exec;
 
-pub(crate) use audit::{AuditGuard, AuditMeta};
+pub(crate) use audit::AuditMeta;
 pub use errors::Error;
+#[cfg(test)]
+pub(crate) use exec::run_with;
+pub(crate) use exec::{App, exec};
+
+use audit::AuditGuard;
 
 use crate::composition::{self, Env};
 use time::OffsetDateTime;

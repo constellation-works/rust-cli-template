@@ -124,7 +124,7 @@ length (STD-02@3 §R18).
 ## Mutating commands are audited through one guard
 
 **Recorded:** 2026-09-26
-**Code anchors:** `crates/tmpl-cli-core/src/runtime/audit.rs::AuditGuard`; `crates/tmpl-cli-core/src/apps/note/mod.rs::Command::audit`, `::exec`
+**Code anchors:** `crates/tmpl-cli-core/src/runtime/audit.rs::AuditGuard`; `crates/tmpl-cli-core/src/runtime/exec.rs::exec`; `crates/tmpl-cli-core/src/apps/note/mod.rs::Command::audit`
 
 ### Context
 
@@ -153,8 +153,9 @@ line within one deadline.
 
 - A panic or early return in a handler is logged as a failure.
 - Update (2026-11-24): the guard lives in the core's runtime and the
-  chokepoint is each app's `exec`, which takes the surface's `finish` so the
-  line is still written after the payload or error object is flushed.
+  chokepoint is the runtime's `exec`, which every app's `exec` forwards to.
+  It takes the surface's `finish` so the line is still written after the
+  payload or error object is flushed.
 - Cost: every audited command pays a second lock and an `fsync`; a command
   that cannot write its line still succeeds, so the log can miss entries,
   and it grows without rotation.
@@ -595,7 +596,7 @@ govern. Each binds as soon as it does, and this entry is edited then:
 ## The template is laid out by app in three crates
 
 **Recorded:** 2026-11-24
-**Code anchors:** `Cargo.toml` `[workspace] members`; `scripts/check-dependency-direction.sh::policy`; `crates/tmpl-cli-core/src/apps/note/mod.rs::exec`; `crates/tmpl-cli-store/src/store.rs::Store`
+**Code anchors:** `Cargo.toml` `[workspace] members`; `scripts/check-dependency-direction.sh::policy`; `crates/tmpl-cli-core/src/runtime/exec.rs::App`, `::exec`; `crates/tmpl-cli-core/src/apps/note/mod.rs::exec`; `crates/tmpl-cli-store/src/store.rs::Store`
 
 ### Context
 
@@ -625,8 +626,8 @@ Three crates, `tmpl-cli -> tmpl-cli-core -> tmpl-cli-store`
   environment into the core's `Env` once. It names only the core.
 - `tmpl-cli-core` holds `apps/<app>/` (`Command`, `Outcome`, `Error`,
   `exec`, `run`, one flow per command and the app's pure `rules`),
-  `runtime/` (the context a flow receives, the audit guard, the errors every
-  app shares) and `composition.rs` (the only code that reads the
+  `runtime/` (the context a flow receives, the one chokepoint, the audit
+  guard, the errors every app shares) and `composition.rs` (the only code that reads the
   environment or picks the data directory, the store and the clock). A flow
   loads from one `store.read()`, decides with its rules and commits in one
   `store.write(|tx| …)`.
@@ -641,8 +642,16 @@ calls a model. One from the plain `exec(env, command)` shape: `exec` also
 takes the surface's `finish`, because the audit line must be written after
 the payload or error object is flushed (the integration test
 `json_error_object_precedes_audit_failure_warning_on_stderr` holds that
-order). STD-02@4 §R7 asks a new crate for a dependency edge that must be
-enforceable; the store crate is one: the core cannot reach a file primitive
+order). Runtime start, the audit guard and the `finish` order are written once, in
+the runtime's generic `exec`; an app's `exec` is a one-line forward and the
+app supplies only what differs through the `App` trait (whether a command is
+audited, its dispatch, the record id and error code for the audit line).
+Daniel, 2026-11-24, on the first draft, where each app's `exec` held the
+wrapper: "this is being called for each app group. perhaps keeping the
+composition at the choke point was a better idea?" A project grown from the
+template would have pasted the wrapper into every app, and one could have
+left the guard out. STD-02@4 §R7 asks a new crate for a dependency edge that
+must be enforceable; the store crate is one: the core cannot reach a file primitive
 or the persisted format, only the repositories.
 
 ### Consequences
@@ -652,6 +661,9 @@ or the persisted format, only the repositories.
   nothing else moves.
 - A second surface (an MCP server, a desktop app) calls the same `exec` and
   gets composition and auditing with it.
+- A new app implements `App` and forwards its `exec`; it cannot run a
+  command outside the guard, and `scripts/check-dependency-direction.sh`
+  rejects an app that starts the runtime or the guard itself.
 - Tests that need a pinned clock or a short lock wait run an app through the
   core's `test-support` feature (`Ctx`, `note_run`) instead of `exec`.
 - Cost: three manifests; record shapes are `pub` across a crate boundary;
