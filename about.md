@@ -1,7 +1,7 @@
 ---
 codebase: rust-cli-template
 owner: daniel
-summary: This repository is the starting point for a new constellation Rust CLI, with two crates, an output contract, a local store, and gates and CI that meet the constellation standards. Create a copy with GitHub's Use this template or the umbrella's operations/scripts/new-rust-cli.sh.
+summary: This repository is the starting point for a new constellation Rust CLI, with four crates laid out by app, an output contract, a local store, and gates and CI that meet the constellation standards. Create a copy with GitHub's Use this template or the umbrella's operations/scripts/new-rust-cli.sh.
 status: active
 stack: Rust
 gate: pr

@@ -1,7 +1,4 @@
-//! Unit tests for the business-logic modules, one file per source file
-//! (STD-02 R19). Being siblings rather than children of the modules they test,
-//! they reach only `pub(crate)` items. The store's tests live in
-//! `store/tests/`.
+//! Unit tests for the crate-root modules, one file per source file
+//! (STD-02 R19). Each app and the runtime keep their own tests beside them.
 
-mod note;
-mod query;
+mod composition;

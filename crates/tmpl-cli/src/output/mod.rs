@@ -15,11 +15,12 @@ mod table;
 pub(crate) use payload::{NotePayload, Output};
 pub(crate) use sink::{FORMAT_ENV, FormatArg, Sink, help_width};
 
-use crate::error::CliError;
+use crate::error::{exit_code, hint, output_error};
 use serde::Serialize;
 use std::ffi::OsString;
 use std::io::{self, Write};
 use std::process::ExitCode;
+use tmpl_cli_core::Error;
 
 /// Environment variable holding the log filter (`warn` when unset).
 const LOG_ENV: &str = "TMPL_CLI_LOG";
@@ -59,16 +60,17 @@ pub(crate) fn init_logging() {
 }
 
 /// Render a command's outcome and return the process exit code.
-pub(crate) fn finish(sink: &Sink, outcome: Result<Output, CliError>) -> ExitCode {
-    let result = outcome.and_then(|output| emit(sink, &output).map_err(CliError::Output));
-    match result {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(CliError::Output(e)) if e.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
-        Err(err) => {
-            report_error(sink.mode == sink::OutputMode::Json, &err);
-            ExitCode::from(err.exit_code())
-        }
-    }
+pub(crate) fn finish(sink: &Sink, outcome: Result<Output, Error>) -> ExitCode {
+    let err = match outcome {
+        Ok(output) => match emit(sink, &output) {
+            Ok(()) => return ExitCode::SUCCESS,
+            Err(e) if e.kind() == io::ErrorKind::BrokenPipe => return ExitCode::SUCCESS,
+            Err(e) => output_error(e),
+        },
+        Err(err) => err,
+    };
+    report_error(sink.mode == sink::OutputMode::Json, &err);
+    ExitCode::from(exit_code(&err))
 }
 
 /// Handle an argument-parsing outcome that is not a parsed command line:
@@ -124,7 +126,7 @@ fn emit(sink: &Sink, output: &Output) -> io::Result<()> {
 
 /// Report an error on stderr: one JSON object in JSON mode, else one
 /// `error: <message>` line with the cause chain folded in (STD-01 R19).
-fn report_error(json: bool, err: &CliError) {
+fn report_error(json: bool, err: &Error) {
     let mut message = err.to_string();
     let mut source = std::error::Error::source(err);
     while let Some(cause) = source {
@@ -132,7 +134,7 @@ fn report_error(json: bool, err: &CliError) {
         message.push_str(&cause.to_string());
         source = cause.source();
     }
-    if let Some(hint) = err.hint() {
+    if let Some(hint) = hint(err) {
         message.push_str("; ");
         message.push_str(hint);
     }

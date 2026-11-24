@@ -1,0 +1,37 @@
+//! `note add`: assign the next id and store the note.
+
+use super::rules::{self, NewNote};
+use super::{Error, Outcome};
+use crate::runtime::Ctx;
+use tmpl_cli_store::Error as StoreError;
+
+/// Load the notes, refuse what can be refused before any side effect, then
+/// assign the next id and store the note in one write.
+pub(super) fn add(ctx: &Ctx<'_>, new: NewNote) -> Result<Outcome, Error> {
+    let now = ctx.now();
+    let store = ctx.store();
+    // Every check that can refuse runs before the first write (STD-02 R34):
+    // an unsafe, corrupt, newer, bad-record or id-exhausted store is refused
+    // here, before the directory or the lock file is created.
+    let snapshot = store.read()?;
+    let notes = snapshot.notes();
+    if let Some(bad) = notes.bad_records().first() {
+        return Err(StoreError::BadRecord(bad.clone()).into());
+    }
+    if rules::next_id(notes.all()).is_none() {
+        return Err(Error::IdExhausted { path: store.path() });
+    }
+    // The id is decided again inside the write, against what the store holds
+    // under the lock: anything read before it may be stale.
+    let note = store.write("note add", |tx| {
+        let id = rules::next_id(tx.notes().all())
+            .ok_or_else(|| Error::IdExhausted { path: store.path() })?;
+        let note = new.into_note(id, now);
+        tx.notes().put(note.clone());
+        Ok::<_, Error>(note)
+    })?;
+    let path = store.path();
+    tracing::debug!(id = %note.id, path = %path.display(), "added note");
+    tracing::info!(id = %note.id, "note added");
+    Ok(Outcome::Added { note, path })
+}

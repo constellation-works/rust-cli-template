@@ -1,19 +1,19 @@
-//! The tmpl-cli note store as a library.
+//! The tmpl-cli apps as a library.
 //!
-//! This crate is the domain, split by responsibility so it can grow:
+//! - [`apps`]: one module per subject a user names on the command line
+//!   (today `note`), each with its `Command`, `Outcome`, `Error`, one `exec`,
+//!   its flows and its pure rules;
+//! - `runtime`: the context an app runs against, the one chokepoint every
+//!   app's `exec` forwards to and the audit guard;
+//! - `composition`: the one place that reads the host — the captured
+//!   environment ([`Env`]), the data directory, the store and the clock.
 //!
-//! - business logic with no I/O: the note types ([`Note`], [`NoteId`],
-//!   [`Title`], [`Body`], [`Tag`], [`Priority`]) and their rules in `note`,
-//!   and list selection ([`ListFilter`], [`NoteList`]) in `query`;
-//! - persistence in `store`: the file-backed [`Store`], its format, the audit
-//!   log ([`AuditEvent`]) and the filesystem mechanisms, and nothing else;
-//! - the crate's typed [`Error`].
-//!
-//! It never parses arguments, never touches the terminal and never decides
-//! where data lives: the caller resolves the data directory and hands it to
-//! [`Store::open`] (STD-02 R3). Anything another surface (an MCP server, a
-//! desktop app) would need to see the same notes belongs here, not in the CLI
-//! crate.
+//! Persistence is the `tmpl-cli-store` crate; the record shapes it defines
+//! are re-exported as [`contracts`]. The one error type is the foundation's,
+//! `tmpl-cli-common`, re-exported as [`Error`] and [`Kind`]. A surface so
+//! names only this crate. This crate never parses arguments and never touches
+//! the terminal. Anything another surface (an MCP server, a desktop app)
+//! would need to see the same notes belongs here, not in the CLI crate.
 
 // Library code never prints; diagnostics go through `tracing` (STD-02 R15).
 #![deny(clippy::print_stderr, clippy::print_stdout)]
@@ -27,15 +27,15 @@
     )
 )]
 
-mod error;
-mod note;
-mod query;
-mod store;
+pub mod apps;
+mod composition;
+mod runtime;
+#[cfg(feature = "test-support")]
+pub mod test_support;
 
-pub use error::{BadRecord, BadRecordReason, Error, RecordLocator, Result};
-pub use note::{Body, NewNote, Note, NoteError, NoteId, Priority, Tag, Title};
-pub use query::{ListFilter, NoteList};
-pub use store::{AuditEvent, AuditStatus, Loaded, STORE_FILE, Store};
+pub use composition::Env;
+pub use tmpl_cli_common::{Error, Kind};
+pub use tmpl_cli_store::contracts;
 
 #[cfg(test)]
 mod tests;
