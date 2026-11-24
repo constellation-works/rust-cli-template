@@ -6,10 +6,10 @@
 //! Nothing else in the core reads an environment variable or discovers a
 //! path (`scripts/check-dependency-direction.sh`).
 
+use cw_base::Kind;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
-use cw_base::Kind;
 use tmpl_cli_store::Store;
 
 /// Why composition could not resolve what an app runs against.

@@ -61,4 +61,4 @@ breaking change and shows up as a golden diff.
 Stable codes: `note_not_found`, `io_error`, `encode_error`, `store_corrupt`,
 `store_bad_record`, `store_duplicate_id`, `note_id_exhausted`, `store_too_new`,
 `store_locked`, `store_symlink`, `store_foreign_owner`, `store_permissions`,
-`no_data_dir`, `output_error`, `usage_error`.
+`store_not_regular`, `store_too_large`, `store_lock_reentrant`, `no_data_dir`, `output_error`, `usage_error`.

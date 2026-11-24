@@ -21,9 +21,9 @@ use crate::db::format::{self, StoreDocument};
 use crate::db::{AUDIT_LOCK_FILE, LOCK_FILE, STORE_CAP, STORE_FILE, audit};
 use crate::error::{Error, Result};
 use crate::repository::{Audit, Snapshot, Tx};
+use cw_fs::Lock;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use cw_fs::Lock;
 
 /// How long a writer waits for another writer before refusing (STD-03 R7).
 const DEFAULT_LOCK_WAIT: Duration = Duration::from_secs(10);

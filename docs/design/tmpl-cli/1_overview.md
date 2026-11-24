@@ -64,9 +64,10 @@ there.
 | Next-id rule, list selection (filter, count, limit) | [crates/tmpl-cli-core/src/apps/note/rules.rs](../../../crates/tmpl-cli-core/src/apps/note/rules.rs) |
 | Runtime context; audit guard around mutating commands | [crates/tmpl-cli-core/src/runtime/](../../../crates/tmpl-cli-core/src/runtime/) |
 | Note and audit record shapes, validation | [crates/tmpl-cli-store/src/contracts/](../../../crates/tmpl-cli-store/src/contracts/) |
-| The one error type and its classification | [crates/tmpl-cli-common/src/error/](../../../crates/tmpl-cli-common/src/error/) |
+| The one error type and its classification | `cw-base` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/b8b6809c15cafeeece299f4f2aa2a974a7491adb/crates/cw-base) |
+| The store's codes for the kit's errors | [crates/tmpl-cli-store/src/error.rs](../../../crates/tmpl-cli-store/src/error.rs) |
 | Store facade: read, write transaction | [crates/tmpl-cli-store/src/store.rs](../../../crates/tmpl-cli-store/src/store.rs) |
 | Repositories: notes, audit | [crates/tmpl-cli-store/src/repository/](../../../crates/tmpl-cli-store/src/repository/) |
 | Persisted format, upgrades; audit line | [crates/tmpl-cli-store/src/db/format.rs](../../../crates/tmpl-cli-store/src/db/format.rs), [audit.rs](../../../crates/tmpl-cli-store/src/db/audit.rs) |
-| Atomic write, append, lock, bounded reads, private state | [crates/tmpl-cli-common/src/fs/fsio.rs](../../../crates/tmpl-cli-common/src/fs/fsio.rs) |
+| Atomic write, append, lock, bounded reads, private state | `cw-fs` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/b8b6809c15cafeeece299f4f2aa2a974a7491adb/crates/cw-fs) |
 | Goldens of help and output | [crates/tmpl-cli/tests/goldens.rs](../../../crates/tmpl-cli/tests/goldens.rs) |

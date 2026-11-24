@@ -7,7 +7,7 @@ status: Draft
 feature: tmpl-cli
 doc_role: decisions
 type: design
-summary: Why three crates laid out by app over a foundation crate (binary, core with apps, runtime and composition, store with repositories and contracts; the one error type and file access in the foundation), why commands are one module per noun, why mutating commands are audited through one guard, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, how the store format evolves and stays private, and every recorded standard deviation or rule the template does not exercise.
+summary: Why three crates laid out by app over the cw-kit (binary, core with apps, runtime and composition, store with repositories and contracts; the one error type and file access from the kit's cw-base and cw-fs), why commands are one module per noun, why mutating commands are audited through one guard, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, how the store format evolves and stays private, and every recorded standard deviation or rule the template does not exercise.
 tags: [tmpl-cli, decisions]
 paths: ["Cargo.toml", "crates/**", "Makefile"]
 related_features: [tmpl-cli]
@@ -214,7 +214,7 @@ is 0. This reads R16's "nothing" as "no records", as Orbit does.
 ## The store lock uses std file locks, not a crate
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli-common/src/fs/fsio.rs::LockGuard::acquire`
+**Code anchors:** `crates/tmpl-cli-store/src/store.rs::Store::lock`; the kit's `cw_fs::Lock::acquire`
 
 ### Context
 
@@ -233,6 +233,12 @@ the need.
 - One fewer dependency to audit; the lock semantics are std's documented ones.
 - Cost: the minimum supported Rust is 1.89, and there is no blocking-with-
   timeout primitive, so the wait is a 20 ms poll.
+- Update (2026-11-24): the lock is now the kit's `cw_fs::Lock`, on the same
+  std primitive (see [The foundation is the cw-kit](#the-foundation-is-the-cw-kit)).
+  Its poll starts at 1 ms and doubles to 20 ms; the holder record is one
+  JSON line, and a timeout names the holder only while that process is
+  alive. The same thread asking again for a lock it holds is refused at
+  once (`store_lock_reentrant`) instead of waiting out its deadline.
 
 ## clap without color or terminal-width features
 
@@ -399,7 +405,7 @@ registry ships empty.
 ## Store state is owner-only and checked on every load
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli-common/src/fs/fsio.rs::create_private_dir`, `::inspect_dir`, `::inspect_file`, `::LockGuard::acquire`
+**Code anchors:** `crates/tmpl-cli-store/src/store.rs::Store::write`, `::Store::load`; the kit's `cw_fs::create_private_dir`, `cw_fs::inspect_dir`, `cw_fs::inspect_file`, `cw_fs::read`, `cw_fs::Lock::acquire`
 
 ### Context
 
@@ -432,6 +438,18 @@ for Windows, which would need ACLs).
   refused until the operator runs the named `chmod` (STD-03@2 §R24 allows
   this form: the refusal names the file and a repair that needs no tool);
   and one more dependency.
+- Update (2026-11-24): the checks are now the kit's `cw-fs` (see
+  [The foundation is the cw-kit](#the-foundation-is-the-cw-kit)), which is
+  stricter in four ways. Any group or other permission bit is refused, not
+  only a write bit, so a `0644` store or `0755` data directory is refused
+  too. The data directory may no longer be a symbolic link (a link in a
+  component above it is still followed): whoever can replace the link can
+  point the data anywhere. A file is checked again after it is opened, and a
+  store or lock file that is not a regular file, or a lock file with a
+  second hard link, is refused (`store_not_regular`). A store file larger
+  than 64 MiB is refused unread (`store_too_large`). The remedy now reads
+  `chmod -- 600 '<path>'`, safe to paste for any file name. The template
+  depends on `rustix` no longer; the kit does.
 
 ## One malformed note makes the store corrupt
 
@@ -672,14 +690,22 @@ or the persisted format, only the repositories.
   edge; and `exec` carries a `finish` callback instead of returning the
   outcome.
 - Update (2026-11-24): the error type and the file mechanism (`db/fsio.rs`)
-  moved to a fourth crate, the foundation `tmpl-cli-common`, so the store
-  names no file primitive. The record shapes stay in the store. See
+  moved to a fourth crate, a foundation crate, so the store names no file
+  primitive. The record shapes stay in the store. See
   [One error type and file access live in a foundation crate](#one-error-type-and-file-access-live-in-a-foundation-crate).
+  The same day the foundation crate was replaced by the kit's `cw-base` and
+  `cw-fs`, leaving three crates again: see
+  [The foundation is the cw-kit](#the-foundation-is-the-cw-kit).
 
 ## One error type and file access live in a foundation crate
 
+**Superseded** by [The foundation is the cw-kit](#the-foundation-is-the-cw-kit):
+the crate this decision made is deleted, and its two folders are the kit's
+`cw-base` and `cw-fs`. The reasoning below stands; the anchors name what
+replaced the deleted files.
+
 **Recorded:** 2026-11-24
-**Code anchors:** `crates/tmpl-cli-common/src/error/mod.rs::Error`; `crates/tmpl-cli-common/src/error/kind.rs::Kind`; `crates/tmpl-cli-common/src/fs/mod.rs`; `crates/tmpl-cli-common/src/fs/error.rs::Error`; `crates/tmpl-cli-store/src/error.rs` (`impl From<Error> for tmpl_cli_common::Error`); `crates/tmpl-cli-core/src/apps/note/mod.rs::Error`; `crates/tmpl-cli/src/error.rs::exit_code`; `scripts/check-dependency-direction.sh::policy`
+**Code anchors:** the kit's `cw_base::Error`, `cw_base::Kind` and `cw_fs::Error`; `crates/tmpl-cli-store/src/error.rs` (`impl From<Error> for cw_base::Error`); `crates/tmpl-cli-core/src/apps/note/mod.rs::Error`; `crates/tmpl-cli/src/error.rs::exit_code`; `scripts/check-dependency-direction.sh::policy`
 
 ### Context
 
@@ -691,7 +717,7 @@ app's `exec` returned a different error type. Daniel, 2026-11-24, on that
 hand-written conversion: "what is this"; then: "we are going to make the
 best version possible now. This repo will serve as the basis for all future
 projects, so we need to get the first footing right. what do you think about
-creating a leaf node, tmpl-cli-common, and we can port the global errors
+creating a leaf node, [the common crate], and we can port the global errors
 there". While it was built: "no flat layers in the common crate. any common
 types/contracts can go there too"; "fs utils can go there in common"; and,
 after the record shapes had been moved there: "actually, contracts can stay
@@ -705,8 +731,8 @@ as Orbit's `OrbitError` is, would make every new app edit the foundation.
 
 ### Decision
 
-A fourth crate, `tmpl-cli-common`, that names no other crate of the
-workspace. It is grouped by subject, one folder each:
+A fourth crate, the foundation (named `common`), that names no other crate
+of the workspace. It is grouped by subject, one folder each:
 
 - `error/`: one `Error` for the whole workspace (STD-02@4 §R11). It wraps a
   unit's typed error whole and adds a `Kind` and the stable code. Its
@@ -729,7 +755,7 @@ the code (§R12, the case where the owning unit can name the surface type).
 The store's `Error`, composition's `Error` (no data directory) and the note
 app's `Error` each have one. An app's enum is its own refusals plus one
 `Store(#[from] …)` variant; the runtime's error enum is gone. Every app's
-`exec` returns `Result<Outcome, tmpl_cli_common::Error>`, so the runtime's
+`exec` returns `Result<Outcome, Error>` with the foundation's `Error`, so the runtime's
 `App` trait asks an app for no error code, and the audit line reads the
 code from the one type. `run` still returns the app's typed error.
 
@@ -774,6 +800,59 @@ the store cannot depend on the core, so it has to sit below both.
   standard than this repository pins (STD-02@6 §R43) allows that name in
   the foundation only. What keeps it from collecting code is its section in
   [ARCHITECTURE.md](../../../ARCHITECTURE.md) and the guard, not its name.
+
+## The foundation is the cw-kit
+
+**Recorded:** 2026-11-24
+**Code anchors:** `Cargo.toml` `[workspace.dependencies]` `cw-base`, `cw-fs`; `deny.toml` `[sources] allow-git`; `crates/tmpl-cli-store/src/error.rs::Error::code`; `crates/tmpl-cli-store/src/db/mod.rs::STORE_CAP`; `crates/tmpl-cli/src/error.rs::exit_code`; `scripts/check-dependency-direction.sh::policy`
+
+### Context
+
+The foundation crate held mechanism every constellation Rust CLI needs and
+no project-specific rule: one error type and file access for a private
+data directory. Each project grown from the template would carry its own
+copy and drift. The cw-kit design moves that mechanism into versioned
+crates in the public
+[constellation-works/satellites](https://github.com/constellation-works/satellites)
+repository, and the template is its first adopter, so its CI is the kit's
+integration test.
+
+### Decision
+
+The workspace depends on the kit's `cw-base` (`Error`, `Kind`, a clock) and
+`cw-fs` (atomic write, append, bounded read, listing, removal, private
+directories, owner-only checks, one advisory lock) as git dependencies
+pinned to commit `b8b6809c15cafeeece299f4f2aa2a974a7491adb`, since no release
+is published; `deny.toml` allows that one git source. The foundation crate
+is deleted, and the template keeps three crates.
+
+- The store and the core name `cw-base`; only the store names `cw-fs`; the
+  binary names neither and reaches `Error` and `Kind` through the core's
+  re-export. `scripts/check-dependency-direction.sh` holds each crate's kit
+  list and fails a `cw-*` dependency outside it.
+- Each unit keeps its typed `thiserror` enum and its one `From` impl into
+  `cw_base::Error`, naming the `Kind` and the template's own stable code.
+  `cw_fs::Error` carries a kind and no code: the store wraps it as
+  `Error::Fs` and names a code for every variant. The existing codes are
+  unchanged; the kit's three further refusals get `store_not_regular`,
+  `store_too_large` and `store_lock_reentrant`.
+- Every store read states a cap (64 MiB, `STORE_CAP`), which the foundation's
+  read did not.
+- `Kind` gained `Usage`. clap still reports today's usage errors before a
+  command runs; the binary's exit-code match maps `Usage` to 2, as
+  STD-01@2 §R20 asks.
+
+### Consequences
+
+- A fix to the mechanism lands once in the kit and reaches the template by
+  moving the pin; a project grown from the template inherits the pin and
+  moves it on its own schedule.
+- The kit is stricter than the foundation was; what changed for an operator
+  is listed under
+  [Store state is owner-only and checked on every load](#store-state-is-owner-only-and-checked-on-every-load).
+- Cost: a build fetches the satellites repository once; an unpublished pin
+  is a commit hash a reader must look up; and a kit change the template
+  needs waits for a satellites change and a pin move.
 
 ## Public design documents use public references
 

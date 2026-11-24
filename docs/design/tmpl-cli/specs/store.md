@@ -43,10 +43,14 @@ leave unparseable state.
 - A missing `notes.json` is an empty store. Reads take no lock, create
   nothing and work on a read-only directory.
 - Every load refuses a data directory or `notes.json` owned by another user
-  (`store_foreign_owner`) or writable by group or others
-  (`store_permissions`, naming the `chmod`), and a `notes.json` or lock file
-  that is a symbolic link (`store_symlink`). Nothing is repaired
-  automatically. The data directory itself may be a link.
+  (`store_foreign_owner`) or open to any group or other permission bit
+  (`store_permissions`, naming the `chmod -- 600 '<path>'` or
+  `chmod -- 700 '<path>'` that fixes it), a data directory, `notes.json` or
+  lock file that is a symbolic link (`store_symlink`), a `notes.json` or lock
+  file that is not a regular file, or a lock file with a second hard link
+  (`store_not_regular`), and a `notes.json` larger than 64 MiB
+  (`store_too_large`). Nothing is repaired automatically. The data directory
+  itself may not be a link; a link in a component above it is used as given.
 - `add` runs every check before its first write, so a refused store gains no
   directory, lock file or temp file.
 - `format` greater than this build's is refused (`store_too_new`) for reads

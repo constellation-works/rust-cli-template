@@ -15,8 +15,8 @@ pub use rules::{ListFilter, NewNote, NoteList};
 
 use crate::composition::Env;
 use crate::runtime::{self, App, AuditMeta, Ctx};
-use std::path::PathBuf;
 use cw_base::Kind;
+use std::path::PathBuf;
 use tmpl_cli_store::BadRecord;
 use tmpl_cli_store::contracts::{Note, NoteId};
 

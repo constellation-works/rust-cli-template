@@ -1,12 +1,12 @@
 use crate::Store;
 use crate::contracts::{AuditEvent, AuditStatus, Note, NoteId, Priority};
 use crate::error::Error;
-use std::time::Duration;
-use time::OffsetDateTime;
 use cw_fs::{Error as FsError, Lock};
 use std::path::Path;
 use std::sync::mpsc;
 use std::thread::JoinHandle;
+use std::time::Duration;
+use time::OffsetDateTime;
 
 /// A lock held by another thread until this is dropped: cw-fs refuses a
 /// thread that asks again for a lock it holds (`Reentrant`), so the other

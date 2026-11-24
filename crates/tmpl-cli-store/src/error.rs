@@ -8,9 +8,9 @@
 //! (STD-02 R12).
 
 use crate::contracts::{NoteError, NoteId};
+use cw_base::Kind;
 use std::fmt;
 use std::path::PathBuf;
-use cw_base::Kind;
 
 /// Where a bad record sits in the store file: its note id when readable,
 /// otherwise its 1-based line number in the file.

@@ -23,9 +23,9 @@ and the gates. The output and store contracts are specified in
 
 ## 1. Layering
 
-Three crates laid out by app over one foundation crate (why:
+Three crates laid out by app over the cw-kit (why:
 [4_decisions.md](./4_decisions.md#the-template-is-laid-out-by-app-in-three-crates),
-[the foundation](./4_decisions.md#one-error-type-and-file-access-live-in-a-foundation-crate)).
+[the kit](./4_decisions.md#the-foundation-is-the-cw-kit)).
 `tmpl-cli` is the surface: `cli` (the root flags), `commands` (one module
 per noun, holding its subcommands, flags and help, and mapping its arguments
 to an app's `Command` and the `Outcome` to a payload) and `output`.
@@ -38,11 +38,13 @@ clock). `tmpl-cli-store` owns
 the data directory: the `Store` facade (one read, one locked write) over
 `db/` (`format`: the persisted document and its upgrades; `audit`: the
 persisted audit line), one repository per record (`notes`, `audit`) and
-the record shapes in `contracts/`. `tmpl-cli-common` is the foundation both
-libraries name: `error/` (the one error type every unit translates its
-typed error into, with its `Kind` and stable code) and `fs/` (durable writes,
-appends, locking and private-state checks, mechanism only, and the only
-code that names `std::fs`). No library has clap or terminal access. The crate and module rules are in
+the record shapes in `contracts/`. The foundation is the cw-kit from
+[constellation-works/satellites](https://github.com/constellation-works/satellites),
+pinned to commit `b8b6809c15cafeeece299f4f2aa2a974a7491adb`: `cw-base` (the
+one error type every unit translates its typed error into, with its `Kind`
+and stable code), which the store and the core name, and `cw-fs` (durable
+writes, appends, locking and private-state checks, mechanism only), which
+only the store names. No library has clap or terminal access. The crate and module rules are in
 [ARCHITECTURE.md](../../../ARCHITECTURE.md), and
 `scripts/check-dependency-direction.sh` enforces them from source text
 alone, so it runs in `make ci-fast` without compiling.
@@ -104,8 +106,8 @@ in every mode.
 write nothing: the file is only ever replaced by rename, so readers see a
 whole version, and `list`/`show` work on a read-only data directory. Every
 load first checks that the data directory and the store file belong to this
-user and are not writable by others, and that the store file is not a link;
-otherwise it refuses with the `chmod` that fixes it. Each note record is
+user and are open to no group or other permission bit, and that neither is
+a link; otherwise it refuses with the `chmod` that fixes it. Each note record is
 decoded individually at the construction boundary with no silent field
 defaults: a record whose title or tag fails validation or which lacks a
 required field is isolated as a `BadRecord` (`store_bad_record`) naming its id
@@ -117,11 +119,11 @@ ever dropped or defaulted. Duplicate note ids are refused on load
 anything, so a refused store leaves nothing behind; it then calls
 `Store::write`, which creates the data directory (`0700`), takes `.lock` (`0600`, never through a link; an OS advisory lock
 with a 10-second deadline, and a timeout names the holder's pid, label and
-start time only while that pid is still alive), re-reads under the lock and
+start time only while that process is still alive), re-reads under the lock and
 refuses a store with bad records; inside the write the flow assigns the next
 id (`rules::next_id`: checked max id + 1, refusing with `note_id_exhausted`
 at `u64::MAX`) and puts the note, and the store writes through
-the foundation's `fs::write_atomic` (a
+`cw_fs::write_atomic` (a
 `0600` temp file in the same directory, `fsync`, rename, `fsync` of the
 directory). The temp file removes itself on every failure path. A file
 declaring a newer format is refused for reads and writes; an older one is

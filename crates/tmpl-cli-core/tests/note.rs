@@ -11,12 +11,12 @@
     )
 )]
 
+use cw_fs::Error as FsError;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::Arc;
 use time::OffsetDateTime;
 use time::macros::datetime;
-use cw_fs::Error as FsError;
 use tmpl_cli_core::apps::note::{Command, Error, ListFilter, NewNote, NoteList, Outcome};
 use tmpl_cli_core::contracts::{Note, NoteId, Priority, Tag};
 use tmpl_cli_core::test_support::{Ctx, note_run};
