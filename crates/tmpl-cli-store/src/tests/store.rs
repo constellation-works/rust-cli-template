@@ -175,3 +175,22 @@ fn a_write_that_would_pass_the_size_limit_is_refused_and_the_store_left_readable
     assert_eq!(std::fs::read(store.path()).unwrap(), one_note);
     assert_eq!(store.read().unwrap().notes().all().len(), 1);
 }
+
+#[cfg(unix)]
+#[test]
+fn a_write_through_a_symlinked_root_is_refused_before_any_side_effect() {
+    // STD-02 R34: the public write checks the root before it creates the
+    // directory or the lock file, as the audit append does.
+    let dir = crate::db::tests::private_tempdir();
+    let target = dir.path().join("target");
+    std::fs::create_dir(&target).unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let link = dir.path().join("link");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+    let err = add(&Store::open(&link), new_note("refused")).unwrap_err();
+    assert_eq!(err.code(), "store_symlink", "got {err:?}");
+    assert_eq!(std::fs::read_dir(&target).unwrap().count(), 0);
+}

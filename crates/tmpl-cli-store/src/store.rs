@@ -92,8 +92,8 @@ impl Store {
         Ok(Snapshot::new(self.load()?))
     }
 
-    /// Change the store in one transaction: create the data directory if
-    /// needed, take `.lock` (recording `label` as the holder), re-read the
+    /// Change the store in one transaction: check the data directory and
+    /// create it if needed, take `.lock` (recording `label` as the holder), re-read the
     /// store under the lock, run `apply` against it, and replace the file
     /// atomically if `apply` succeeds. Nothing is written when `apply` fails.
     ///
@@ -122,10 +122,17 @@ impl Store {
         Ok(value)
     }
 
-    /// Everything a write does before `apply`: create the data directory,
-    /// take the lock, and re-read the store under it, refusing bad records.
+    /// Everything a write does before `apply`: check the data directory,
+    /// create it when absent, take the lock, and re-read the store under it,
+    /// refusing bad records.
+    ///
+    /// The directory is checked (a link, another user's, open to others)
+    /// before anything is created in it, so a refused root gains no lock
+    /// file (STD-02 R34).
     fn begin(&self, label: &str) -> Result<(Lock, StoreDocument)> {
-        cw_fs::create_private_dir(&self.root)?;
+        if !cw_fs::inspect_dir(&self.root)? {
+            cw_fs::create_private_dir(&self.root)?;
+        }
         let lock = self.lock(label)?;
         // Re-read under the lock: anything read before it may be stale.
         let doc = self.load()?;
