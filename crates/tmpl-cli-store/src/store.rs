@@ -33,6 +33,8 @@ const DEFAULT_LOCK_WAIT: Duration = Duration::from_secs(10);
 pub struct Store {
     root: PathBuf,
     lock_wait: Duration,
+    /// The most bytes the store file may hold, read or written.
+    cap: cw_fs::Cap,
 }
 
 impl Store {
@@ -43,7 +45,15 @@ impl Store {
         Self {
             root: root.into(),
             lock_wait: DEFAULT_LOCK_WAIT,
+            cap: STORE_CAP,
         }
+    }
+
+    /// A smaller size limit, so a test can reach it without writing 64 MiB.
+    #[cfg(test)]
+    pub(crate) fn with_cap(mut self, cap: cw_fs::Cap) -> Self {
+        self.cap = cap;
+        self
     }
 
     /// Override how long a writer waits for the lock.
@@ -125,9 +135,20 @@ impl Store {
         Ok((lock, doc))
     }
 
-    /// Replace the store file with `doc`.
+    /// Replace the store file with `doc`, unless it would be larger than
+    /// reads accept: a write must never leave a store its own reads refuse.
     fn commit(&self, doc: &StoreDocument) -> Result<()> {
-        cw_fs::write_atomic(&self.path(), &format::encode(doc)?)?;
+        let path = self.path();
+        let bytes = format::encode(doc)?;
+        let size = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+        if size > self.cap.get() {
+            return Err(Error::WouldExceedCap {
+                path,
+                size,
+                cap: self.cap.get(),
+            });
+        }
+        cw_fs::write_atomic(&path, &bytes)?;
         Ok(())
     }
 
@@ -158,7 +179,7 @@ impl Store {
         if !cw_fs::inspect_dir(&self.root)? || !cw_fs::inspect_file(&path)? {
             return Ok(StoreDocument::empty());
         }
-        let bytes = cw_fs::read(&path, STORE_CAP)?;
+        let bytes = cw_fs::read(&path, self.cap)?;
         format::decode(&path, &bytes)
     }
 }

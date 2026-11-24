@@ -158,3 +158,20 @@ fn record_audit_encode_failure_is_not_io_and_names_no_path() {
         "encode error must not name an untouched path: {msg}"
     );
 }
+
+#[test]
+fn a_write_that_would_pass_the_size_limit_is_refused_and_the_store_left_readable() {
+    // A write must never leave a store its own reads refuse (STD-02 R16).
+    let dir = crate::db::tests::private_tempdir();
+    let probe = Store::open(dir.path());
+    add(&probe, new_note("first")).unwrap();
+    let one_note = std::fs::read(probe.path()).unwrap();
+    let cap = u64::try_from(one_note.len()).unwrap() + 8;
+    let store = Store::open(dir.path()).with_cap(cw_fs::Cap::bytes(cap));
+    let mut second = new_note("second, which does not fit");
+    second.id = NoteId::try_from(2).unwrap();
+    let err = add(&store, second).unwrap_err();
+    assert_eq!(err.code(), "store_too_large", "got {err:?}");
+    assert_eq!(std::fs::read(store.path()).unwrap(), one_note);
+    assert_eq!(store.read().unwrap().notes().all().len(), 1);
+}

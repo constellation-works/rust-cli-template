@@ -51,6 +51,15 @@ leave unparseable state.
   (`store_not_regular`), and a `notes.json` larger than 64 MiB
   (`store_too_large`). Nothing is repaired automatically. The data directory
   itself may not be a link; a link in a component above it is used as given.
+- `notes.json` holds at most 64 MiB, on both sides: a read refuses a larger
+  file unread, and a write whose encoded document would be larger is refused
+  before anything is replaced (`store_too_large` for both). A refused write
+  leaves the store as it was and still readable. To recover a store that is
+  over the limit (one written before the limit existed, or edited by hand):
+  copy `notes.json` somewhere safe, then either point the tool at a new data
+  directory (`--root` or `TMPL_CLI_ROOT`) and keep the old file as an
+  archive, or remove whole entries from its `notes` array with a JSON editor
+  until it is under 64 MiB, keeping `format` and the file's `0600` mode.
 - `add` runs every check before its first write, so a refused store gains no
   directory, lock file or temp file.
 - `format` greater than this build's is refused (`store_too_new`) for reads

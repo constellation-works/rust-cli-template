@@ -122,6 +122,20 @@ pub enum Error {
         /// The repeated id.
         id: NoteId,
     },
+    /// A write would make the store file larger than reads accept, so it was
+    /// refused and the file left as it was.
+    #[error(
+        "{} would grow to {size} bytes, past the store's limit of {cap} bytes; nothing was written",
+        path.display()
+    )]
+    WouldExceedCap {
+        /// The store file.
+        path: PathBuf,
+        /// The encoded size the write would have produced.
+        size: u64,
+        /// The limit, in bytes.
+        cap: u64,
+    },
     /// The store was written by a newer build (STD-03 R10: refuse, never
     /// rewrite or reinterpret newer state).
     #[error(
@@ -151,7 +165,9 @@ impl Error {
             Self::Fs(cw_fs::Error::ForeignOwner { .. }) => "store_foreign_owner",
             Self::Fs(cw_fs::Error::Permissions { .. }) => "store_permissions",
             Self::Fs(cw_fs::Error::NotRegular { .. }) => "store_not_regular",
-            Self::Fs(cw_fs::Error::TooLarge { .. }) => "store_too_large",
+            Self::Fs(cw_fs::Error::TooLarge { .. }) | Self::WouldExceedCap { .. } => {
+                "store_too_large"
+            }
             Self::Fs(cw_fs::Error::Reentrant { .. }) => "store_lock_reentrant",
             Self::Encode { .. } => "encode_error",
             Self::Corrupt { .. } => "store_corrupt",
@@ -169,6 +185,7 @@ impl Error {
             Self::Fs(e) => e.kind(),
             Self::Encode { .. } => Kind::Internal,
             Self::Corrupt { .. } | Self::BadRecord(_) | Self::DuplicateId { .. } => Kind::Corrupt,
+            Self::WouldExceedCap { .. } => Kind::Refused,
             Self::NewerFormat { .. } => Kind::Incompatible,
         }
     }

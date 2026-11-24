@@ -841,7 +841,10 @@ is deleted, and the template keeps three crates.
   unchanged; the kit's three further refusals get `store_not_regular`,
   `store_too_large` and `store_lock_reentrant`.
 - Every store read states a cap (64 MiB, `STORE_CAP`), which the foundation's
-  read did not.
+  read did not, and every write checks the encoded document against the same
+  cap before it replaces the file, so a write never leaves a store its own
+  reads refuse (STD-02@4 §R16). Recovery for a store over the limit is in
+  [specs/store.md](./specs/store.md).
 - `Kind` gained `Usage`. clap still reports today's usage errors before a
   command runs; the binary's exit-code match maps `Usage` to 2, as
   STD-01@2 §R20 asks.
