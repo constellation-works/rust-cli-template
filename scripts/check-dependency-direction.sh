@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # scripts/check-dependency-direction.sh — STD-02 R1–R6, R16, R17 for this workspace.
 #
-# Two layers of checks, both from source files alone (no build, no network,
-# no jq), so the gate runs in `make ci-fast`:
+# Two layers of checks, neither of which compiles, so the gate runs in
+# `make ci-fast`:
 #
-#   1. Crate edges. Every workspace crate needs a policy below. A crate may
-#      depend only on the internal crates in its allowlist and the cw-kit
-#      crates (`cw-*`, from the satellites repository) in its kit list, and
-#      never on the external crates in its banlist. Dev-dependencies are
-#      exempt. A crate without a policy fails the check, so a new member
-#      forces a decision.
+#   1. Crate edges, read from Cargo's own package graph
+#      (`cargo metadata --no-deps --locked`), which names each dependency by
+#      its package, so a quoted key or a renamed dependency
+#      (`files = { package = "cw-fs" }`) is seen for what it is. Every
+#      workspace crate needs a policy below. A normal or build dependency may
+#      name only the internal crates in ALLOWED and the cw-kit crates (`cw-*`,
+#      from the satellites repository) in KIT, and never an external crate in
+#      BANNED. A dev-dependency may name the kit crates in KIT and KIT_DEV;
+#      other dev edges are free. A crate without a policy fails the check, so
+#      a new member forces a decision. Needs cargo and jq.
 #   2. Module edges inside a crate, as grep and grouped-import bans over
 #      non-test sources.
 #
@@ -24,8 +28,9 @@ fail=0
 err() { echo "dependency-direction: $*" >&2; fail=1; }
 
 # --- 1. crate policies -------------------------------------------------------
-# policy <crate>  -> sets ALLOWED (internal deps), KIT (cw-kit deps) and
-# BANNED (external deps)
+# policy <crate>  -> sets ALLOWED (internal deps), KIT (cw-kit deps),
+# KIT_DEV (cw-kit crates allowed as dev-dependencies only) and BANNED
+# (external deps)
 policy() {
   case "$1" in
     tmpl-cli-store)
@@ -33,6 +38,7 @@ policy() {
       # The one error type (cw-base) and file access for the data directory
       # (cw-fs). The store is the only crate that names cw-fs.
       KIT="cw-base cw-fs"
+      KIT_DEV=""
       # Persistence never parses arguments, draws on a terminal or installs a
       # log subscriber: those belong to surfaces. It reaches files only
       # through cw-fs, so it needs no file crate.
@@ -42,6 +48,10 @@ policy() {
       ALLOWED="tmpl-cli-store"
       # The one error type only: the apps reach files through the store.
       KIT="cw-base"
+      # Its integration tests match the kit's file error behind a store
+      # failure (`cw_fs::Error::Locked`), so cw-fs is a dev edge only; its
+      # sources never name it (module rules below).
+      KIT_DEV="cw-fs"
       # The apps reach files only through the store, so they need no file or
       # process crate either.
       BANNED="clap tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored tempfile rustix"
@@ -51,26 +61,11 @@ policy() {
       # it renders and the one error type (cw-base's, as tmpl_cli_core::Error).
       ALLOWED="tmpl-cli-core"
       KIT=""
+      KIT_DEV=""
       BANNED=""
       ;;
     *) return 1 ;;
   esac
-}
-
-# Print the dependency names declared in the non-dev dependency tables of a
-# Cargo.toml: [dependencies], [build-dependencies] and target-specific ones.
-declared_deps() {
-  awk '
-    /^\[/ {
-      section = $0
-      in_deps = (section ~ /^\[(target\..*\.)?(build-)?dependencies\]$/)
-      next
-    }
-    in_deps && /^[A-Za-z0-9_-]+[[:space:]]*(\.workspace)?[[:space:]]*=/ {
-      name = $1; sub(/\.workspace$/, "", name); sub(/=.*/, "", name)
-      gsub(/[[:space:]]/, "", name); print name
-    }
-  ' "$1"
 }
 
 contains() { # contains <word> <space-separated list>
@@ -79,22 +74,48 @@ contains() { # contains <word> <space-separated list>
   return 1
 }
 
-for manifest in crates/*/Cargo.toml; do
-  crate=$(awk -F'"' '/^name[[:space:]]*=/ { print $2; exit }' "$manifest")
-  if ! policy "$crate"; then
-    err "crate '$crate' ($manifest) has no policy; add one here and a row in ARCHITECTURE.md"
-    continue
+# check_crate_edges: layer 1, on Cargo's package graph. Exits 2 when the
+# graph cannot be read, so a broken manifest never passes as "no edges".
+check_crate_edges() {
+  local tool metadata members edges crate kind dep
+  for tool in cargo jq; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+      echo "dependency-direction: cannot run: $tool is not installed" >&2
+      exit 2
+    fi
+  done
+  if ! metadata=$(cargo metadata --format-version 1 --no-deps --locked 2>/dev/null); then
+    echo "dependency-direction: cannot run: cargo metadata failed" >&2
+    exit 2
   fi
-  while IFS= read -r dep; do
-    if [[ "$dep" == "$PREFIX" || "$dep" == "$PREFIX"-* ]]; then
+  # One line per workspace package: its name.
+  members=$(jq -er '.packages[].name' <<<"$metadata") || {
+    echo "dependency-direction: cannot run: cargo metadata gave no package list" >&2
+    exit 2
+  }
+  # One line per edge: "<crate> <kind> <package>", kind normal, build or dev.
+  edges=$(jq -er '.packages[] | .name as $crate
+    | .dependencies[] | "\($crate) \(.kind // "normal") \(.name)"' <<<"$metadata") || edges=""
+  while IFS= read -r crate; do
+    policy "$crate" || err "crate '$crate' has no policy; add one here and a row in ARCHITECTURE.md"
+  done <<<"$members"
+  while read -r crate kind dep; do
+    [[ -n "$crate" ]] || continue
+    policy "$crate" || continue
+    if [[ "$kind" == "dev" ]]; then
+      if [[ "$dep" == "$KIT_PREFIX"-* ]]; then
+        contains "$dep" "$KIT $KIT_DEV" ||
+          err "$crate must not depend on kit crate $dep, even for tests (allowed: ${KIT:-none} ${KIT_DEV})"
+      fi
+    elif [[ "$dep" == "$PREFIX" || "$dep" == "$PREFIX"-* ]]; then
       contains "$dep" "$ALLOWED" || err "$crate must not depend on internal crate $dep"
     elif [[ "$dep" == "$KIT_PREFIX"-* ]]; then
       contains "$dep" "$KIT" || err "$crate must not depend on kit crate $dep (allowed: ${KIT:-none})"
     elif contains "$dep" "$BANNED"; then
       err "$crate must not depend on $dep (surface crate in the domain)"
     fi
-  done < <(declared_deps "$manifest")
-done
+  done <<<"$edges"
+}
 
 # --- 2. module bans ----------------------------------------------------------
 # ban <path> <extended-regex> <message>: fail if the pattern appears in
@@ -277,6 +298,9 @@ for retired in \
   crates/tmpl-cli-store/src/db/tests/fsio.rs; do
   [[ -e "$retired" ]] && err "retired path exists again: $retired"
 done
+
+# Crate edges last: the module bans above run even where Cargo cannot.
+check_crate_edges
 
 if [[ "$fail" -eq 0 ]]; then
   echo "dependency-direction: ok"
