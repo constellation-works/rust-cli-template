@@ -14,7 +14,8 @@ path = "src/lib.rs"
 # Persistence dependencies only. scripts/check-dependency-direction.sh rejects
 # clap, tracing-subscriber and any other surface crate here.
 [dependencies]
-tmpl-cli-common = { workspace = true }
+cw-base = { workspace = true }
+cw-fs = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

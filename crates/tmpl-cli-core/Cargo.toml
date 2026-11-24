@@ -19,7 +19,7 @@ test-support = []
 # Domain dependencies only. scripts/check-dependency-direction.sh rejects
 # clap, tracing-subscriber and any other surface crate here.
 [dependencies]
-tmpl-cli-common = { workspace = true }
+cw-base = { workspace = true }
 tmpl-cli-store = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
@@ -28,6 +28,8 @@ tracing = { workspace = true }
 [dev-dependencies]
 # The crate's own integration tests run the apps through `test-support`.
 tmpl-cli-core = { path = ".", features = ["test-support"] }
+# The integration tests name the kit's file error behind a store failure.
+cw-fs = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 time = { workspace = true, features = ["macros"] }

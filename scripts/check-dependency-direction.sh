@@ -5,9 +5,11 @@
 # no jq), so the gate runs in `make ci-fast`:
 #
 #   1. Crate edges. Every workspace crate needs a policy below. A crate may
-#      depend only on the internal crates in its allowlist, and never on the
-#      external crates in its banlist. Dev-dependencies are exempt. A crate
-#      without a policy fails the check, so a new member forces a decision.
+#      depend only on the internal crates in its allowlist and the cw-kit
+#      crates (`cw-*`, from the satellites repository) in its kit list, and
+#      never on the external crates in its banlist. Dev-dependencies are
+#      exempt. A crate without a policy fails the check, so a new member
+#      forces a decision.
 #   2. Module edges inside a crate, as grep and grouped-import bans over
 #      non-test sources.
 #
@@ -17,38 +19,38 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 PREFIX="tmpl-cli"
+KIT_PREFIX="cw"
 fail=0
 err() { echo "dependency-direction: $*" >&2; fail=1; }
 
 # --- 1. crate policies -------------------------------------------------------
-# policy <crate>  -> sets ALLOWED (internal deps) and BANNED (external deps)
+# policy <crate>  -> sets ALLOWED (internal deps), KIT (cw-kit deps) and
+# BANNED (external deps)
 policy() {
   case "$1" in
-    tmpl-cli-common)
-      # The foundation names no other crate of the workspace: no terminal,
-      # parser or log-subscriber crate, and no byte format (serde_json
-      # belongs to whoever persists or renders). tempfile and rustix serve
-      # its fs/ module only (module rules below).
-      ALLOWED=""
-      BANNED="clap tracing-subscriber serde_json anstream anstyle termcolor terminal_size crossterm owo-colors colored"
-      ;;
     tmpl-cli-store)
-      ALLOWED="tmpl-cli-common"
+      ALLOWED=""
+      # The one error type (cw-base) and file access for the data directory
+      # (cw-fs). The store is the only crate that names cw-fs.
+      KIT="cw-base cw-fs"
       # Persistence never parses arguments, draws on a terminal or installs a
       # log subscriber: those belong to surfaces. It reaches files only
-      # through the foundation's fs module, so it needs no file crate.
+      # through cw-fs, so it needs no file crate.
       BANNED="clap tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored tempfile rustix"
       ;;
     tmpl-cli-core)
-      ALLOWED="tmpl-cli-common tmpl-cli-store"
+      ALLOWED="tmpl-cli-store"
+      # The one error type only: the apps reach files through the store.
+      KIT="cw-base"
       # The apps reach files only through the store, so they need no file or
       # process crate either.
       BANNED="clap tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored tempfile rustix"
       ;;
     tmpl-cli)
       # The binary names only the core; the core re-exports the record shapes
-      # it renders and the one error type.
+      # it renders and the one error type (cw-base's, as tmpl_cli_core::Error).
       ALLOWED="tmpl-cli-core"
+      KIT=""
       BANNED=""
       ;;
     *) return 1 ;;
@@ -86,6 +88,8 @@ for manifest in crates/*/Cargo.toml; do
   while IFS= read -r dep; do
     if [[ "$dep" == "$PREFIX" || "$dep" == "$PREFIX"-* ]]; then
       contains "$dep" "$ALLOWED" || err "$crate must not depend on internal crate $dep"
+    elif [[ "$dep" == "$KIT_PREFIX"-* ]]; then
+      contains "$dep" "$KIT" || err "$crate must not depend on kit crate $dep (allowed: ${KIT:-none})"
     elif contains "$dep" "$BANNED"; then
       err "$crate must not depend on $dep (surface crate in the domain)"
     fi
@@ -185,55 +189,31 @@ ban_import() {
   fi
 }
 
-COMMON=crates/tmpl-cli-common/src
 STORE=crates/tmpl-cli-store/src
 CORE=crates/tmpl-cli-core/src
 CLI=crates/tmpl-cli/src
 
-# Foundation: the error type and file access. Only fs/ names a file, process
-# or clock; error/ is a shape and never imports fs/. fs/ is mechanism (R4):
-# the foundation names no other crate, so it cannot know a record. Nothing
-# here reads the environment (R3). It is grouped by subject, one folder each: no
-# file beside lib.rs, and no folder named for no responsibility.
-ban "$COMMON"        'std::env::|home_dir|current_dir'                     "the foundation reads no environment and discovers no path"
-ban_import "$COMMON" 'std' 'env'                                           "the foundation reads no environment and discovers no path"
-for path in "$COMMON"/*; do
-  name=$(basename "$path")
-  case "$name" in
-    lib.rs | fs) continue ;;
-    *.rs) err "common/src/$name: the foundation is grouped by subject; put it in a folder (error/, fs/)"; continue ;;
-    util | utils | helpers | misc | shared | types | models) err "common/src/$name: name the folder for what it owns"; continue ;;
-  esac
-  ban "$path" 'std::(fs|net|process)|tempfile::|rustix::|crate::fs\b'     "common/$name holds shapes; only fs/ touches a file"
-  ban_import "$path" 'std' 'fs|net|process'                                "common/$name holds shapes; only fs/ touches a file"
-  ban_import "$path" 'crate' 'fs'                                          "common/$name holds shapes; only fs/ touches a file"
-  ban "$path" 'fn check_|now_utc|SystemTime'                               "common/$name holds shapes only: no checks across records and no clock"
-done
-
 # Store: no code here names a file, process or network primitive; it reaches
-# the data directory through the foundation's fs module. db/ holds the file
+# the data directory through the kit's cw-fs. db/ holds the file
 # names and converts bytes; contracts are shapes that know nothing of how
 # they are stored and hold no rule (R4).
-ban "$STORE"         'std::(fs|net|process)|tempfile::|rustix::'           "the store reaches files through tmpl_cli_common::fs"
-ban_import "$STORE"  'std' 'fs|net|process'                                "the store reaches files through tmpl_cli_common::fs"
+ban "$STORE"         'std::(fs|net|process)|tempfile::|rustix::'           "the store reaches files through cw_fs"
+ban_import "$STORE"  'std' 'fs|net|process'                                "the store reaches files through cw_fs"
 for file in format audit; do
-  ban "$STORE/db/$file.rs" 'tmpl_cli_common::fs'                           "db/$file.rs converts bytes; it must not do I/O"
-  ban_import "$STORE/db/$file.rs" 'tmpl_cli_common' 'fs'                   "db/$file.rs converts bytes; it must not do I/O"
+  ban "$STORE/db/$file.rs" 'cw_fs::'                                       "db/$file.rs converts bytes; it must not do I/O"
 done
-ban "$STORE/contracts" 'crate::(db|repository|store|Store)|super::super::|tmpl_cli_common::fs' "contracts are record shapes; they must not import db, repository, the store or file access"
+ban "$STORE/contracts" 'crate::(db|repository|store|Store)|super::super::|cw_fs::' "contracts are record shapes; they must not import db, repository, the store or file access"
 ban_import "$STORE/contracts" 'crate' 'db|repository|store|Store'           "contracts are record shapes; they must not import db, repository or the store"
-ban_import "$STORE/contracts" 'tmpl_cli_common' 'fs'                        "contracts are record shapes; they must not import file access"
 ban "$STORE/contracts" 'fn check_|now_utc|SystemTime'                      "contracts hold shapes only: no checks across records and no clock"
-[[ -e "$STORE/db/fsio.rs" ]] && err "store/db/fsio.rs: file access lives in tmpl-cli-common/src/fs"
+[[ -e "$STORE/db/fsio.rs" ]] && err "store/db/fsio.rs: file access is the kit's cw-fs"
 # The store receives a resolved root (R3).
 ban "$STORE"         'std::env::|home_dir|current_dir'                     "the store crate must not read the environment or discover paths"
 ban_import "$STORE"  'std' 'env'                                           "the store crate must not read the environment or discover paths"
 
 # Core: apps, runtime and composition. Nothing in the core touches a file or
 # a process; it reaches the data directory through the store (R5).
-ban "$CORE"          'std::(fs|net|process)|tempfile::|rustix::|tmpl_cli_common::fs' "the core reaches files only through tmpl-cli-store"
+ban "$CORE"          'std::(fs|net|process)|tempfile::|rustix::|cw_fs\b'  "the core reaches files only through tmpl-cli-store"
 ban_import "$CORE"   'std' 'fs|net|process'                                "the core reaches files only through tmpl-cli-store"
-ban_import "$CORE"   'tmpl_cli_common' 'fs'                                "the core reaches files only through tmpl-cli-store"
 # Only composition reads the host: environment variables and paths (R3).
 for path in "$CORE"/*; do
   name=$(basename "$path")
@@ -264,7 +244,7 @@ done
 
 # Binary: argument declarations, the mapping to an app, rendering (R2). It
 # names only the core, and its handlers open no store and read no environment.
-ban "crates/tmpl-cli" 'tmpl_cli_(store|common)'                            "the binary names only tmpl-cli-core"
+ban "crates/tmpl-cli" 'tmpl_cli_store|cw_(base|fs)\b'                      "the binary names only tmpl-cli-core"
 ban "$CLI/commands"  'std::(env|fs)|Store\b|Runtime|Ctx\b'               "a command handler maps arguments to an app command; it reads no environment and opens no store"
 ban_import "$CLI/commands" 'std' 'env|fs'                                  "a command handler maps arguments to an app command; it reads no environment and opens no store"
 # Rendering is derived from payloads only; it never reaches back up (R1).

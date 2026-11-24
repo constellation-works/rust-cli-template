@@ -37,13 +37,13 @@ fn lock_timeout_audited_command_waits_one_deadline_and_records_one_failure_line(
 
     // Hold the store lock `.lock` for the duration of the command.
     let lock_path = dir.path().join(".lock");
-    let lock_file = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(&lock_path)
-        .unwrap();
+    // Owner-only, as the store creates it: cw-fs refuses a lock file open to
+    // any group or other permission bit before it waits.
+    let mut options = OpenOptions::new();
+    options.create(true).truncate(false).read(true).write(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    let lock_file = options.open(&lock_path).unwrap();
     lock_file.try_lock().unwrap();
 
     let deadline = Duration::from_millis(80);

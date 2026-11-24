@@ -11,18 +11,19 @@
 //! timed out on `.lock` still records its failure line within one deadline.
 //! New directories are created `0700` and new files `0600` (STD-05 R8), and
 //! every load refuses state that is a symbolic link, owned by another user,
-//! or writable by group or others (STD-05 R9).
+//! or open to any group or other permission bit (STD-05 R9). The mechanism
+//! is the kit's `cw_fs`; the store names the files and the codes.
 //!
 //! The store decides nothing about notes: which id comes next, which notes a
 //! listing returns and when a command is refused are the note app's rules.
 
 use crate::db::format::{self, StoreDocument};
-use crate::db::{AUDIT_LOCK_FILE, LOCK_FILE, STORE_FILE, audit};
+use crate::db::{AUDIT_LOCK_FILE, LOCK_FILE, STORE_CAP, STORE_FILE, audit};
 use crate::error::{Error, Result};
 use crate::repository::{Audit, Snapshot, Tx};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use tmpl_cli_common::fs::{self as fsio, LockGuard};
+use cw_fs::Lock;
 
 /// How long a writer waits for another writer before refusing (STD-03 R7).
 const DEFAULT_LOCK_WAIT: Duration = Duration::from_secs(10);
@@ -94,7 +95,7 @@ impl Store {
     where
         E: From<Error>,
     {
-        fsio::create_private_dir(&self.root).map_err(Error::from)?;
+        cw_fs::create_private_dir(&self.root).map_err(Error::from)?;
         let _lock = self.lock(label)?;
         // Re-read under the lock: anything read before it may be stale.
         let mut doc = self.load()?;
@@ -103,7 +104,7 @@ impl Store {
         }
         let value = apply(&mut Tx::new(&mut doc))?;
         let path = self.path();
-        fsio::write_atomic(&path, &format::encode(&doc)?).map_err(Error::from)?;
+        cw_fs::write_atomic(&path, &format::encode(&doc)?).map_err(Error::from)?;
         Ok(value)
     }
 
@@ -113,16 +114,16 @@ impl Store {
         Audit::new(self)
     }
 
-    pub(crate) fn lock(&self, label: &str) -> Result<LockGuard> {
-        Ok(LockGuard::acquire(
+    pub(crate) fn lock(&self, label: &str) -> Result<Lock> {
+        Ok(Lock::acquire(
             &self.root.join(LOCK_FILE),
             label,
             self.lock_wait,
         )?)
     }
 
-    pub(crate) fn audit_lock(&self, label: &str) -> Result<LockGuard> {
-        Ok(LockGuard::acquire(
+    pub(crate) fn audit_lock(&self, label: &str) -> Result<Lock> {
+        Ok(Lock::acquire(
             &self.root.join(AUDIT_LOCK_FILE),
             label,
             self.lock_wait,
@@ -131,10 +132,10 @@ impl Store {
 
     fn load(&self) -> Result<StoreDocument> {
         let path = self.path();
-        if !fsio::inspect_dir(&self.root)? || !fsio::inspect_file(&path)? {
+        if !cw_fs::inspect_dir(&self.root)? || !cw_fs::inspect_file(&path)? {
             return Ok(StoreDocument::empty());
         }
-        let bytes = fsio::read(&path)?;
+        let bytes = cw_fs::read(&path, STORE_CAP)?;
         format::decode(&path, &bytes)
     }
 }

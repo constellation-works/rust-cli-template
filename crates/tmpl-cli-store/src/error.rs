@@ -10,7 +10,7 @@
 use crate::contracts::{NoteError, NoteId};
 use std::fmt;
 use std::path::PathBuf;
-use tmpl_cli_common::{Kind, fs};
+use cw_base::Kind;
 
 /// Where a bad record sits in the store file: its note id when readable,
 /// otherwise its 1-based line number in the file.
@@ -78,9 +78,10 @@ pub struct BadRecord {
 #[non_exhaustive]
 pub enum Error {
     /// A file operation on the data directory failed, was refused, or timed
-    /// out on the lock.
+    /// out on the lock. The kit's error carries a kind and no code: the
+    /// store names the code ([`Error::code`]).
     #[error(transparent)]
-    Fs(#[from] fs::Error),
+    Fs(#[from] cw_fs::Error),
     /// Serializing a store document or audit event failed before any file was touched.
     #[error("cannot encode {what}")]
     Encode {
@@ -132,12 +133,15 @@ impl Error {
     #[must_use]
     pub fn code(&self) -> &'static str {
         match self {
-            // The file mechanism's failures get the store's codes here.
-            Self::Fs(fs::Error::Io { .. }) => "io_error",
-            Self::Fs(fs::Error::Locked { .. }) => "store_locked",
-            Self::Fs(fs::Error::Symlink { .. }) => "store_symlink",
-            Self::Fs(fs::Error::ForeignOwner { .. }) => "store_foreign_owner",
-            Self::Fs(fs::Error::Permissions { .. }) => "store_permissions",
+            // The kit's file failures get the store's codes here.
+            Self::Fs(cw_fs::Error::Io { .. }) => "io_error",
+            Self::Fs(cw_fs::Error::Locked { .. }) => "store_locked",
+            Self::Fs(cw_fs::Error::Symlink { .. }) => "store_symlink",
+            Self::Fs(cw_fs::Error::ForeignOwner { .. }) => "store_foreign_owner",
+            Self::Fs(cw_fs::Error::Permissions { .. }) => "store_permissions",
+            Self::Fs(cw_fs::Error::NotRegular { .. }) => "store_not_regular",
+            Self::Fs(cw_fs::Error::TooLarge { .. }) => "store_too_large",
+            Self::Fs(cw_fs::Error::Reentrant { .. }) => "store_lock_reentrant",
             Self::Encode { .. } => "encode_error",
             Self::Corrupt { .. } => "store_corrupt",
             Self::BadRecord(_) => "store_bad_record",
@@ -159,8 +163,9 @@ impl Error {
     }
 }
 
-/// The store's one translator into the workspace's error type (STD-02 R12).
-impl From<Error> for tmpl_cli_common::Error {
+/// The store's one translator into the workspace's error type, the kit's
+/// `cw_base::Error` (STD-02 R12).
+impl From<Error> for cw_base::Error {
     fn from(err: Error) -> Self {
         Self::new(err.kind(), err.code(), err)
     }

@@ -16,7 +16,7 @@ use std::path::Path;
 use std::sync::Arc;
 use time::OffsetDateTime;
 use time::macros::datetime;
-use tmpl_cli_common::fs::Error as FsError;
+use cw_fs::Error as FsError;
 use tmpl_cli_core::apps::note::{Command, Error, ListFilter, NewNote, NoteList, Outcome};
 use tmpl_cli_core::contracts::{Note, NoteId, Priority, Tag};
 use tmpl_cli_core::test_support::{Ctx, note_run};
@@ -97,13 +97,20 @@ fn a_lock_timeout_omits_an_oversized_holder_record() {
     let lock = std::fs::File::create(&path).unwrap();
     let record = format!("pid {} ({})", std::process::id(), "x".repeat(4096));
     std::fs::write(&path, record).unwrap();
+    // Owner-only, as the store creates it: cw-fs refuses a lock file open
+    // to any group or other permission bit before it waits.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
     lock.try_lock().unwrap();
     let store = Store::open(dir.path()).with_lock_wait(std::time::Duration::ZERO);
     let err = store
         .add(new_note("waiting", &[], Priority::Normal), NOW)
         .unwrap_err();
     assert!(
-        matches!(store_error(&err), Some(StoreError::Fs(FsError::Locked { holder, .. })) if holder == "an unknown process")
+        matches!(store_error(&err), Some(StoreError::Fs(FsError::Locked { holder, .. })) if holder.is_none())
     );
 }
 

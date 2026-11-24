@@ -9,8 +9,8 @@
 //! - the crate's typed [`Error`], and its one translator into the
 //!   workspace's error type.
 //!
-//! It reaches the data directory only through `tmpl_cli_common::fs`: no code
-//! in this crate names `std::fs`.
+//! It reaches the data directory only through the kit's `cw_fs`: no code in
+//! this crate names `std::fs`.
 //!
 //! The store holds no rule of any app: no next-id rule, no list selection,
 //! no validation beyond what a contract type enforces on itself. It never

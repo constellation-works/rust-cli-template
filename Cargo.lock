@@ -69,6 +69,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 
 [[package]]
+name = "cw-base"
+version = "0.1.0"
+source = "git+https://github.com/constellation-works/satellites?rev=b8b6809c15cafeeece299f4f2aa2a974a7491adb#b8b6809c15cafeeece299f4f2aa2a974a7491adb"
+dependencies = [
+ "thiserror",
+ "time",
+]
+
+[[package]]
+name = "cw-fs"
+version = "0.1.0"
+source = "git+https://github.com/constellation-works/satellites?rev=b8b6809c15cafeeece299f4f2aa2a974a7491adb#b8b6809c15cafeeece299f4f2aa2a974a7491adb"
+dependencies = [
+ "cw-base",
+ "rustix",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "deranged"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -394,25 +414,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "tmpl-cli-common"
-version = "0.1.0"
-dependencies = [
- "rustix",
- "tempfile",
- "thiserror",
- "time",
- "tracing",
-]
-
-[[package]]
 name = "tmpl-cli-core"
 version = "0.1.0"
 dependencies = [
+ "cw-base",
+ "cw-fs",
  "serde_json",
  "tempfile",
  "thiserror",
  "time",
- "tmpl-cli-common",
  "tmpl-cli-core",
  "tmpl-cli-store",
  "tracing",
@@ -422,12 +432,13 @@ dependencies = [
 name = "tmpl-cli-store"
 version = "0.1.0"
 dependencies = [
+ "cw-base",
+ "cw-fs",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror",
  "time",
- "tmpl-cli-common",
  "tracing",
 ]
 
