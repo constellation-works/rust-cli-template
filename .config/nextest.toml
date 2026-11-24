@@ -17,9 +17,9 @@ leak-timeout = { period = "500ms", result = "fail" }
 # A test that asserts wall-clock time measures the machine as well as the
 # code, so it runs alone: sharing the runner with the process-spawning tests
 # pushes a lock-deadline measurement past its bound. Its assertion is not
-# loosened instead.
+# loosened instead. Both tests below bound "one lock deadline, not two".
 [[profile.default.overrides]]
-filter = "test(/lock_timeout_audited_command_waits_one_deadline/)"
+filter = "test(/lock_timeout_audited_command_waits_one_deadline/) | test(/record_audit_succeeds_while_the_store_lock_is_held/)"
 threads-required = "num-cpus"
 
 # No test mutates process-global state (environment, current directory): the
