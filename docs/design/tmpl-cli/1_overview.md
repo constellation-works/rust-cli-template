@@ -51,21 +51,20 @@ there.
   written in one transaction, its schema an append-only list of steps.
 - **Payload** — the typed record every output mode renders from; its JSON
   form is the machine contract.
-- **Sink** — the per-invocation answer to "who reads stdout": output mode,
-  color, width. Resolved once, in one module.
+- **Sink** — the kit's (`cw_cli::Sink`) path to stdout and stderr, rendering
+  as the one terminal decision (output mode, color, width) said.
 
 ## 3. At a Glance
 
 | Concern | File |
 |---------|------|
-| Grouped root help | [crates/tmpl-cli/src/help.rs](../../../crates/tmpl-cli/src/help.rs) |
-| Root command, global flags, parsing | [crates/tmpl-cli/src/cli.rs](../../../crates/tmpl-cli/src/cli.rs) |
+| Root command, global flags, parsing, root help groups | [crates/tmpl-cli/src/cli.rs](../../../crates/tmpl-cli/src/cli.rs) |
 | Environment capture (the one read of the process) | [crates/tmpl-cli/src/main.rs](../../../crates/tmpl-cli/src/main.rs) |
 | The runtime: data directory, store, clock, audit log | [crates/tmpl-cli-core/src/composition.rs](../../../crates/tmpl-cli-core/src/composition.rs) |
 | Noun dispatch | [crates/tmpl-cli/src/command/mod.rs](../../../crates/tmpl-cli/src/command/mod.rs) |
 | `note` subcommands, flags, help, mapping to the app, empty-result notice | [crates/tmpl-cli/src/command/note.rs](../../../crates/tmpl-cli/src/command/note.rs) |
-| Output mode, color, width resolution | [crates/tmpl-cli/src/output/sink.rs](../../../crates/tmpl-cli/src/output/sink.rs) |
-| Rendering, error reporting, closed pipe | [crates/tmpl-cli/src/output/](../../../crates/tmpl-cli/src/output/) |
+| One terminal decision, logging, dispatch | [crates/tmpl-cli/src/lib.rs](../../../crates/tmpl-cli/src/lib.rs) |
+| Payloads, each command's view, error and usage reporting through the kit | [crates/tmpl-cli/src/output/](../../../crates/tmpl-cli/src/output/) |
 | The `note` app: `exec`, its `cw_app::App` impl, audited-command table, flows | [crates/tmpl-cli-core/src/app/note/](../../../crates/tmpl-cli-core/src/app/note/) |
 | Next-id rule, list selection (filter, count, limit) | [crates/tmpl-cli-core/src/app/note/rule.rs](../../../crates/tmpl-cli-core/src/app/note/rule.rs) |
 | The chokepoint, `Env`, the audit log and its line format | `cw-app` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/9c9cc998720f0a75041be3451c14fbaf80f29dc8/crates/cw-app) |

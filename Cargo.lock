@@ -101,6 +101,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "cw-cli"
+version = "0.1.0"
+source = "git+https://github.com/constellation-works/satellites?rev=9c9cc998720f0a75041be3451c14fbaf80f29dc8#9c9cc998720f0a75041be3451c14fbaf80f29dc8"
+dependencies = [
+ "clap",
+ "cw-app",
+ "cw-base",
+ "rustix",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tracing",
+ "tracing-subscriber",
+ "unicode-width",
+]
+
+[[package]]
 name = "cw-fs"
 version = "0.1.0"
 source = "git+https://github.com/constellation-works/satellites?rev=9c9cc998720f0a75041be3451c14fbaf80f29dc8#9c9cc998720f0a75041be3451c14fbaf80f29dc8"
@@ -534,6 +551,7 @@ name = "tmpl-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "cw-cli",
  "cw-testkit",
  "serde",
  "serde_json",
@@ -542,7 +560,6 @@ dependencies = [
  "time",
  "tmpl-cli-core",
  "tmpl-cli-store",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -625,6 +642,12 @@ name = "unicode-ident"
 version = "1.0.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d245f478577f809a851594d02313b640fb437e0bb33866753cff937863096954"
+
+[[package]]
+name = "unicode-width"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca718471876992059f251e33aafc334346ada08042b7661dd1fe313a9bced557"
 
 [[package]]
 name = "vcpkg"

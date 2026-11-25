@@ -1,7 +1,7 @@
 ---
 title: tmpl-cli — Vision
 owner: claude
-last_updated: 2026-09-26
+last_updated: 2026-11-25
 last_validated: 2026-09-26
 status: Draft
 feature: tmpl-cli
@@ -35,7 +35,7 @@ not build yet.
 ### Constellation CLIs
 
 - Orbit's `orbit-cli` output layer (sink, payload, table, color) is the
-  full-size version of `output/` here.
+  full-size version of what the kit's `cw-cli` now gives `output/` here.
 - nebula's `neb` uses the same core-library-plus-CLI split and the same
   advisory-lock pattern.
 

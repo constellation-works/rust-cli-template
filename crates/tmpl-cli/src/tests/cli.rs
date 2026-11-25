@@ -1,7 +1,8 @@
-use crate::cli::{Cli, every_command};
+use crate::cli::{Cli, every_command, raw_requested_format};
 use crate::command::Command;
-use crate::output::FormatArg;
 use clap::{CommandFactory, Parser};
+use cw_cli::Format;
+use cw_cli::help::{SUMMARY_LIMIT, check_summaries};
 use std::ffi::OsString;
 
 #[test]
@@ -18,7 +19,7 @@ fn global_flags_parse_before_and_after_the_subcommand() {
     let after =
         Cli::try_parse_from(["tmpl-cli", "status", "--format", "json", "--root", "/r"]).unwrap();
     for cli in [before, after] {
-        assert_eq!(cli.global.requested_format(), Some(FormatArg::Json));
+        assert_eq!(cli.global.requested_format(), Some(Format::Json));
         assert_eq!(cli.global.root.as_deref(), Some(std::path::Path::new("/r")));
         assert!(matches!(cli.command, Command::Status(_)));
     }
@@ -27,7 +28,7 @@ fn global_flags_parse_before_and_after_the_subcommand() {
 #[test]
 fn json_is_shorthand_for_format_json_and_conflicts_with_format() {
     let cli = Cli::try_parse_from(["tmpl-cli", "status", "--json"]).unwrap();
-    assert_eq!(cli.global.requested_format(), Some(FormatArg::Json));
+    assert_eq!(cli.global.requested_format(), Some(Format::Json));
     for conflicting in [
         &["tmpl-cli", "--json", "status", "--format", "table"][..],
         &["tmpl-cli", "status", "--json", "--format", "auto"][..],
@@ -151,4 +152,38 @@ fn no_subcommand_argument_shares_an_id_with_a_global_one() {
             );
         }
     }
+}
+
+#[test]
+fn every_command_summary_is_one_short_line() {
+    // STD-01 R22: the grouped root help keeps one line per command.
+    let (_, root) = every_command().remove(0);
+    check_summaries(&root, SUMMARY_LIMIT).unwrap();
+}
+
+#[test]
+fn a_command_line_that_does_not_parse_still_names_its_format() {
+    // STD-01 R19: the usage error is reported in the format asked for.
+    let requested = |args: &[&str]| {
+        let args: Vec<OsString> = args.iter().map(OsString::from).collect();
+        raw_requested_format(&args)
+    };
+    assert_eq!(
+        requested(&["tmpl-cli", "bogus", "--json"]),
+        Some(Format::Json)
+    );
+    assert_eq!(
+        requested(&["tmpl-cli", "--format=json", "x"]),
+        Some(Format::Json)
+    );
+    assert_eq!(
+        requested(&["tmpl-cli", "--format", "json", "--format", "table"]),
+        Some(Format::Table)
+    );
+    assert_eq!(
+        requested(&["tmpl-cli", "--format", "nonsense"]),
+        Some(Format::Auto)
+    );
+    assert_eq!(requested(&["tmpl-cli", "x", "--", "--json"]), None);
+    assert_eq!(requested(&["tmpl-cli", "x"]), None);
 }

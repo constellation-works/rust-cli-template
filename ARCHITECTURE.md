@@ -10,13 +10,14 @@ formatting exists (`scripts/check-architecture-map.sh`, STD-02 R43).
 
 ```
 tmpl-cli  ->  tmpl-cli-core  ->  tmpl-cli-store
-                |   |              |   |    |
-                |   +--> cw-base <-+   |    +--> cw-fs -> cw-base
-                |                      +--> cw-sqlite -> cw-fs, cw-base
-                +--> cw-app -> cw-fs, cw-base
+   |            |   |              |   |    |
+   |            |   +--> cw-base <-+   |    +--> cw-fs -> cw-base
+   |            |                      +--> cw-sqlite -> cw-fs, cw-base
+   |            +--> cw-app -> cw-fs, cw-base
+   +--> cw-cli -> cw-app, cw-base
 ```
 
-`cw-base`, `cw-fs`, `cw-sqlite` and `cw-app` are the cw-kit, with `cw-testkit` (test isolation, a
+`cw-base`, `cw-fs`, `cw-sqlite`, `cw-app` and `cw-cli` are the cw-kit, with `cw-testkit` (test isolation, a
 dev-dependency only), all from
 [constellation-works/satellites](https://github.com/constellation-works/satellites),
 a git dependency pinned in the root `Cargo.toml` to commit
@@ -25,9 +26,9 @@ pin is a change of its own). Every kit crate is pinned to that one rev.
 
 | Crate | Kind | Owns | Internal and kit dependencies | Banned |
 |-------|------|------|-------------------------------|--------|
-| `tmpl-cli` | binary `tmpl-cli` | `main` (the one read of the process: `Env::capture()` and the arguments), argument declarations, the mapping from arguments to an app's `Command`, rendering, settling the audit record and printing its warning, exit codes. The only stdout, stderr and terminal access. | `tmpl-cli-core`; `cw-testkit` and `tmpl-cli-store` (its `test-support`) as dev-dependencies only | `tmpl-cli-store` as a normal dependency, every kit crate, `rusqlite` |
-| `tmpl-cli-core` | library | The apps, each a `cw_app::App`, and composition (the runtime every command runs against). | `tmpl-cli-store`, `cw-base`, `cw-app`; `cw-testkit` and the store's `test-support` as dev-dependencies only | `cw-fs`, `cw-sqlite`, `rusqlite`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
-| `tmpl-cli-store` | library | The data directory: the database's driver, one repository per record, the record shapes (`contract`), and the store's stable code for each of the kit's errors. No audit code or file: the audit log is `cw-app`'s. It names no file primitive and no SQLite crate of its own: it reaches the directory through `cw-fs` and the database through `cw-sqlite`, and names `rusqlite` only through its re-export. | `cw-base`, `cw-fs`, `cw-sqlite`; `cw-testkit` as a dev-dependency only | `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix`, `rusqlite` as a dependency of its own |
+| `tmpl-cli` | binary `tmpl-cli` | `main` (the one read of the process: `Env::capture()` and the arguments), argument declarations, the mapping from arguments to an app's `Command`, each command's human view, settling the audit record and printing its warning, the remedy for each error. The only stdout, stderr and terminal access, all of it through `cw-cli`: the terminal decision, the sink, error rendering with the exit code, logging and grouped root help are the kit's. | `tmpl-cli-core`, `cw-cli`; `cw-testkit` and `tmpl-cli-store` (its `test-support`) as dev-dependencies only | `tmpl-cli-store` as a normal dependency, every other kit crate, `rusqlite`, `tracing-subscriber`, any terminal crate, `rustix` |
+| `tmpl-cli-core` | library | The apps, each a `cw_app::App`, and composition (the runtime every command runs against). | `tmpl-cli-store`, `cw-base`, `cw-app`; `cw-testkit` and the store's `test-support` as dev-dependencies only | `cw-fs`, `cw-sqlite`, `cw-cli`, `rusqlite`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
+| `tmpl-cli-store` | library | The data directory: the database's driver, one repository per record, the record shapes (`contract`), and the store's stable code for each of the kit's errors. No audit code or file: the audit log is `cw-app`'s. It names no file primitive and no SQLite crate of its own: it reaches the directory through `cw-fs` and the database through `cw-sqlite`, and names `rusqlite` only through its re-export. | `cw-base`, `cw-fs`, `cw-sqlite`; `cw-testkit` as a dev-dependency only | `cw-cli`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix`, `rusqlite` as a dependency of its own |
 
 `scripts/check-dependency-direction.sh` reads these edges from Cargo's own
 package graph (`cargo metadata --no-deps --locked`), so a quoted or renamed
@@ -39,8 +40,9 @@ root, the isolated child and the goldens of their tests; no non-test source
 names `cw_testkit`). The binary's and the core's tests also take
 `tmpl-cli-store` with its `test-support` feature, which runs raw SQL on the
 database, so a test can set up a store the public API never writes
-while no crate outside the store names `rusqlite`. The binary names only
-`tmpl-cli-core`. The core re-exports the store's record shapes as
+while no crate outside the store names `rusqlite`. The binary names
+`tmpl-cli-core` and, for its command line, `cw-cli`, which no other crate
+names. The core re-exports the store's record shapes as
 `tmpl_cli_core::contract` and the kit's error type as
 `tmpl_cli_core::Error` and `tmpl_cli_core::Kind`, and what a surface needs
 of `cw-app` (`Env`, `EnvVar`, `Origin`, `Surface`, `Finished`,
@@ -57,12 +59,18 @@ Why the crates are laid out by app, and why the foundation is the kit:
 
 ```
 main.rs              Env::capture() and the arguments, once; run
-lib.rs               parse, resolve the output sink, start the runtime, dispatch, print an audit warning
-cli.rs               the root command and the global flags
+lib.rs               probe the streams, parse, open the kit's sink, start logging and the runtime, dispatch, print an audit warning
+cli.rs               the root command, the global flags, the root help's groups (rendered by cw_cli::help::grouped)
 command/<noun>.rs    arguments -> app::<app>::Command; exec; Outcome -> payload; render, then settle
-output/              payloads, rendering, the sink, logging; env.rs declares the CLI's own variables
-error.rs             the exit code and the remedy for an error; the output failure
-help.rs              grouped root help
+output/              payloads and each command's human view, written through the kit's sink
+  mod.rs             finish: emit or report through cw_cli::Sink; usage errors, help and version
+  payload.rs         the payloads every mode renders
+  status.rs          the status table
+<!-- example:begin -->
+  note.rs            the note payloads, the list table, the detail text, the priority's colour role
+<!-- example:end -->
+  env.rs             the variables the kit reads but does not declare yet, for the usage table
+error.rs             the remedy for an error; the surface's own failures (output, usage)
 ```
 
 A command handler maps the parsed arguments to the app's `Command`, calls
@@ -71,9 +79,15 @@ the `Outcome` into an output payload, has it rendered, and then settles the
 audit record, handing back any `AuditWarning`. It opens no store, resolves
 no path, reads no environment variable and decides nothing about a record.
 `main` captures the environment once with the kit's `Env::capture()`, the
-only read of the process environment; `output/` alone interprets the
-presentation variables from it (`TMPL_CLI_FORMAT`, `TMPL_CLI_LOG`,
-`NO_COLOR`, `CLICOLOR_FORCE`, `TERM`, `COLUMNS`).
+only read of the process environment. The presentation variables
+(`TMPL_CLI_FORMAT`, `TMPL_CLI_LOG`, `NO_COLOR`, `CLICOLOR_FORCE`, `TERM`,
+`COLUMNS`) are interpreted by `cw-cli` alone: `lib.rs` probes the streams
+once and the kit's `Terminal::decide` makes the one decision about colour,
+width and mode from that probe and the captured `Env`. The template keeps no
+terminal detection, colour decision, sink, table layout or logging setup of
+its own. Errors reach stderr and the exit code only through the kit's
+`Sink::report`, which returns the `Exit` the error's kind calls for; the
+template supplies only the remedy (`error.rs`).
 
 ## `tmpl-cli-core`
 
@@ -287,7 +301,8 @@ By grep:
   the runtime, never builds it. `output/` imports no `cli` or
   `command`.
 - Only `tmpl-cli/src/output/` touches stdout, stderr, `IsTerminal` or the
-  color/format variables (`scripts/check-terminal-guard.sh`).
+  color/format variables (`scripts/check-terminal-guard.sh`), and it does
+  so only through `cw-cli`.
 - Every crate: module, source directory and source file names are singular
   (`scripts/check-singular-names.sh`, STD-12 R1), and the source style that
   stable rustfmt cannot check holds (`scripts/check-source-style.sh`, STD-12

@@ -79,13 +79,17 @@ policy() {
     tmpl-cli)
       # The binary names only the core; the core re-exports the record shapes
       # it renders, the one error type (cw-base's, as tmpl_cli_core::Error)
-      # and what a surface needs of cw-app (Env, Origin, the runtime).
+      # and what a surface needs of cw-app (Env, Origin, the runtime). The
+      # command line's mechanism is cw-cli's: the terminal decision, the
+      # sink, error rendering, logging and grouped help. No other crate
+      # names cw-cli (it is in no other KIT list).
       ALLOWED="tmpl-cli-core"
-      KIT=""
+      KIT="cw-cli"
       # Test isolation: the temp root, the isolated child and goldens.
       KIT_DEV="cw-testkit"
-      # SQLite belongs to the store alone.
-      BANNED="rusqlite libsqlite3-sys"
+      # SQLite belongs to the store alone. Terminal state, colour and the log
+      # subscriber are cw-cli's, so the CLI names none of their crates.
+      BANNED="rusqlite libsqlite3-sys tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored rustix"
       ;;
     # crates:end
     *) return 1 ;;

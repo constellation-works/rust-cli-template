@@ -172,19 +172,23 @@ fn the_format_environment_variable_applies_and_a_bad_value_falls_back() {
 }
 
 #[test]
-fn a_missing_note_fails_with_exit_one_and_an_error_line_on_stderr() {
+fn a_missing_note_fails_with_exit_one_an_error_line_and_a_hint_on_stderr() {
     // STD-01 R19, R20, R21.
     let fx = Fixture::new();
     let out = fx.run(&["note", "show", "7"]);
     assert_eq!(out.status.code(), Some(1));
     assert!(out.stdout.is_empty());
     let stderr = text(&out.stderr);
-    assert_eq!(stderr.lines().count(), 1);
+    let lines: Vec<&str> = stderr.lines().collect();
+    assert_eq!(lines.len(), 2, "got {stderr:?}");
     assert!(
-        stderr.starts_with("error: no note with id 7"),
+        lines[0].starts_with("error: no note with id 7"),
         "got {stderr:?}"
     );
-    assert!(stderr.contains("note list"), "says how to find ids");
+    assert!(
+        lines[1].starts_with("hint: ") && lines[1].contains("note list"),
+        "says how to find ids: {stderr:?}"
+    );
 }
 
 #[test]
@@ -196,6 +200,7 @@ fn in_json_mode_an_error_is_one_json_object_on_stderr() {
     let err: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
     assert_eq!(err["code"], "note_not_found");
     assert!(err["error"].as_str().unwrap().contains("7"));
+    assert!(err["hint"].as_str().unwrap().contains("note list"));
 }
 
 #[test]

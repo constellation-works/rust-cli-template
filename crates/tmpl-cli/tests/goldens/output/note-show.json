@@ -1,8 +1,1 @@
-{
-  "id": 3,
-  "title": "Read later",
-  "body": "An article\nwith two lines",
-  "tags": [],
-  "priority": "low",
-  "created_at": "<timestamp>"
-}
+{"id":3,"title":"Read later","body":"An article\nwith two lines","tags":[],"priority":"low","created_at":"<timestamp>"}

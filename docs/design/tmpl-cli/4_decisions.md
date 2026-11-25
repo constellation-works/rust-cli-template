@@ -7,7 +7,7 @@ status: Draft
 feature: tmpl-cli
 doc_role: decisions
 type: design
-summary: Why three crates laid out by app over the cw-kit (binary, core with apps and composition, store with a driver, repositories and a contract module; the one error type, file access, the SQLite notes database and the command path from the kit's cw-base, cw-fs, cw-sqlite and cw-app), why commands are one module per noun, why mutating commands are audited through one chokepoint and why that chokepoint, the captured environment and the audit log are the kit's, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, why the notes live in SQLite and how its schema evolves, how the store stays private, and every recorded standard deviation or rule the template does not exercise.
+summary: Why three crates laid out by app over the cw-kit (binary, core with apps and composition, store with a driver, repositories and a contract module; the one error type, file access, the SQLite notes database, the command path and the command line's mechanism from the kit's cw-base, cw-fs, cw-sqlite, cw-app and cw-cli), why commands are one module per noun, why mutating commands are audited through one chokepoint and why that chokepoint, the captured environment and the audit log are the kit's, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, why the notes live in SQLite and how its schema evolves, how the store stays private, and every recorded standard deviation or rule the template does not exercise.
 tags: [tmpl-cli, decisions]
 paths: ["Cargo.toml", "crates/**", "Makefile"]
 related_features: [tmpl-cli]
@@ -197,7 +197,7 @@ checked after parsing in `Cli::parse_args` and reported as a clap usage error
 **Superseded** by [A list's JSON is an envelope with total and truncated](#a-lists-json-is-an-envelope-with-total-and-truncated).
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli/src/output/render.rs::note_list`
+**Code anchors:** `crates/tmpl-cli/src/output/note.rs::list_table`
 
 ### Context
 
@@ -266,12 +266,13 @@ goldens depend on where they were captured.
 
 clap is built with `default-features = false` and without `color` or
 `wrap_help`. Help and usage errors are plain text everywhere; styling, if it
-is ever wanted, is applied from the sink's decision.
+is ever wanted, is applied from the kit's terminal decision.
 
 ### Consequences
 
-- Piped help is byte-stable for the goldens. The output sink supplies a
-  terminal width for wrapping root command summaries.
+- Piped help is byte-stable for the goldens. The kit's terminal decision
+  supplies a terminal width for wrapping root command summaries
+  (`cw_cli::help::grouped`).
 - Cost: help is plain text and flag descriptions keep clap's unwrapped layout.
 
 ## Usage errors keep clap's rendering
@@ -291,7 +292,10 @@ R21 asks for.
 Deviation from STD-01@1 §R19 for usage errors only: in human mode they keep
 clap's multi-line rendering (first line `error: …`, exit 2). In JSON mode they
 are one `{"error","code":"usage_error"}` object like every other error.
-Command failures follow R19 exactly.
+Command failures follow R19 exactly. Since the command line moved onto
+`cw-cli`, the first line is written by the kit's `Sink::report` (escaped,
+with the kit's exit code for a usage error) and clap's tip and usage lines
+follow it unchanged as a notice, so the bytes are the same.
 
 ### Consequences
 
@@ -575,7 +579,7 @@ Cargo.lock freshness (`--locked` on every cargo build).
 ## Environment settings fall back rather than refuse
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli/src/output/sink.rs::resolve_mode`; `crates/tmpl-cli/src/output/mod.rs::init_logging`
+**Code anchors:** the kit's `cw_cli::Terminal::decide` and `cw_cli::Logging::from_env`; `crates/tmpl-cli/src/lib.rs::run`
 
 ### Context
 
@@ -734,7 +738,7 @@ the crate this decision made is deleted, and its two folders are the kit's
 replaced the deleted files.
 
 **Recorded:** 2026-11-24
-**Code anchors:** the kit's `cw_base::Error`, `cw_base::Kind` and `cw_fs::Error`; `crates/tmpl-cli-store/src/error.rs` (`impl From<Error> for cw_base::Error`); `crates/tmpl-cli-core/src/app/note/mod.rs::Error`; `crates/tmpl-cli/src/error.rs::exit_code`; `scripts/check-dependency-direction.sh::policy`
+**Code anchors:** the kit's `cw_base::Error`, `cw_base::Kind` and `cw_fs::Error`; `crates/tmpl-cli-store/src/error.rs` (`impl From<Error> for cw_base::Error`); `crates/tmpl-cli-core/src/app/note/mod.rs::Error`; the kit's `cw_cli::exit_code`; `scripts/check-dependency-direction.sh::policy`
 
 ### Context
 
@@ -833,7 +837,7 @@ the store cannot depend on the core, so it has to sit below both.
 ## The foundation is the cw-kit
 
 **Recorded:** 2026-11-24
-**Code anchors:** `Cargo.toml` `[workspace.dependencies]` `cw-base`, `cw-fs`, `cw-testkit`; `crates/tmpl-cli/tests/support/mod.rs::Fixture`; `crates/tmpl-cli/tests/golden.rs::goldens`; `deny.toml` `[sources] allow-git`; `crates/tmpl-cli-store/src/error.rs::Error::code`; `crates/tmpl-cli-store/src/db/mod.rs::STORE_CAP`; `crates/tmpl-cli/src/error.rs::exit_code`; `scripts/check-dependency-direction.sh::policy`
+**Code anchors:** `Cargo.toml` `[workspace.dependencies]` `cw-base`, `cw-fs`, `cw-testkit`; `crates/tmpl-cli/tests/support/mod.rs::Fixture`; `crates/tmpl-cli/tests/golden.rs::goldens`; `deny.toml` `[sources] allow-git`; `crates/tmpl-cli-store/src/error.rs::Error::code`; `crates/tmpl-cli-store/src/db/mod.rs::STORE_CAP`; the kit's `cw_cli::exit_code`; `scripts/check-dependency-direction.sh::policy`
 
 ### Context
 
@@ -1091,8 +1095,8 @@ re-vendors. Each line names the rule and what is unmet.
   process boundaries".)
 - **STD-02@8 §R7**: the binary crate reads the environment: its `main`
   captures it once with the kit's `Env::capture()`, as the kit asks, and
-  `tmpl-cli/src/output/` interprets the presentation variables and the log
-  filter from that captured value.
+  `cw-cli` interprets the presentation variables and the log filter from
+  that captured value.
 - **STD-06@2 §R4**: the numbered design docs and the doc templates in
   `docs/design/_templates/` carry `last_updated`, not `created_date` and
   `updated_date`.
@@ -1223,3 +1227,53 @@ boundaries on Clippy, which resolves every call to its path.
   longer refused in the store or the core; none of them reaches a file, the
   environment or a process on its own.
 
+## The command line's mechanism is the kit's cw-cli
+
+**Recorded:** 2026-11-25
+**Code anchors:** `crates/tmpl-cli/src/lib.rs::run`; `crates/tmpl-cli/src/output/mod.rs::finish`, `finish_parse_error`; `crates/tmpl-cli/src/cli.rs::GROUPS`; `crates/tmpl-cli/src/error.rs::hint`; `scripts/check-dependency-direction.sh::policy`
+
+### Context
+
+The binary's `output/` held a terminal detection, a colour decision, a sink,
+a table layout and logging setup of its own, `error.rs` mapped each error
+kind to an exit code, and `help.rs` grouped the root help. Every
+constellation CLI repeats this mechanism, and the cw-kit moves it into
+`cw-cli` (satellites), whose README is its contract.
+
+### Decision
+
+The binary takes `cw-cli` at the workspace's one satellites rev; no other
+crate names it.
+
+- `run` probes the streams once (`Probe::detect`), and the kit's
+  `Terminal::decide` makes the one decision about mode, colour and width
+  from the probe and the captured `Env`, before parsing (for the help width)
+  and after (with the format asked for). `--format` takes `cw_cli::Format`.
+- Every byte goes through `cw_cli::Sink`: warnings with `warn`, the notice
+  with `notice`, the payload with `emit` (a command's `Table`) or
+  `emit_text` (the note detail view), then `finish`. A piped `note show`
+  stays the list's one tab-separated line.
+- Errors reach stderr and the exit code only through `Sink::report`, which
+  returns the kit's `Exit`; the template supplies the remedy (`hint`) and
+  wraps the kit's output error with its own code. A usage error is reported
+  the same way, with clap's tip and usage lines after it as text.
+- Logging is `Logging::from_env(env, APP).init()`; root help is
+  `cw_cli::help::grouped`, and a unit test runs `help::check_summaries`.
+- `output/` keeps the payloads, each command's view and the priority's
+  colour role. `output/env.rs` still declares `CLICOLOR_FORCE` and
+  `COLUMNS`, which the kit reads but `cw_app` does not declare yet, so the
+  usage table keeps listing them; it goes when the kit declares them.
+
+### Consequences
+
+- What changed for a reader: a command failure's fix is on its own `hint:`
+  line instead of after `; ` on the `error:` line; a JSON error carries
+  `hint` (`null` when there is none); JSON output is one compact line, not
+  pretty-printed; table widths follow the terminal's own size when `COLUMNS`
+  is unset; and stderr text is escaped by the kit.
+- Gaps recorded against the kit rather than re-created here: `Sink::warn`
+  and `Sink::notice` keep line feeds and tabs raw, so record text in a
+  warning can still break a stderr line; the note detail view cannot colour
+  its priority, since `emit_text` escapes the whole text; and the two
+  variables above are undeclared in the kit.
+- Cost: the surface's bytes change only by moving the satellites pin.
