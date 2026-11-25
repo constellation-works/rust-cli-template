@@ -26,7 +26,7 @@ and the gates. The output and store contracts are specified in
 Three crates laid out by app over the cw-kit (why:
 [4_decisions.md](./4_decisions.md#the-template-is-laid-out-by-app-in-three-crates),
 [the kit](./4_decisions.md#the-foundation-is-the-cw-kit)).
-`tmpl-cli` is the surface: `cli` (the root flags), `commands` (one module
+`tmpl-cli` is the surface: `cli` (the root flags), `command` (one module
 per noun, holding its subcommands, flags and help, and mapping its arguments
 to an app's `Command` and the `Outcome` to a payload) and `output`.
 `tmpl-cli-core` holds the apps (`app/note/`: `Command`, `Outcome`, `Error`,
@@ -39,7 +39,7 @@ the data directory: the `Store` facade (one read, one write transaction)
 over `driver/sqlite/` (the notes database's file and lock wait, and in
 `schema/` one module per table and the one ordered step list, handed out as
 a `cw_sqlite::Db`; no query), one repository per record
-(`notes`: the notes' SQL and row mapping; `audit`), `db/audit.rs` (the
+(`note`: the notes' SQL and row mapping; `audit`), `db/audit.rs` (the
 persisted audit line) and the record shapes in `contract/`. A driver sets
 one storage mechanism up once and returns a handle; a repository is one
 record's use of it. The core reaches a record only through

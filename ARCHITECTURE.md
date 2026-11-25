@@ -125,7 +125,7 @@ driver/
     note.rs          the note table's steps as named items (CREATE_NOTE)
 repository/
   mod.rs             Snapshot (one reader), Tx (one write transaction)
-  notes.rs           notes: the SQL and row mapping; all, get, bad records; put
+  note.rs            notes: the SQL and row mapping; all, get, bad records; put
   audit.rs           audit: append
 db/
   mod.rs             the audit log's lock file name
@@ -226,6 +226,6 @@ Checked by grep over non-test sources, except that `rusqlite` and
   `composition`, `Store`, `Snapshot` or `Tx`.
 - `tmpl-cli`: nothing names `tmpl_cli_store`, `cw_base`, `cw_fs`, `cw_sqlite` or `rusqlite`. `command/` names no `std::env`,
   `std::fs`, `Store`, `Runtime` or `Ctx`. `output/` imports no `cli` or
-  `commands`.
+  `command`.
 - Only `tmpl-cli/src/output/` touches stdout, stderr, `IsTerminal` or the
   color/format variables (`scripts/check-terminal-guard.sh`).

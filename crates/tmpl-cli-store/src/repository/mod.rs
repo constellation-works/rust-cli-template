@@ -1,4 +1,4 @@
-//! One repository per record: `notes` and `audit`.
+//! One repository per record: `note` and `audit`.
 //!
 //! A repository is named for the record it holds, never for a command: it
 //! gets, lists and puts records and decides nothing about them. It is one
