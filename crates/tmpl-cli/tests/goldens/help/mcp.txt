@@ -1,0 +1,18 @@
+Serve every command as an MCP tool on stdin and stdout
+
+Usage: tmpl-cli mcp [OPTIONS]
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+
+Global options:
+      --root <DIR>       Data directory [default: $TMPL_CLI_ROOT, else ~/.tmpl-cli]
+      --format <FORMAT>  Output format; auto is a table on a terminal, tab-separated lines otherwise, and json is one JSON document [default: $TMPL_CLI_FORMAT, else auto] [possible values: auto, table, json]
+      --json             Shorthand for --format json [default: false]
+
+Examples:
+  tmpl-cli mcp
+  tmpl-cli --root ~/data mcp
+
+Point an MCP client at the command. It serves until its input closes.

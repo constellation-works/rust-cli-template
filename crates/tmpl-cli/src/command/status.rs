@@ -5,6 +5,8 @@
 
 use crate::output::{Output, Payload, StatusPayload};
 use clap::Args;
+use cw_mcp::schemars::JsonSchema;
+use serde::Deserialize;
 use tmpl_cli_core::app::status::{self, Outcome};
 use tmpl_cli_core::{AuditWarning, Error, Origin, Runtime};
 
@@ -16,8 +18,11 @@ Examples:
 
 A store with no database yet has no format: '-', or null with --json.";
 
-/// Arguments to `status`: none of its own; the global flags apply.
-#[derive(Debug, Args)]
+/// Arguments to `status`, and the `status` tool's input: none of its own;
+/// the global flags apply.
+#[derive(Debug, Args, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "cw_mcp::schemars")]
 pub(crate) struct StatusArgs {}
 
 /// Run `status` through the `status` app against `runtime` for `origin`,

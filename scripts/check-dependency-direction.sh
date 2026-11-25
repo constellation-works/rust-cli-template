@@ -81,10 +81,11 @@ policy() {
       # it renders, the one error type (cw-base's, as tmpl_cli_core::Error)
       # and what a surface needs of cw-app (Env, Origin, the runtime). The
       # command line's mechanism is cw-cli's: the terminal decision, the
-      # sink, error rendering, logging and grouped help. No other crate
-      # names cw-cli (it is in no other KIT list).
+      # sink, error rendering, logging and grouped help. Its second surface,
+      # the MCP server, is cw-mcp's. No other crate names cw-cli or cw-mcp
+      # (they are in no other KIT list).
       ALLOWED="tmpl-cli-core"
-      KIT="cw-cli"
+      KIT="cw-cli cw-mcp"
       # Test isolation: the temp root, the isolated child and goldens.
       KIT_DEV="cw-testkit"
       # SQLite belongs to the store alone. Terminal state, colour and the log

@@ -1,0 +1,149 @@
+[
+  {
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "description": "Show the data directory and the store format",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "name": "status"
+  },
+  {
+    "annotations": {
+      "readOnlyHint": false
+    },
+    "description": "Add a note and print it",
+    "inputSchema": {
+      "$defs": {
+        "Priority": {
+          "enum": [
+            "low",
+            "normal",
+            "high"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "description": "Longer text, shown by `note show` and in --json output; not blank [default: none]",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Priority"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How much it matters [default: normal]"
+        },
+        "tags": {
+          "default": [],
+          "description": "Label the note; repeat for several (lowercase letters, digits, '-') [default: none]",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "description": "The note's title: one line, at most 200 characters",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
+    "name": "note_add"
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "description": "List notes, oldest first",
+    "inputSchema": {
+      "$defs": {
+        "Priority": {
+          "enum": [
+            "low",
+            "normal",
+            "high"
+          ],
+          "type": "string"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "default": null,
+          "description": "Show at most this many of the matching notes, 1 or more; --json reports the\ntotal and whether the list was cut [default: all]",
+          "format": "uint",
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Priority"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Only notes at this priority [default: any]"
+        },
+        "tag": {
+          "default": null,
+          "description": "Only notes with this tag [default: any]",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "name": "note_list"
+  },
+  {
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "description": "Show one note in full, including its body",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "The note's id, as printed by `note list`",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "name": "note_show"
+  }
+]

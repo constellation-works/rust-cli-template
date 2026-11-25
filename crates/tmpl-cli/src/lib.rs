@@ -27,10 +27,14 @@ mod command;
 
 mod error;
 
+mod mcp;
+
 mod output;
 
 pub use cli::every_command;
+pub use mcp::server as mcp_server;
 
+use cli::Invocation;
 use cw_cli::{Logging, Probe};
 use std::ffi::OsString;
 use std::process::ExitCode;
@@ -68,7 +72,17 @@ pub fn run(args: Vec<OsString>, env: &Env) -> ExitCode {
     // The actor is the user the environment claims; the audit line records
     // it only when it reads as an identifier.
     let origin = Origin::new(Surface::CLI, env.user().map(str::to_owned));
-    let (code, warning) = command::run(cli.command, &runtime, &origin, |outcome| {
+    let command = match cli.command {
+        Invocation::Run(command) => command,
+        // The server names each call's origin itself, from the client.
+        Invocation::Mcp(_args) => {
+            return match mcp::serve(runtime) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(err) => output::fail(&mut sink, &err),
+            };
+        }
+    };
+    let (code, warning) = command::run(command, &runtime, &origin, |outcome| {
         output::finish(&mut sink, outcome)
     });
     if let Some(warning) = warning {

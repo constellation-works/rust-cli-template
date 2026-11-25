@@ -28,14 +28,17 @@ publish = false
 # The cw-kit (https://github.com/constellation-works/satellites): the one
 # error type and a clock (cw-base), file access for a private data
 # directory (cw-fs), one private SQLite database (cw-sqlite, which bundles
-# SQLite and re-exports rusqlite), and the command path (cw-app: the
-# chokepoint, the environment captured once and the audit log), and the
-# command line's mechanism (cw-cli: the terminal decision, the output sink,
-# error rendering, logging and grouped help). No release is published yet,
-# so the workspace pins one commit of the satellites `agent-main` for every kit
-# crate; moving the pin is a change of its own.
+# SQLite and re-exports rusqlite), the command path (cw-app: the chokepoint,
+# the environment captured once and the audit log), the command line's
+# mechanism (cw-cli: the terminal decision, the output sink, error
+# rendering, logging and grouped help) and the MCP surface (cw-mcp: a stdio
+# server over typed tools that run through the same entry point). No
+# release is published yet, so the workspace pins one commit of the
+# satellites `agent-main` for every kit crate; moving the pin is a change of
+# its own.
 cw-app = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
 cw-cli = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
+cw-mcp = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
 cw-base = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
 cw-fs = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
 cw-sqlite = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }

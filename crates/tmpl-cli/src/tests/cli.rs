@@ -1,4 +1,4 @@
-use crate::cli::{Cli, every_command, raw_requested_format};
+use crate::cli::{Cli, Invocation, every_command, raw_requested_format};
 use crate::command::Command;
 use clap::{CommandFactory, Parser};
 use cw_cli::Format;
@@ -21,7 +21,7 @@ fn global_flags_parse_before_and_after_the_subcommand() {
     for cli in [before, after] {
         assert_eq!(cli.global.requested_format(), Some(Format::Json));
         assert_eq!(cli.global.root.as_deref(), Some(std::path::Path::new("/r")));
-        assert!(matches!(cli.command, Command::Status(_)));
+        assert!(matches!(cli.command, Invocation::Run(Command::Status(_))));
     }
 }
 

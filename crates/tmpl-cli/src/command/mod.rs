@@ -17,7 +17,7 @@ pub(crate) use status::StatusArgs;
 
 mod note;
 
-pub(crate) use note::NoteCommand;
+pub(crate) use note::{AddArgs, ListArgs, NoteCommand, ShowArgs};
 // example:end
 
 /// Top-level nouns.

@@ -1,6 +1,6 @@
-//! What the surface decides about a failure: the remedy to print, and its
+//! What the surfaces decide about a failure: the remedy to print, and their
 //! own failures (output that could not be written, a command line that does
-//! not parse).
+//! not parse, an MCP session that could not be served).
 //!
 //! Every failure a command can end with is the workspace's one error type,
 //! `tmpl_cli_core::Error` (STD-02 R11). Units translate into it beside their
@@ -19,6 +19,12 @@ enum SurfaceError {
     /// The command line does not parse: clap's own sentence.
     #[error("{0}")]
     Usage(String),
+    /// A payload could not be encoded as a tool's JSON.
+    #[error("cannot encode the result as JSON")]
+    Encode(#[source] serde_json::Error),
+    /// The MCP server could not be built or served.
+    #[error(transparent)]
+    Mcp(cw_mcp::Error),
 }
 
 impl SurfaceError {
@@ -29,6 +35,13 @@ impl SurfaceError {
             Self::Output(cw_cli::Error::Encode(_)) => "output_encode_error",
             Self::Output(cw_cli::Error::Summaries { .. }) => "help_summaries",
             Self::Usage(_) => "usage_error",
+            Self::Encode(_) => "output_encode_error",
+            Self::Mcp(cw_mcp::Error::DuplicateTool { .. } | cw_mcp::Error::InputSchema { .. }) => {
+                "mcp_tool_list"
+            }
+            Self::Mcp(cw_mcp::Error::Panicked { .. }) => TOOL_PANICKED,
+            Self::Mcp(cw_mcp::Error::Runtime(_)) => "mcp_runtime",
+            Self::Mcp(cw_mcp::Error::Connection(_)) => "mcp_connection",
         }
     }
 
@@ -37,6 +50,8 @@ impl SurfaceError {
         match self {
             Self::Output(err) => err.kind(),
             Self::Usage(_) => Kind::Usage,
+            Self::Encode(_) => Kind::Internal,
+            Self::Mcp(err) => err.kind(),
         }
     }
 }
@@ -53,6 +68,20 @@ impl From<SurfaceError> for Error {
 pub(crate) fn output_error(source: cw_cli::Error) -> Error {
     SurfaceError::Output(source).into()
 }
+
+/// A payload that could not become a tool's JSON, as the workspace's
+/// error type.
+pub(crate) fn encode_error(source: serde_json::Error) -> Error {
+    SurfaceError::Encode(source).into()
+}
+
+/// The MCP server's own failure, as the workspace's error type.
+pub(crate) fn mcp_error(source: cw_mcp::Error) -> Error {
+    SurfaceError::Mcp(source).into()
+}
+
+/// The code an MCP tool that panicked is answered with.
+pub(crate) const TOOL_PANICKED: &str = "tool_panicked";
 
 /// A command line that does not parse, as the workspace's error type:
 /// `message` is clap's sentence, without its `error: ` prefix.

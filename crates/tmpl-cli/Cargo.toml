@@ -18,14 +18,18 @@ path = "src/main.rs"
 [dependencies]
 tmpl-cli-core = { workspace = true }
 cw-cli = { workspace = true }
+cw-mcp = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 cw-testkit = { workspace = true }
+# The in-process MCP harness, for the tool tests.
+cw-mcp = { workspace = true, features = ["test-support"] }
 # Hand-made store state (a bad record, the last id, a newer schema) for
 # the tests, through the store's raw-SQL test support.
 tmpl-cli-store = { workspace = true, features = ["test-support"] }
