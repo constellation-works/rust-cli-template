@@ -174,14 +174,16 @@ exit code.
 
 | Gate | Make target | Holds |
 |------|-------------|-------|
-| `cargo fmt --check` | `ci-fast` | formatting |
+| `cargo fmt --check` on stable, with `rustfmt.toml` at `max_width = 100` and only stable options | `ci-fast` | formatting (STD-12 R11); an option stable rustfmt calls unstable fails the gate |
 | `check-dependency-direction.sh` | `ci-fast` | crate and module layering (STD-02 R1–R6), file access only in the store, `rusqlite` only in the store and only through `cw_sqlite`, schema statements only in `driver/sqlite/schema/` and step lists only in its `mod.rs`, no repository path named in the core, environment reads only in the core's `composition.rs`, no clock-defaulted timestamps (R16), retired paths stay gone (R17) |
 | `check-test-modules.sh` | `ci-fast` | every sibling unit-test file is declared (STD-02 R19) |
 | `check-terminal-guard.sh` | `ci-fast` | one owner for streams, TTY and color env (STD-01 R12, R17) |
+| `check-singular-names.sh` | `ci-fast` | module, source directory and source file names are singular, apart from its allow-list (STD-12 R1) |
+| `check-source-style.sh` | `ci-fast` | what stable rustfmt cannot check: blank lines between the module doc, the use block, top-level items and impl methods (STD-12 R12), lines within `max_width` apart from one string literal or URL (R13), one module per `use` (R16), a reason before each `rustfmt::skip` (R19) |
 | `check-private-task-ids.sh` | `ci-fast` | public tree excludes private task IDs outside the vendored canon |
 | `check-readme.py` and `generate-feature-board.py --check` | `ci-fast` | README size and local links (STD-09 R2, R12), the design feature board (STD-06 R9) |
 | `docs/standards/check.sh` | `ci-fast` (`standards-check`) | vendored standards (warns until vendored; fails in CI) |
-| `clippy --all-targets -D warnings` with the STD-02 lint table and its adoptable additions | `ci-lint` | no unwrap/expect/print/dbg, no lock across await, no wildcard enum arms, no narrowing `as` |
+| `clippy --all-targets -D warnings` with the STD-02 lint table and its adoptable additions, plus STD-12's lints and `clippy.toml` | `ci-lint` | no unwrap/expect/print/dbg, no lock across await, no wildcard enum arms, no narrowing `as`; no one-letter binding (`min_ident_chars`, no allowed idents; STD-12 R14), no glob import (`wildcard_imports`, `enum_glob_use`; R15), every public item documented (`missing_docs`; R18) |
 | `cargo deny check` | `ci-lint` | advisories, licenses, sources |
 | nextest `--no-tests=fail` (timeouts in `.config/nextest.toml`, no retries), then `cargo test --doc` | `test` | behaviour, and runnable doc examples |
 | help and output goldens from the built binary | `goldens` | the public surface (STD-01 R24) |

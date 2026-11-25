@@ -71,6 +71,13 @@ match_wildcard_for_single_variants = "warn"
 cast_possible_truncation = "warn"
 cast_sign_loss = "warn"
 cast_possible_wrap = "warn"
+# STD-12 R14: no one-letter bindings; clippy.toml empties the lint's default
+# allow-list.
+min_ident_chars = "warn"
+# STD-12 R15: no glob imports, apart from the lints' own default exceptions.
+wildcard_imports = "warn"
+enum_glob_use = "warn"
 
 [workspace.lints.rust]
+# STD-12 R18: every public item carries a doc comment.
 missing_docs = "warn"
