@@ -34,10 +34,11 @@ fn json_is_shorthand_for_format_json_and_conflicts_with_format() {
         &["tmpl-cli", "status", "--json", "--format", "auto"][..],
     ] {
         let args: Vec<OsString> = conflicting.iter().map(OsString::from).collect();
-        let err = Cli::parse_args(&args, None).unwrap_err();
+        let cli = Cli::parse_args(&args, None).unwrap();
+        let err = cli.global.check().unwrap_err();
         assert_eq!(
-            err.exit_code(),
-            2,
+            err.kind(),
+            tmpl_cli_core::Kind::Usage,
             "{conflicting:?} should be a usage error"
         );
     }
@@ -45,7 +46,8 @@ fn json_is_shorthand_for_format_json_and_conflicts_with_format() {
         .iter()
         .map(OsString::from)
         .collect();
-    assert!(Cli::parse_args(&redundant, None).is_ok());
+    let cli = Cli::parse_args(&redundant, None).unwrap();
+    assert!(cli.global.check().is_ok());
 }
 
 /// Every subcommand path in the unbuilt tree, including the root.

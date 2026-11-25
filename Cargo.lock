@@ -991,6 +991,7 @@ version = "0.1.0"
 dependencies = [
  "cw-app",
  "cw-base",
+ "cw-fs",
  "cw-testkit",
  "serde_json",
  "thiserror",

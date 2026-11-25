@@ -64,7 +64,7 @@ fn an_empty_json_list_is_the_envelope_with_no_notes() {
     let out = fx.ok(&["note", "list", "--json"]);
     assert_eq!(
         json(&out.stdout),
-        serde_json::json!({"notes": [], "total": 0, "truncated": false})
+        serde_json::json!({"notes": [], "total": 0, "truncated": false, "warnings": []})
     );
 }
 
@@ -230,6 +230,23 @@ fn a_usage_error_in_json_mode_is_a_json_object() {
     assert_eq!(out.status.code(), Some(2));
     let err: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
     assert_eq!(err["code"], "usage_error");
+
+    // clap's lines that name the argument stay in the one object: the
+    // missing `<ID>` joins the message, and the usage line is the hint.
+    let out = fx.run(&["note", "show", "--json"]);
+    assert_eq!(out.status.code(), Some(2));
+    let err: serde_json::Value = serde_json::from_slice(&out.stderr).unwrap();
+    assert_eq!(
+        err["error"],
+        "the following required arguments were not provided: <ID>"
+    );
+    assert!(
+        err["hint"]
+            .as_str()
+            .unwrap()
+            .contains("Usage: tmpl-cli note show"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -534,6 +551,18 @@ fn bad_records_warn_on_reads_fail_on_show_and_refuse_writes_without_touching_sto
     assert_eq!(doc["notes"].as_array().map(Vec::len), Some(1));
     assert_eq!(doc["notes"][0]["id"], 1);
     assert_eq!(text(&list_json.stderr).lines().count(), 2);
+    // The envelope names each skipped record in `warnings`, in store order.
+    let warnings = doc["warnings"].as_array().unwrap();
+    assert_eq!(warnings.len(), 2, "{doc}");
+    assert_eq!(warnings[0]["record"], "note 2");
+    assert!(
+        warnings[0]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("control character"),
+        "{doc}"
+    );
+    assert_eq!(warnings[1]["record"], "note 3");
 
     // `note show <good id>`: exits 0 with good note and stderr warnings.
     let show_good = fx.ok(&["note", "show", "1", "--json"]);

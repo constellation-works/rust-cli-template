@@ -11,7 +11,7 @@
 //! STD-02 R18: split along responsibilities, not by length alone.
 
 use crate::command::input::{parsed, parsed_list, parsed_option};
-use crate::output::{NotePayload, Output, Payload};
+use crate::output::{NotePayload, Output, Payload, SkippedRecord};
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::{ArgAction, Args, Subcommand};
 use cw_mcp::schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
@@ -196,6 +196,13 @@ fn output(outcome: Outcome) -> Output {
             payload: Payload::Notes {
                 notes: list.notes.iter().map(NotePayload::from).collect(),
                 total: list.total,
+                skipped: bad_records
+                    .iter()
+                    .map(|bad| SkippedRecord {
+                        record: bad.locator.to_string(),
+                        reason: bad.reason.to_string(),
+                    })
+                    .collect(),
             },
             notice: list_notice(&filter, &list),
             warnings: bad_records.iter().map(ToString::to_string).collect(),

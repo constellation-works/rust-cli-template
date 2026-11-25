@@ -119,6 +119,23 @@ fn a_usage_error_in_json_mode_is_a_json_object() {
 }
 
 #[test]
+fn a_usage_error_the_surface_raises_itself_exits_two() {
+    // Not clap's: the --json/--format conflict clap cannot see across
+    // subcommand levels is the surface's own check, reported through the
+    // kit's sink like any failure.
+    let fx = Fixture::new();
+    let out = fx.run(&["--json", "status", "--format", "table"]);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(out.stdout.is_empty());
+    let err = json(&out.stderr);
+    assert_eq!(err["code"], "usage_error");
+    assert_eq!(
+        err["error"],
+        "--json cannot be used with a --format other than json"
+    );
+}
+
+#[test]
 fn the_data_directory_defaults_under_home_and_is_never_guessed() {
     let fx = Fixture::new();
     let mut cmd = fx.cmd(&["status", "--json"]);

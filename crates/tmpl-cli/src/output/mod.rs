@@ -21,7 +21,7 @@ mod status;
 
 pub(crate) use payload::{Output, Payload, StatusPayload};
 // example:begin
-pub(crate) use note::NotePayload;
+pub(crate) use note::{NotePayload, SkippedRecord};
 // example:end
 pub(crate) use env::VARS;
 
@@ -56,8 +56,8 @@ pub(crate) fn finish<O: Write, E: Write>(
     }
 }
 
-/// Report a failure that is not a command's outcome (the MCP server's own)
-/// and return its exit code.
+/// Report a failure that is not a command's outcome (a usage error the
+/// surface raises itself, the MCP server's own) and return its exit code.
 pub(crate) fn fail(sink: &mut Sink, err: &Error) -> ExitCode {
     report(sink, err)
 }
@@ -101,13 +101,45 @@ pub(crate) fn finish_parse_error(
         sink.notice(rendered.trim_end_matches('\n'));
         return Exit::of(tmpl_cli_core::Kind::Usage).into();
     };
+    if sink.terminal().mode() == Mode::Json {
+        // One JSON object: the lines that name the argument join the
+        // message, and clap's usage and tip are its hint.
+        let (named, rest) = json_usage(message, tail);
+        let err = usage_error(&named);
+        let hint = (!rest.is_empty()).then_some(rest.as_str());
+        return sink.report(&err, hint).into();
+    }
     let exit = report(&mut sink, &usage_error(message));
     // As text, clap's usage and tip follow the error line unchanged.
     let tail = tail.trim_end_matches('\n');
-    if sink.terminal().mode() != Mode::Json && !tail.is_empty() {
+    if !tail.is_empty() {
         sink.notice(tail);
     }
     exit
+}
+
+/// A clap usage error as one JSON object's message and hint. The lines
+/// right after clap's error line, before the first blank one, name the
+/// argument (`  <ID>`) and join the message; the rest (a tip, the usage
+/// line, the pointer to `--help`) is the hint, one line each.
+fn json_usage(first_line: &str, tail: &str) -> (String, String) {
+    let mut lines = tail.lines();
+    let named: Vec<&str> = lines
+        .by_ref()
+        .take_while(|line| !line.trim().is_empty())
+        .map(str::trim)
+        .collect();
+    let message = if named.is_empty() {
+        first_line.trim().to_owned()
+    } else {
+        format!("{} {}", first_line.trim(), named.join(", "))
+    };
+    let rest = lines
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+    (message, rest)
 }
 
 /// Print the audit log's warning after the command's own output: the line

@@ -60,7 +60,7 @@ Before the first commit, trace one real command against [ARCHITECTURE.md](ARCHIT
 - `--json` field names and the store's persisted shape are contracts (STD-01 R10, STD-02 R16): add fields, never rename or retype them. A schema change adds a named step to its table's module under [`crates/tmpl-cli-store/src/driver/sqlite/schema/`](crates/tmpl-cli-store/src/driver/sqlite/schema/) and appends it to `MIGRATIONS` in `schema/mod.rs`, never renumbering a shipped step; only `schema/` holds a statement that changes the schema (STD-03 R23).
 - Store writes go through `Store::write`, one `IMMEDIATE` transaction through `cw_sqlite::Db::write` (the audit log is the kit's, appended under its own lock) (STD-03 R5, R6). Never rewrite a durable file in place. Reads go through one read-only `cw_sqlite` reader and take no lock. Store state is owner-only and checked on every read and write.
 <!-- example:begin -->
-- The list envelope (`notes`, `total`, `truncated`) is a `--json` contract too.
+- The list envelope (`notes`, `total`, `truncated`, `warnings`) is a `--json` contract too.
 <!-- example:end -->
 <!-- crates:end -->
 - Report commands and outcomes at handoff — passed, failed, not run — never "tested" (STD-04 R16).

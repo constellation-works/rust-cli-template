@@ -56,6 +56,19 @@ pub(crate) struct ListPayload<'a> {
     pub(crate) total: usize,
     /// Whether `--limit` left matching notes out.
     pub(crate) truncated: bool,
+    /// Each record skipped because it could not be read, as stderr warns of
+    /// it too; `[]` when none, never omitted (STD-02 R32, STD-01 R11).
+    pub(crate) warnings: &'a [SkippedRecord],
+}
+
+/// A store record a list skipped: which one, and why it could not be read.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub(crate) struct SkippedRecord {
+    /// The record, as the store names it: `note <id>`, or `row <id>` when
+    /// the row's id is not a note id.
+    pub(crate) record: String,
+    /// Why it was skipped.
+    pub(crate) reason: String,
 }
 
 /// The one mapping from domain values to colour roles (STD-01 R18).

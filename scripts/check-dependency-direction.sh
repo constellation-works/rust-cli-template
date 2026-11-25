@@ -76,8 +76,9 @@ policy() {
       # chokepoint, the captured environment and the audit log). The apps
       # reach the records through the store.
       KIT="cw-base cw-app"
-      # Test isolation, for its tests' private temp roots.
-      KIT_DEV="cw-testkit"
+      # Test isolation, for its tests' private temp roots, and cw-fs for the
+      # capacity the kit's audit reader takes (cw-app does not re-export it).
+      KIT_DEV="cw-testkit cw-fs"
       # The apps reach files only through the store, so they need no file or
       # process crate either, and the data directory is the kit's, so no
       # path-finding crate.
