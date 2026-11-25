@@ -59,6 +59,18 @@ impl Copy {
         out
     }
 
+    /// The copy's architecture map still matches its renamed crates. The
+    /// script reads them through `cargo metadata`, so the cargo that builds
+    /// these tests goes on the isolated `PATH`.
+    fn check_architecture_map(&self) {
+        let cargo = self.temp.bin().join("cargo");
+        if !cargo.exists() {
+            std::os::unix::fs::symlink(env!("CARGO"), &cargo).unwrap();
+        }
+        let out = self.run("scripts/check-architecture-map.sh", &[]);
+        assert!(out.status.success(), "architecture map: {}", stderr(&out));
+    }
+
     /// A git repository holding every file, as a new repository would.
     fn commit(&self, message: &str) {
         for args in [
@@ -236,6 +248,7 @@ fn the_cli_kind_keeps_the_example_and_names_the_given_repository() {
         );
     }
     assert!(copy.read("about.md").contains("standards: STD-01,"));
+    copy.check_architecture_map();
 }
 
 #[test]
@@ -290,6 +303,7 @@ fn the_bare_kind_drops_the_example_leaves_the_repository_out_and_protected_trees
     for manifest in manifests {
         assert!(!manifest.contains("repository"), "{manifest}");
     }
+    copy.check_architecture_map();
 }
 
 #[test]

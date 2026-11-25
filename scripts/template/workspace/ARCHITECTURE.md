@@ -2,7 +2,9 @@
 
 The layer model that `scripts/check-dependency-direction.sh` enforces
 (STD-02 R1, R6). A lower layer never imports a higher one. Adding a crate or
-an edge changes this file and that script in the same commit.
+an edge changes this file and that script in the same commit. Every crate
+and top-level module has its place here, and every path written in code
+formatting exists (`scripts/check-architecture-map.sh`, STD-02 R43).
 
 ## Crates
 
@@ -15,14 +17,18 @@ A new crate goes under `crates/` and gets:
 - a member entry in the root `Cargo.toml` (`[workspace] members`);
 - a row in the table below, with what it owns, its internal and kit
   dependencies, and what it must never depend on;
+- a section of its own in this file, headed with the crate's name in code
+  formatting, naming each top-level module, and a first-line `//!` doc on
+  the crate root and each top-level module
+  (`scripts/check-architecture-map.sh` fails until both are there);
 - a policy entry in `scripts/check-dependency-direction.sh`, without which
   the check fails.
 
 | Crate | Kind | Owns | Internal and kit dependencies | Banned |
 |-------|------|------|-------------------------------|--------|
 
-The cw-kit (`cw-base`, `cw-fs`, `cw-sqlite`, with `cw-testkit` as a
-dev-dependency only) from
+The cw-kit (`cw-base`, `cw-fs`, `cw-sqlite`, `cw-app`, with `cw-testkit` as
+a dev-dependency only) from
 [constellation-works/satellites](https://github.com/constellation-works/satellites)
 is pinned to one commit in the root `Cargo.toml` `[workspace.dependencies]`.
 Each crate's README there is its contract.

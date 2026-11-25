@@ -189,6 +189,7 @@ and never changes the command's result or exit code.
 | Gate | Make target | Holds |
 |------|-------------|-------|
 | `cargo fmt --check` on stable, with `rustfmt.toml` at `max_width = 100` and only stable options | `ci-fast` | formatting (STD-12 R11); an option stable rustfmt calls unstable fails the gate |
+| `check-architecture-map.sh` | `ci-fast` | the architecture map (STD-02 R43): every crate from `cargo metadata` has a section in `ARCHITECTURE.md` and each of its top-level modules is named there, every path the doc writes in code formatting exists, and every crate root and top-level module begins with a `//!` line |
 | `check-dependency-direction.sh` | `ci-fast` | crate and module layering (STD-02 R1–R6), file access only in the store, `rusqlite` only in the store and only through `cw_sqlite`, schema statements only in `driver/sqlite/schema/` and step lists only in its `mod.rs`, no repository path named in the core, `std::env` named only in the binary's `main.rs` (the arguments, and the environment only through `Env::capture()`), every app's `exec` forwarding to `cw_app::exec` and no audit code outside the kit, no clock-defaulted timestamps (R16), retired paths stay gone (R17) |
 | `check-test-modules.sh` | `ci-fast` | every sibling unit-test file is declared (STD-02 R19) |
 | `check-terminal-guard.sh` | `ci-fast` | one owner for streams, TTY and color env (STD-01 R12, R17) |
