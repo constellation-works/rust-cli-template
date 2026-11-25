@@ -3,7 +3,8 @@
 //!
 //! A tool is a second mapping onto the same command, not a second command:
 //! its input is the command's own clap `Args` struct (which also derives
-//! `Deserialize` and `JsonSchema`, see [`input`]), its description is the
+//! `Deserialize` and `JsonSchema`; a text argument is read through its
+//! type's `FromStr`, as the example's `input.rs` shows), its description is the
 //! command's summary, and its function wraps the input in the CLI's
 //! [`Command`] and calls the same handler, [`command::run`], which runs the
 //! app through `app::<app>::exec` and the kit's `cw_app::exec`. So the tool
@@ -18,8 +19,10 @@
 //! To add a tool for a new command: give its `Args` the same derives as
 //! `StatusArgs`, and add one line to [`tools`].
 
+// example:begin
 pub(crate) mod input;
 
+// example:end
 use crate::cli::Cli;
 use crate::command::{self, Command, StatusArgs};
 // example:begin

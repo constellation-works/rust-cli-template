@@ -1,8 +1,11 @@
 //! Unit tests for the MCP surface, one file per source file (STD-02 R19).
 
+// example:begin
 mod input;
 
+// example:end
 use crate::cli::every_command;
+use crate::command::StatusArgs;
 use crate::mcp::tools;
 
 /// Every command a user can run, as a path: a leaf of the tree other than
@@ -42,4 +45,11 @@ fn a_tools_description_is_its_commands_summary() {
             tool.name()
         );
     }
+}
+
+#[test]
+fn an_input_refuses_an_argument_its_command_does_not_have() {
+    // STD-01 R36: nothing is accepted that no runtime path reads.
+    assert!(serde_json::from_value::<StatusArgs>(serde_json::json!({})).is_ok());
+    assert!(serde_json::from_value::<StatusArgs>(serde_json::json!({"root": "/x"})).is_err());
 }

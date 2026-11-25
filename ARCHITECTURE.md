@@ -65,7 +65,9 @@ cli.rs               the root command, the global flags, the root help's groups 
 command/<noun>.rs    arguments -> app::<app>::Command; exec; Outcome -> payload; render, then settle
 mcp/                 the MCP surface: one cw_mcp::Tool per command, served by `tmpl-cli mcp`
   mod.rs             tools(): each command's Args as the input, its summary as the description, its handler as the call; server, serve
+<!-- example:begin -->
   input.rs           how a text argument is read from a tool's JSON: through the type's own FromStr
+<!-- example:end -->
 output/              payloads and each command's human view, written through the kit's sink
   mod.rs             finish: emit or report through cw_cli::Sink; usage errors, help and version
   payload.rs         the payloads every mode renders

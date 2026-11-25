@@ -1,4 +1,3 @@
-use crate::command::StatusArgs;
 use crate::mcp::input::{parsed, parsed_list, parsed_option};
 use serde::Deserialize;
 
@@ -27,11 +26,4 @@ fn a_text_field_is_parsed_by_its_type_and_refused_when_it_does_not_parse() {
     ] {
         assert!(serde_json::from_value::<Probe>(bad).is_err());
     }
-}
-
-#[test]
-fn an_input_refuses_an_argument_its_command_does_not_have() {
-    // STD-01 R36: nothing is accepted that no runtime path reads.
-    assert!(serde_json::from_value::<StatusArgs>(serde_json::json!({})).is_ok());
-    assert!(serde_json::from_value::<StatusArgs>(serde_json::json!({"root": "/x"})).is_err());
 }
