@@ -983,3 +983,73 @@ The tracked-file gate enforces this policy for private Orbit IDs.
 
 - The public references resolve for readers of the repository.
 - Cost: readers need access to Orbit for private tracker provenance.
+
+## Rules the template does not yet meet after the 829a01d re-vendor
+
+**Recorded:** 2026-11-25
+
+### Context
+
+The template adopts STD-12@1 in the change that adds its gates. The
+standards sync tool vendors the whole adopted set from one umbrella commit,
+so the same sync at 829a01d also moved five standards on:
+
+- STD-01 from 2 to 4;
+- STD-02 from 4 to 8;
+- STD-06 from 1 to 2;
+- STD-08 from 2 to 3;
+- STD-09 from 1 to 3.
+
+The template was audited against each rule that is new or changed between
+the versions it vendored before and the ones it vendors now. STD-12@1 is met
+in full by the gates added with it.
+
+### Decision
+
+Each rule below is a recorded deviation until the follow-up that brings the
+template into line closes it. That follow-up is not part of the change that
+re-vendors. Each line names the rule and what is unmet.
+
+- **STD-01@4 §R25**:
+  - the environment variables are not one documented constant list stating
+    each one's meaning, default and the flag it overrides;
+  - `NO_COLOR`, `CLICOLOR_FORCE`, `TERM`, `COLUMNS`, `HOME`, `USER` and
+    `USERNAME` are read as bare literals;
+  - `docs/usage.md`'s table is written by hand rather than generated;
+  - the help text types `$TMPL_CLI_ROOT` and `$TMPL_CLI_FORMAT` by hand.
+- **STD-02@8 §R6**:
+  - `scripts/check-dependency-direction.sh` has no module import-cycle check;
+  - `clippy.toml` carries none of the `disallowed-types` or
+    `disallowed-methods` baseline;
+  - the script's grep bans on `std::fs`, `std::net`, `std::process` and
+    `std::env` stand where Clippy is to take them over.
+- **STD-02@8 §R7**: the binary crate reads the environment, for the
+  presentation variables and the log filter, in `tmpl-cli/src/output/`.
+- **STD-02@8 §R43**: `make structure` has no unit-map gate, which would fail
+  on a crate or top-level module missing from `ARCHITECTURE.md`, a mapped path
+  that does not exist, or a unit with no `//!` doc.
+- **STD-06@2 §R4**: the numbered design docs and the doc templates in
+  `docs/design/_templates/` carry `last_updated`, not `created_date` and
+  `updated_date`.
+- **STD-09@3 §R15**: some docs lack `type` and `summary` frontmatter:
+  - `ARCHITECTURE.md`, `CHANGELOG.md`, `about.md`, `docs/usage.md`,
+    `docs/development.md`;
+  - `docs/design/CONVENTIONS.md`, `docs/design/FEATURES.md` and
+    `docs/design/_templates/1_scope.md`.
+- **STD-09@3 §R16**: there is no generated `docs/INDEX.md` and no CI check
+  that it is current.
+- **STD-09@3 §R17**: no link and anchor check covers the root and `docs/`
+  Markdown; `scripts/check-readme.py` checks `README.md` only.
+- **STD-09@3 §R23**: there is no `docs/architecture/README.md` and no page
+  per crate.
+- **STD-09@3 §R25**: there is no `SECURITY.md`.
+- **STD-09@3 §R26**: there is no root `CONTRIBUTING.md`. `docs/development.md`
+  holds the setup and checks, and says how agents may be used only through a
+  link to `AGENTS.md`.
+
+### Consequences
+
+- A reviewer checks a change against the vendored versions, and finds each
+  gap above already recorded rather than introduced by the change.
+- Cost: until the follow-up lands, a project made from the template inherits
+  these gaps along with the record of them.
