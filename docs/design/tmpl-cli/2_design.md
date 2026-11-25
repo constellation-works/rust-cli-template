@@ -253,9 +253,14 @@ kind on a scratch copy, checks that none of the template's name or summary
 is left, then runs `make ci` there; the workflow goes with `init.sh`.
 Cargo builds and tests pass `--locked`. When Cargo's advisory cache is
 read-only, the supply-chain check uses `target/cargo-deny/advisory-dbs`.
-Missing gate tools warn locally and fail under `CI=true`. CI runs
-`make ci` on Linux and macOS with a 30-minute job timeout and pins actions,
-the toolchain and tools. Dependabot proposes crate and action updates.
+Missing gate tools warn locally and fail under `CI=true`; locally,
+`make ci` ends with a line naming each gate it skipped for a missing tool.
+CI runs `make ci` on Linux and macOS with a 30-minute job timeout and pins
+actions, the toolchain (`rust-toolchain.toml`, which the workflows read) and
+tools. Its `msrv` job checks every target with the oldest supported Rust,
+`rust-version` in `Cargo.toml` (`make msrv`). A newer push to a pull request
+cancels the run it supersedes. Dependabot proposes crate and action updates
+as one grouped pull request per ecosystem, a week after a release.
 
 ## 7. Concerns & Honest Limitations
 

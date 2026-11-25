@@ -1,10 +1,15 @@
 # The template's own checks; scripts/init.sh deletes this workflow from a copy.
 name: template
 on:
-  push: { branches: [main, agent-main] }
+  push: { branches: [agent-main] }
   pull_request:
 permissions:
   contents: read
+# As in ci.yml: a newer push cancels the run it supersedes, except on
+# agent-main.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/agent-main' }}
 jobs:
   # A pull request that changes a shipped file raises version in template.toml.
   version:
@@ -35,8 +40,11 @@ jobs:
     # Pinned as in ci.yml (STD-05 R23).
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Read the pinned toolchain
+        id: toolchain
+        run: echo "channel=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)" >>"$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
-        with: { toolchain: "1.96.0", components: "rustfmt, clippy" }
+        with: { toolchain: "${{ steps.toolchain.outputs.channel }}", components: "rustfmt, clippy" }
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with: { key: "${{ matrix.kind }}" }
       - uses: taiki-e/install-action@ab49d3c64680143e184118bed66a46419fc15519 # v2.90.5

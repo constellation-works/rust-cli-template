@@ -9,10 +9,11 @@ updated_date: 2026-11-25
 
 ## Setup
 
-Install Rust with rustfmt and Clippy, Git, Make, Python 3 and `jq` (the
-dependency-direction gate reads `cargo metadata` with it). The
-[CI workflow](.github/workflows/ci.yml) pins the Rust toolchain,
-cargo-deny and cargo-nextest versions.
+Install Rust through rustup, Git, Make, Python 3 and `jq` (the
+dependency-direction gate reads `cargo metadata` with it). Rustup installs
+the toolchain that [`rust-toolchain.toml`](rust-toolchain.toml) pins, with
+rustfmt and Clippy. The [CI workflow](.github/workflows/ci.yml) reads that
+pin and pins the cargo-deny and cargo-nextest versions.
 
 ## Required checks
 
