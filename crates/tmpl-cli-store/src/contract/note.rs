@@ -5,9 +5,9 @@
 //! here enforces only its own invariant; rules that look at several notes
 //! (the next id, list selection) belong to the note app in `tmpl-cli-core`.
 //! `scripts/check-dependency-direction.sh` rejects file access and imports of
-//! `db` or `repository` here.
+//! the driver, `repository` or the store here.
 //!
-//! Persisted note records are decoded per record in `db/format.rs`, which
+//! Persisted note rows are mapped per row in `repository/note.rs`, which
 //! validates every required field through these constructors rather than
 //! letting serde default missing fields or abort the whole store on one bad
 //! record.
