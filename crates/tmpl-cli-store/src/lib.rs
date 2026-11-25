@@ -7,8 +7,8 @@
 //! - [`repository`]: one repository per record (notes, audit), read through a
 //!   [`Snapshot`] and written through a [`Tx`] inside [`Store::write`]; the
 //!   notes repository holds the notes' SQL and row mapping;
-//! - [`contracts`]: the record shapes ([`contracts::Note`] and its field
-//!   types, [`contracts::AuditEvent`]);
+//! - [`contract`]: the record shapes ([`contract::Note`] and its field
+//!   types, [`contract::AuditEvent`]);
 //! - `db`: the audit log's file and its persisted line;
 //! - the crate's typed [`Error`], and its one translator into the
 //!   workspace's error type.
@@ -37,7 +37,7 @@
     )
 )]
 
-pub mod contracts;
+pub mod contract;
 mod db;
 mod driver;
 mod error;

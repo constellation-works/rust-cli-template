@@ -19,7 +19,7 @@
 )]
 
 mod cli;
-mod commands;
+mod command;
 mod error;
 mod help;
 mod output;
@@ -41,7 +41,7 @@ pub fn run(env: Env) -> ExitCode {
     let sink = output::Sink::from_process(cli.global.requested_format());
     output::init_logging();
     let env = env.with_root_flag(cli.global.root);
-    commands::run_with(cli.command, &env, |outcome| output::finish(&sink, outcome))
+    command::run_with(cli.command, &env, |outcome| output::finish(&sink, outcome))
 }
 
 #[cfg(test)]

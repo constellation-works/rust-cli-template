@@ -9,7 +9,7 @@
 
 use std::num::NonZeroUsize;
 use time::OffsetDateTime;
-use tmpl_cli_store::contracts::{Body, Note, NoteId, Priority, Tag, Title};
+use tmpl_cli_store::contract::{Body, Note, NoteId, Priority, Tag, Title};
 
 /// The fields a caller supplies to add a note; the app assigns the rest.
 #[derive(Clone, Debug, PartialEq, Eq)]

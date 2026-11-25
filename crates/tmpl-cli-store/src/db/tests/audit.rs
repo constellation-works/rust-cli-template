@@ -1,4 +1,4 @@
-use crate::contracts::{AuditEvent, AuditStatus};
+use crate::contract::{AuditEvent, AuditStatus};
 use crate::db::audit::{AUDIT_FORMAT, AuditLine, UPGRADES, decode_line, encode_line};
 use crate::error::Error;
 use std::path::Path;

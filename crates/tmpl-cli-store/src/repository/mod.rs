@@ -1,4 +1,4 @@
-//! One repository per record: `notes` and `audit`.
+//! One repository per record: `note` and `audit`.
 //!
 //! A repository is named for the record it holds, never for a command: it
 //! gets, lists and puts records and decides nothing about them. It is one
@@ -10,12 +10,12 @@
 //! or borrowed document crosses into its hands.
 
 mod audit;
-mod notes;
+mod note;
 
 pub use audit::Audit;
-pub use notes::{Notes, NotesMut};
+pub use note::{Notes, NotesMut};
 
-pub(crate) use notes::first_bad;
+pub(crate) use note::first_bad;
 
 use cw_sqlite::Reader;
 use cw_sqlite::rusqlite::Connection;

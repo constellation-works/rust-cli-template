@@ -1,4 +1,4 @@
-use crate::contracts::{Body, NoteError, NoteId, Priority, Tag, Title};
+use crate::contract::{Body, NoteError, NoteId, Priority, Tag, Title};
 
 #[test]
 fn note_id_rejects_zero_and_non_numbers() {

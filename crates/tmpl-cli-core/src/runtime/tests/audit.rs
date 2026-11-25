@@ -1,11 +1,11 @@
-use crate::apps::note::{self, Command, NewNote};
+use crate::app::note::{self, Command, NewNote};
 use crate::composition::Error;
 use crate::runtime::{AuditGuard, AuditMeta, Ctx};
 use std::path::PathBuf;
 use time::OffsetDateTime;
 use time::macros::datetime;
 use tmpl_cli_store::Store;
-use tmpl_cli_store::contracts::{AuditStatus, Priority};
+use tmpl_cli_store::contract::{AuditStatus, Priority};
 
 const ADD: AuditMeta = AuditMeta {
     command: "note add",

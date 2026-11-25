@@ -1,6 +1,6 @@
 //! The `note` noun: its subcommands, their flags and help, and their
 //! handlers. A handler maps the parsed arguments to the `note` app's
-//! `Command`, calls `apps::note::exec`, and turns the `Outcome` into a payload
+//! `Command`, calls `app::note::exec`, and turns the `Outcome` into a payload
 //! (STD-02 R2); rendering happens later, in `output`, from the payload alone.
 //!
 //! A noun this small is one file. When a noun grows (more verbs, or verbs with
@@ -14,8 +14,8 @@ use crate::output::{NotePayload, Output};
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::{ArgAction, Args, Subcommand};
 use std::num::NonZeroUsize;
-use tmpl_cli_core::apps::note::{self, ListFilter, NewNote, NoteList, Outcome};
-use tmpl_cli_core::contracts::{Body, NoteId, Priority, Tag, Title};
+use tmpl_cli_core::app::note::{self, ListFilter, NewNote, NoteList, Outcome};
+use tmpl_cli_core::contract::{Body, NoteId, Priority, Tag, Title};
 use tmpl_cli_core::{Env, Error};
 
 pub(super) const NOTE_EXAMPLES: &str = "\

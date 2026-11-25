@@ -1,11 +1,11 @@
 use crate::cli::Cli;
-use crate::commands::note::list_notice;
-use crate::commands::{Command, NoteCommand};
+use crate::command::note::list_notice;
+use crate::command::{Command, NoteCommand};
 use clap::Parser;
 use std::num::NonZeroUsize;
 use time::OffsetDateTime;
-use tmpl_cli_core::apps::note::{ListFilter, NoteList};
-use tmpl_cli_core::contracts::{Note, NoteId, Priority};
+use tmpl_cli_core::app::note::{ListFilter, NoteList};
+use tmpl_cli_core::contract::{Note, NoteId, Priority};
 
 fn listed(shown: u64, total: usize) -> NoteList {
     let notes = (1..=shown)

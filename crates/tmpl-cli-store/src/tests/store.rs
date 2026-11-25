@@ -1,5 +1,5 @@
 use crate::Store;
-use crate::contracts::{AuditEvent, AuditStatus, Note, NoteId, Priority};
+use crate::contract::{AuditEvent, AuditStatus, Note, NoteId, Priority};
 use crate::error::Error;
 use cw_fs::{Error as FsError, Lock};
 use std::path::Path;

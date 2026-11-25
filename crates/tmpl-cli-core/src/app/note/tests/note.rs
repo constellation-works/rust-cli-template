@@ -1,6 +1,6 @@
-use crate::apps::note::{Command, ListFilter, NewNote};
+use crate::app::note::{Command, ListFilter, NewNote};
 use time::OffsetDateTime;
-use tmpl_cli_store::contracts::{NoteId, Priority};
+use tmpl_cli_store::contract::{NoteId, Priority};
 
 fn new_note(title: &str) -> NewNote {
     NewNote {
@@ -22,7 +22,7 @@ fn only_note_add_is_audited() {
 
 #[test]
 fn lock_timeout_audited_command_waits_one_deadline_and_records_one_failure_line() {
-    use crate::apps::note::NoteApp;
+    use crate::app::note::NoteApp;
     use crate::runtime::{Ctx, run_with};
     use std::sync::mpsc;
     use std::time::{Duration, Instant};

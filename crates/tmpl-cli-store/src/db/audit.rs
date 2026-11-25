@@ -7,7 +7,7 @@
 //! reader can upgrade older lines and refuse newer ones (STD-03 R10, R23); a crash can leave a torn last line,
 //! which a reader skips.
 
-use crate::contracts::AuditEvent;
+use crate::contract::AuditEvent;
 use crate::error::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroU32;

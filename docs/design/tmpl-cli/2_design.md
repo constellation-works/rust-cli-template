@@ -26,11 +26,11 @@ and the gates. The output and store contracts are specified in
 Three crates laid out by app over the cw-kit (why:
 [4_decisions.md](./4_decisions.md#the-template-is-laid-out-by-app-in-three-crates),
 [the kit](./4_decisions.md#the-foundation-is-the-cw-kit)).
-`tmpl-cli` is the surface: `cli` (the root flags), `commands` (one module
+`tmpl-cli` is the surface: `cli` (the root flags), `command` (one module
 per noun, holding its subcommands, flags and help, and mapping its arguments
 to an app's `Command` and the `Outcome` to a payload) and `output`.
-`tmpl-cli-core` holds the apps (`apps/note/`: `Command`, `Outcome`, `Error`,
-`exec`, one flow per command and the pure `rules`: the next id and list
+`tmpl-cli-core` holds the apps (`app/note/`: `Command`, `Outcome`, `Error`,
+`exec`, one flow per command and the pure `rule`: the next id and list
 selection), the `runtime` they share (the context, the one chokepoint every
 app's `exec` forwards to, the audit guard) and `composition` (the only code
 that reads the environment or picks the data directory, the store and the
@@ -39,8 +39,8 @@ the data directory: the `Store` facade (one read, one write transaction)
 over `driver/sqlite/` (the notes database's file and lock wait, and in
 `schema/` one module per table and the one ordered step list, handed out as
 a `cw_sqlite::Db`; no query), one repository per record
-(`notes`: the notes' SQL and row mapping; `audit`), `db/audit.rs` (the
-persisted audit line) and the record shapes in `contracts/`. A driver sets
+(`note`: the notes' SQL and row mapping; `audit`), `db/audit.rs` (the
+persisted audit line) and the record shapes in `contract/`. A driver sets
 one storage mechanism up once and returns a handle; a repository is one
 record's use of it. The core reaches a record only through
 `snapshot.<record>()` and `tx.<record>()`. The foundation is the cw-kit from
@@ -65,7 +65,7 @@ alone, so it runs in `make ci-fast` without compiling.
    (`COLUMNS`, terminals only). Nothing else in the program asks these
    questions; `scripts/check-terminal-guard.sh` rejects any attempt.
 3. The noun's handler maps the parsed arguments to the app's `Command` and
-   calls `apps::note::exec` with the environment `main` captured (`Env`, plus
+   calls `app::note::exec` with the environment `main` captured (`Env`, plus
    `--root`). The app's `exec` forwards to the runtime's `exec`
    (`runtime/exec.rs`), which starts the runtime: composition picks the data
    directory, resolves the OS actor (`USER`, else `USERNAME`, else `None`),
@@ -138,7 +138,7 @@ store leaves nothing behind, and closes that read. It then calls
 database (creating it `0600` and running any schema step it lacks), begins
 one `IMMEDIATE` transaction (waiting up to 10 seconds for another writer,
 then `store_locked`), refuses a store with bad records, and runs the flow:
-it assigns the next id (`rules::next_id`: checked max id + 1, refusing with
+it assigns the next id (`rule::next_id`: checked max id + 1, refusing with
 `note_id_exhausted` at `NoteId::MAX`, SQLite's largest integer) and puts the
 note. The transaction commits when the flow succeeds and rolls back when it
 fails. A database at a newer schema version is refused for reads and writes

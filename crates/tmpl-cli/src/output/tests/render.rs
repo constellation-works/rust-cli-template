@@ -2,7 +2,7 @@ use crate::output::payload::NotePayload;
 use crate::output::render::{note_detail, note_list, plain_line};
 use crate::output::sink::{OutputMode, Sink};
 use time::macros::datetime;
-use tmpl_cli_core::contracts::Priority;
+use tmpl_cli_core::contract::Priority;
 
 fn note(id: u64, tags: &[&str]) -> NotePayload {
     NotePayload {

@@ -57,14 +57,14 @@ there.
 | Grouped root help | [crates/tmpl-cli/src/help.rs](../../../crates/tmpl-cli/src/help.rs) |
 | Root command, global flags, parsing | [crates/tmpl-cli/src/cli.rs](../../../crates/tmpl-cli/src/cli.rs) |
 | Environment capture, data directory, store and clock | [crates/tmpl-cli-core/src/composition.rs](../../../crates/tmpl-cli-core/src/composition.rs) |
-| Noun dispatch | [crates/tmpl-cli/src/commands/mod.rs](../../../crates/tmpl-cli/src/commands/mod.rs) |
-| `note` subcommands, flags, help, mapping to the app, empty-result notice | [crates/tmpl-cli/src/commands/note.rs](../../../crates/tmpl-cli/src/commands/note.rs) |
+| Noun dispatch | [crates/tmpl-cli/src/command/mod.rs](../../../crates/tmpl-cli/src/command/mod.rs) |
+| `note` subcommands, flags, help, mapping to the app, empty-result notice | [crates/tmpl-cli/src/command/note.rs](../../../crates/tmpl-cli/src/command/note.rs) |
 | Output mode, color, width resolution | [crates/tmpl-cli/src/output/sink.rs](../../../crates/tmpl-cli/src/output/sink.rs) |
 | Rendering, error reporting, closed pipe | [crates/tmpl-cli/src/output/](../../../crates/tmpl-cli/src/output/) |
-| The `note` app: `exec`, audited-command table, flows | [crates/tmpl-cli-core/src/apps/note/](../../../crates/tmpl-cli-core/src/apps/note/) |
-| Next-id rule, list selection (filter, count, limit) | [crates/tmpl-cli-core/src/apps/note/rules.rs](../../../crates/tmpl-cli-core/src/apps/note/rules.rs) |
+| The `note` app: `exec`, audited-command table, flows | [crates/tmpl-cli-core/src/app/note/](../../../crates/tmpl-cli-core/src/app/note/) |
+| Next-id rule, list selection (filter, count, limit) | [crates/tmpl-cli-core/src/app/note/rule.rs](../../../crates/tmpl-cli-core/src/app/note/rule.rs) |
 | Runtime context; audit guard around mutating commands | [crates/tmpl-cli-core/src/runtime/](../../../crates/tmpl-cli-core/src/runtime/) |
-| Note and audit record shapes, validation | [crates/tmpl-cli-store/src/contracts/](../../../crates/tmpl-cli-store/src/contracts/) |
+| Note and audit record shapes, validation | [crates/tmpl-cli-store/src/contract/](../../../crates/tmpl-cli-store/src/contract/) |
 | The one error type and its classification | `cw-base` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/9c9cc998720f0a75041be3451c14fbaf80f29dc8/crates/cw-base) |
 | The store's codes for the kit's errors | [crates/tmpl-cli-store/src/error.rs](../../../crates/tmpl-cli-store/src/error.rs) |
 | Store facade: read, write transaction | [crates/tmpl-cli-store/src/store.rs](../../../crates/tmpl-cli-store/src/store.rs) |

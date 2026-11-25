@@ -16,10 +16,10 @@ use std::path::Path;
 use std::sync::Arc;
 use time::OffsetDateTime;
 use time::macros::datetime;
-use tmpl_cli_core::apps::note::{Command, Error, ListFilter, NewNote, NoteList, Outcome};
-use tmpl_cli_core::contracts::{Note, NoteId, Priority, Tag};
+use tmpl_cli_core::app::note::{Command, Error, ListFilter, NewNote, NoteList, Outcome};
+use tmpl_cli_core::contract::{Note, NoteId, Priority, Tag};
 use tmpl_cli_core::test_support::{Ctx, note_run};
-use tmpl_cli_store::contracts::NoteError;
+use tmpl_cli_store::contract::NoteError;
 use tmpl_cli_store::{
     BadRecord, BadRecordReason, Error as StoreError, RecordLocator, STORE_FILE, Store,
 };

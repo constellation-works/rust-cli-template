@@ -24,7 +24,7 @@ pin is a change of its own). Every kit crate is pinned to that one rev.
 |-------|------|------|-------------------------------|--------|
 | `tmpl-cli` | binary `tmpl-cli` | Argument declarations, the mapping from arguments to an app's `Command`, rendering, exit codes. The only stdout, stderr and terminal access. | `tmpl-cli-core`; `cw-testkit` and `tmpl-cli-store` (its `test-support`) as dev-dependencies only | `tmpl-cli-store` as a normal dependency, every kit crate, `rusqlite` |
 | `tmpl-cli-core` | library | The apps, the runtime they share, and composition. | `tmpl-cli-store`, `cw-base`; `cw-testkit` and the store's `test-support` as dev-dependencies only | `cw-fs`, `cw-sqlite`, `rusqlite`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
-| `tmpl-cli-store` | library | The data directory: the notes database's driver, one repository per record, the record shapes (`contracts`), the audit line, and the store's stable code for each of the kit's errors. It names no file primitive and no SQLite crate of its own: it reaches the directory and the audit log through `cw-fs` and the notes database through `cw-sqlite`, and names `rusqlite` only through its re-export. | `cw-base`, `cw-fs`, `cw-sqlite`; `cw-testkit` as a dev-dependency only | `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix`, `rusqlite` as a dependency of its own |
+| `tmpl-cli-store` | library | The data directory: the notes database's driver, one repository per record, the record shapes (`contract`), the audit line, and the store's stable code for each of the kit's errors. It names no file primitive and no SQLite crate of its own: it reaches the directory and the audit log through `cw-fs` and the notes database through `cw-sqlite`, and names `rusqlite` only through its re-export. | `cw-base`, `cw-fs`, `cw-sqlite`; `cw-testkit` as a dev-dependency only | `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix`, `rusqlite` as a dependency of its own |
 
 `scripts/check-dependency-direction.sh` reads these edges from Cargo's own
 package graph (`cargo metadata --no-deps --locked`), so a quoted or renamed
@@ -38,7 +38,7 @@ names `cw_testkit`). The binary's and the core's tests also take
 notes database, so a test can set up a store the public API never writes
 while no crate outside the store names `rusqlite`. The binary names only
 `tmpl-cli-core`. The core re-exports the store's record shapes as
-`tmpl_cli_core::contracts` and the kit's error type as
+`tmpl_cli_core::contract` and the kit's error type as
 `tmpl_cli_core::Error` and `tmpl_cli_core::Kind`, so a surface needs no
 second dependency. Why the crates are laid out by app, and why the
 foundation is the kit:
@@ -51,14 +51,14 @@ foundation is the kit:
 main.rs              capture the environment into the core's Env, run
 lib.rs               parse, resolve the output sink, dispatch, render
 cli.rs               the root command and the global flags
-commands/<noun>.rs   arguments -> apps::<app>::Command; Outcome -> payload
+command/<noun>.rs    arguments -> app::<app>::Command; Outcome -> payload
 output/              payloads, rendering, the sink, logging
 error.rs             the exit code and the remedy for an error; the output failure
 help.rs              grouped root help
 ```
 
 A command handler does three things: map the parsed arguments to the app's
-`Command`, call `tmpl_cli_core::apps::<app>::exec`, and turn the `Outcome`
+`Command`, call `tmpl_cli_core::app::<app>::exec`, and turn the `Outcome`
 into an output payload. It opens no store, resolves no path, reads no
 environment variable and decides nothing about a record. `main` captures the
 environment into `Env` once; `output/` alone reads the presentation variables
@@ -68,12 +68,12 @@ environment into `Env` once; `output/` alone reads the presentation variables
 ## `tmpl-cli-core`
 
 ```
-lib.rs               pub mod apps; Env; contracts (re-exported from the store); Error, Kind (from cw-base)
-apps/
+lib.rs               pub mod app; Env; contract (re-exported from the store); Error, Kind (from cw-base)
+app/
   note/
     mod.rs           Command, Outcome, Error, exec (forwards to runtime::exec), run: dispatch only
     add.rs list.rs show.rs   one flow per command
-    rules.rs         the note rules: the next id, a stored note from a new one, list selection
+    rule.rs          the note rules: the next id, a stored note from a new one, list selection
 runtime/
   mod.rs             Runtime (started from composition), Ctx (what a flow receives)
   exec.rs            the one chokepoint: the App trait and exec, which every app's exec forwards to
@@ -91,11 +91,11 @@ test_support.rs      behind the `test-support` feature: Ctx and each app's run
   its dispatch, and its outcome's record id for the audit line. No app starts the runtime or the guard itself
   (`scripts/check-dependency-direction.sh`). `run(ctx, command)` is the
   dispatch without the runtime start or the guard; tests call it.
-- A flow loads from one `store.read()`, decides with the app's pure `rules`,
+- A flow loads from one `store.read()`, decides with the app's pure `rule`,
   and commits in one `store.write(|tx| …)`, re-checking inside the closure
   anything that must be atomic with the write.
 - An app may call another only through that app's `run` or what its `mod.rs`
-  exports. There is no `apps/common`, `apps/shared` or `apps/util`: code two
+  exports. There is no `app/common`, `app/shared` or `app/util`: code two
   apps need goes to the lower app, or to `runtime` when it is about the
   context, the chokepoint or the audit guard.
 - `runtime` is crate-private and imports no app.
@@ -115,7 +115,7 @@ test_support.rs      behind the `test-support` feature: Ctx and each app's run
 ## `tmpl-cli-store`
 
 ```
-lib.rs               re-exports: Store, Snapshot, Tx, Error, contracts, repository, STORE_FILE
+lib.rs               re-exports: Store, Snapshot, Tx, Error, contract, repository, STORE_FILE
 store.rs             Store::open, read() -> Snapshot, write(|tx| …), audit()
 driver/
   mod.rs             one module per storage mechanism
@@ -125,12 +125,12 @@ driver/
     note.rs          the note table's steps as named items (CREATE_NOTE)
 repository/
   mod.rs             Snapshot (one reader), Tx (one write transaction)
-  notes.rs           notes: the SQL and row mapping; all, get, bad records; put
+  note.rs            notes: the SQL and row mapping; all, get, bad records; put
   audit.rs           audit: append
 db/
   mod.rs             the audit log's lock file name
   audit.rs           the persisted audit line and its upgrades
-contracts/
+contract/
   note.rs            Note, NoteId (1 to NoteId::MAX), Title, Body, Tag, Priority, NoteError
   audit.rs           AuditEvent, AuditStatus
 error.rs             Error (a code for every cw_fs::Error and cw_sqlite::Error variant), its translator into cw_base::Error; BadRecord and its locator and reason
@@ -146,8 +146,10 @@ test_support.rs      behind the `test-support` feature: raw SQL on the notes dat
   the one append-only `MIGRATIONS` list naming every step in order. A step
   added later to an earlier table goes at the end of that list; per-table
   lists are never concatenated, so no shipped step is renumbered (STD-03
-  R23). A statement that changes the schema appears only under `schema/`.
-  `repository/notes.rs` holds the notes' SQL and the mapping between a row
+  R23). A step that changes two tables lives in the file of the table it
+  creates or alters, and `schema/mod.rs` still sets its place in the order.
+  A statement that changes the schema appears only under `schema/`.
+  `repository/note.rs` holds the notes' SQL and the mapping between a row
   and the contract types, run on the reader `Store::read` opened or the
   transaction `Store::write` began. There is no `driver/fs/`: the audit
   repository reaches its file through `cw_fs` directly.
@@ -160,13 +162,13 @@ test_support.rs      behind the `test-support` feature: raw SQL on the notes dat
   names the log in its warning). Repository calls return owned values.
 - **A second driver.** There is no trait per repository and no driver chosen
   at run time. When a second storage mechanism is added, `driver/<other>/`
-  sets it up, and `repository/notes.rs` becomes `repository/notes/mod.rs`
-  (the record's public surface, unchanged for the core), `notes/sqlite.rs`
-  and `notes/<other>.rs`.
+  sets it up, and `repository/note.rs` becomes `repository/note/mod.rs`
+  (the record's public surface, unchanged for the core), `note/sqlite.rs`
+  and `note/<other>.rs`.
 - One repository per record, never per command. The store holds no rule of
   any app: no next-id rule, no list selection, no validation beyond what a
   contract type enforces on itself.
-- `contracts/` holds shapes only: type definitions, the constructor or
+- `contract/` holds shapes only: type definitions, the constructor or
   parser that enforces the type's own invariant, serde and `Display`. No
   function that decides across records, no `check_*`, no clock, no file and
   no SQLite.
@@ -211,7 +213,7 @@ Checked by grep over non-test sources, except that `rusqlite` and
   only under `driver/sqlite/schema/`, and only `schema/mod.rs` declares a
   list of steps. No public item names a `rusqlite` or
   `cw_sqlite` type. `db/audit.rs` names neither `cw_fs` nor `cw_sqlite`.
-  `contracts/` imports no `db`, `driver`, `repository`, `Store`, file access
+  `contract/` imports no `db`, `driver`, `repository`, `Store`, file access
   or SQLite, and defines no `check_*` function and reads no clock. There is
   no `db/fsio.rs` and no `driver/fs/`. The crate reads no environment
   variable and discovers no path.
@@ -219,11 +221,11 @@ Checked by grep over non-test sources, except that `rusqlite` and
   `rustix`, `cw_fs`, `cw_sqlite` or `rusqlite` anywhere, and no
   `tmpl_cli_store::repository` path: a record is reached through
   `snapshot.<record>()` or `tx.<record>()`. Only `composition.rs` names `std::env`, `home_dir` or
-  `current_dir`. `runtime/` imports no `crate::apps`. No `apps/common`,
-  `apps/shared` or `apps/util`. An app's `rules` names no `runtime`,
+  `current_dir`. `runtime/` imports no `crate::app`. No `app/common`,
+  `app/shared` or `app/util`. An app's `rule` names no `runtime`,
   `composition`, `Store`, `Snapshot` or `Tx`.
-- `tmpl-cli`: nothing names `tmpl_cli_store`, `cw_base`, `cw_fs`, `cw_sqlite` or `rusqlite`. `commands/` names no `std::env`,
+- `tmpl-cli`: nothing names `tmpl_cli_store`, `cw_base`, `cw_fs`, `cw_sqlite` or `rusqlite`. `command/` names no `std::env`,
   `std::fs`, `Store`, `Runtime` or `Ctx`. `output/` imports no `cli` or
-  `commands`.
+  `command`.
 - Only `tmpl-cli/src/output/` touches stdout, stderr, `IsTerminal` or the
   color/format variables (`scripts/check-terminal-guard.sh`).

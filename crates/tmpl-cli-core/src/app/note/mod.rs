@@ -4,21 +4,21 @@
 //! runs the command inside the audit guard when it mutates, and hands the
 //! result to the caller's `finish` before the guard writes its line. The app
 //! supplies what differs through [`NoteApp`]. Each command is one flow file
-//! (`add.rs`, `list.rs`, `show.rs`); the rules they share are in `rules.rs`.
+//! (`add.rs`, `list.rs`, `show.rs`); the rules they share are in `rule.rs`.
 
 mod add;
 mod list;
-mod rules;
+mod rule;
 mod show;
 
-pub use rules::{ListFilter, NewNote, NoteList};
+pub use rule::{ListFilter, NewNote, NoteList};
 
 use crate::composition::Env;
 use crate::runtime::{self, App, AuditMeta, Ctx};
 use cw_base::Kind;
 use std::path::PathBuf;
 use tmpl_cli_store::BadRecord;
-use tmpl_cli_store::contracts::{Note, NoteId};
+use tmpl_cli_store::contract::{Note, NoteId};
 
 /// What the `note` app can be asked to do.
 #[derive(Clone, Debug, PartialEq, Eq)]
