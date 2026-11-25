@@ -1,22 +1,22 @@
 //! The tmpl-cli data directory as a library.
 //!
 //! - `driver`: one module per storage mechanism, each holding only this
-//!   project's part of it. `driver::sqlite` names the notes database, its
+//!   project's part of it. `driver::sqlite` names the database, its
 //!   lock wait and its schema steps, and hands out the kit's
 //!   `cw_sqlite::Db`; it holds no query;
-//! - [`repository`]: one repository per record (notes, audit), read through a
+//! - [`repository`]: one repository per record, read through a
 //!   [`Snapshot`] and written through a [`Tx`] inside [`Store::write`]; the
-//!   notes repository holds the notes' SQL and row mapping, and the audit
-//!   repository the audit log's lock file and persisted line;
-//! - [`contract`]: the record shapes ([`contract::Note`] and its field
-//!   types, [`contract::AuditEvent`]);
+//!   repository of a record held in the database holds its SQL and row
+//!   mapping, and the audit repository the audit log's lock file and
+//!   persisted line;
+//! - [`contract`]: the record shapes, such as [`contract::AuditEvent`];
 //! - the crate's typed [`Error`], and its one translator into the
 //!   workspace's error type.
 //!
-//! It reaches the notes database only through the kit's `cw_sqlite` and the
+//! It reaches the database only through the kit's `cw_sqlite` and the
 //! data directory and the audit log only through the kit's `cw_fs`: no code
 //! in this crate names `std::fs`. No type of either crate, no path but
-//! [`Store::path`] and [`Store::audit_path`], and no borrow from a
+//! [`Store::root`], [`Store::path`] and [`Store::audit_path`], and no borrow from a
 //! connection is in its public surface.
 //!
 //! The store holds no rule of any app: no next-id rule, no list selection,

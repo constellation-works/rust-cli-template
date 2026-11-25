@@ -12,9 +12,12 @@ mod audit;
 mod exec;
 
 pub(crate) use audit::AuditMeta;
+pub(crate) use exec::{App, exec};
+
+// example:begin
 #[cfg(test)]
 pub(crate) use exec::run_with;
-pub(crate) use exec::{App, exec};
+// example:end
 
 use audit::AuditGuard;
 
@@ -67,7 +70,7 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// The note store.
+    /// The store.
     pub(crate) fn store(&self) -> &'a Store {
         self.store
     }

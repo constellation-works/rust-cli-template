@@ -29,7 +29,7 @@ pub(crate) struct Column {
     /// Alignment of every cell in the column.
     pub(crate) align: Align,
     /// Whether this column may be cut to fit a terminal. Only a column whose
-    /// full value is available from `note show` or `--json` may be (R15).
+    /// full value is available from a detail view or `--json` may be (R15).
     pub(crate) truncate: bool,
 }
 

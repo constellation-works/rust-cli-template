@@ -641,7 +641,7 @@ govern. Each binds as soon as it does, and this entry is edited then:
 
 ### Context
 
-Daniel, 2026-11-24: "can you also update rust-cli-template similarly?
+Daniel, 2026-11-24: "can you also update [the Rust CLI template] similarly?
 separate create for store. runtime, composition, apps in core." "Similarly"
 means the layout he approved for scribe the same day: every command is
 parsed by the binary, run by one `exec` in the core, and rendered by the
@@ -1067,3 +1067,62 @@ re-vendors. Each line names the rule and what is unmet.
   gap above already recorded rather than introduced by the change.
 - Cost: until the follow-up lands, a project made from the template inherits
   these gaps along with the record of them.
+
+## One init command makes three kinds from one marked tree
+
+**Recorded:** 2026-11-25
+**Code anchors:** `scripts/init.sh`; `scripts/template-manifest.txt`; `scripts/check-template.py`; `scripts/check-template-version.sh`; `template.toml`; `crates/tmpl-cli-core/src/app/status/mod.rs::exec`; `crates/tmpl-cli-store/src/driver/sqlite/mod.rs::STORE_FILE`; `Makefile` (`CRATES`)
+
+### Context
+
+A copy of the template began as the full note example, and a project that
+wanted none of it deleted the domain by hand, file by file, through every
+layer. A project that wanted only the gates, CI, lints and design-doc
+templates had no starting point. Nothing recorded which template revision a
+copy came from, so a later update had no baseline.
+
+### Decision
+
+`scripts/init.sh <name> [--kind cli|cli-bare|workspace] [--repository <url>]`
+replaces the rename script. `cli` keeps everything; `cli-bare` keeps the
+layers with one read-only `status` command; `workspace` keeps an empty Cargo
+workspace.
+
+- **Removable by construction.** The example is note-named files, or lines
+  between `example` begin and end markers in the file's comment syntax.
+  `crates` regions hold what only the crates need (dropped by `workspace`),
+  and `template` regions the template's own text, dropped by every kind;
+  in one, a line marked `copy` becomes the copy's text (the README summary line
+  and starting point, the first line of `AGENTS.md`, the first changelog
+  entry). `scripts/template-manifest.txt` lists the files, the regions, the
+  template's own files and the per-kind overlays (the bare root help golden,
+  the workspace `ARCHITECTURE.md`), and `make structure` runs
+  `check-template.py`, which fails on a note reference outside them.
+- **`status`** is the command a bare copy keeps, so every layer keeps a
+  caller: the store read and `Snapshot::format`, an app, the runtime, a
+  command, a payload with plain, table and JSON forms, and its goldens. It
+  reads only, creates nothing and is not audited.
+- **The database file is `store.db`**, not `notes.db`, so a bare copy does
+  not name the example. A store written by an earlier build of the template
+  is not found under the new name: the template has no released user.
+- **`Tx` allows `dead_code`** with its reason: a bare store has no record
+  repository yet, so nothing reads its two fields.
+- **`template.toml`** holds `version`; init writes it with the `kind` into
+  the copy. A pull request that changes a path not listed `template` in the
+  manifest raises the version (`check-template-version.sh`).
+- **No registry, no guessed URL.** `[workspace.package]` sets
+  `publish = false`; `repository` comes only from `--repository`.
+- **The workspace kind keeps STD-01 vendored.** Its card adopts STD-02 to
+  06, 08 and 09, but `docs/standards/` stays as vendored: removing STD-01
+  would break `SHA256SUMS`, which only the umbrella's sync script writes.
+- The Makefile's Cargo targets say they skip while no `crates/*/Cargo.toml`
+  exists, and the gate scripts that read `crates/` pass when it is missing.
+
+### Consequences
+
+- A project picks what it starts from, and `template.toml` records the
+  template version it came from.
+- The template's CI runs init for each kind on a scratch copy and then that
+  copy's `make ci`, so a region that breaks a kind fails the pull request.
+- Cost: a change to the example must keep it inside its files and regions,
+  and a change to a shipped file raises the version.

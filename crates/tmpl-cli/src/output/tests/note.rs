@@ -1,5 +1,4 @@
-use crate::output::payload::NotePayload;
-use crate::output::render::{note_detail, note_list, plain_line};
+use crate::output::note::{NotePayload, detail, list, plain_line};
 use crate::output::sink::{OutputMode, Sink};
 use time::macros::datetime;
 use tmpl_cli_core::contract::Priority;
@@ -25,7 +24,7 @@ fn sink(mode: OutputMode) -> Sink {
 
 fn render_list(mode: OutputMode, notes: &[NotePayload]) -> String {
     let mut out = Vec::new();
-    note_list(&mut out, &sink(mode), notes, notes.len()).unwrap();
+    list(&mut out, &sink(mode), notes, notes.len()).unwrap();
     String::from_utf8(out).unwrap()
 }
 
@@ -58,7 +57,7 @@ fn an_empty_list_is_empty_stdout_in_human_modes_and_an_empty_envelope_in_json() 
 fn a_cut_list_says_so_in_the_json_envelope() {
     // STD-01 R34.
     let mut out = Vec::new();
-    note_list(&mut out, &sink(OutputMode::Json), &[note(1, &[])], 4).unwrap();
+    list(&mut out, &sink(OutputMode::Json), &[note(1, &[])], 4).unwrap();
     let json: serde_json::Value = serde_json::from_slice(&out).unwrap();
     assert_eq!(json["total"], 4);
     assert_eq!(json["truncated"], true);
@@ -69,7 +68,7 @@ fn a_cut_list_says_so_in_the_json_envelope() {
 fn json_carries_null_for_absent_values_rather_than_omitting_them() {
     // STD-01 R11.
     let mut out = Vec::new();
-    note_detail(&mut out, &sink(OutputMode::Json), &note(1, &[])).unwrap();
+    detail(&mut out, &sink(OutputMode::Json), &note(1, &[])).unwrap();
     let value: serde_json::Value = serde_json::from_slice(&out).unwrap();
     assert!(value.get("body").is_some_and(serde_json::Value::is_null));
     assert_eq!(value["tags"], serde_json::json!([]));
@@ -92,7 +91,7 @@ fn detail_view_sanitizes_body_control_characters_and_normalizes_crlf() {
         "first\r\nsecond\rthird\x1b[31mred\x1b[0m\tkept",
     ));
     let mut out = Vec::new();
-    note_detail(&mut out, &sink(OutputMode::Table), &note_payload).unwrap();
+    detail(&mut out, &sink(OutputMode::Table), &note_payload).unwrap();
     let rendered = String::from_utf8(out).unwrap();
     assert!(
         rendered

@@ -1,6 +1,6 @@
 //! Shared fixture for the integration tests: the kit's private temp root
 //! (`cw_testkit::TempRoot`) and the template's own parts on top of it, the
-//! binary's name, the notes the goldens are seeded with, and store files
+//! binary's name, the records the goldens are seeded with, and store files
 //! written by hand.
 //!
 //! Every child runs through `TempRoot::command`: a cleared environment with
@@ -85,7 +85,10 @@ impl Fixture {
         );
         out
     }
+}
 
+// example:begin
+impl Fixture {
     /// Add the notes every output golden and several tests use.
     pub fn seed(&self) {
         self.ok(&[
@@ -117,6 +120,7 @@ impl Fixture {
         ]);
     }
 }
+// example:end
 
 pub fn text(bytes: &[u8]) -> String {
     String::from_utf8(bytes.to_vec()).expect("utf-8 output")
@@ -165,7 +169,8 @@ pub fn make_private(path: &Path) {
     let _ = path;
 }
 
-/// Store `count` notes directly in the notes database, for tests that need
+// example:begin
+/// Store `count` notes directly in the database, for tests that need
 /// more data than is quick to add one process at a time.
 pub fn write_store(root: &Path, count: usize) {
     execute(
@@ -180,21 +185,22 @@ pub fn write_store(root: &Path, count: usize) {
         ),
     );
 }
+// example:end
 
-/// Replace the notes database with bytes that are not one, and drop its
+/// Replace the database with bytes that are not one, and drop its
 /// `-wal` and `-shm`, whose committed pages would otherwise still be read.
 pub fn corrupt_store(root: &Path) {
-    for sidecar in ["notes.db-wal", "notes.db-shm"] {
+    for sidecar in ["store.db-wal", "store.db-shm"] {
         match std::fs::remove_file(root.join(sidecar)) {
             Ok(()) => {}
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
             Err(err) => panic!("remove {sidecar}: {err}"),
         }
     }
-    std::fs::write(root.join("notes.db"), b"not a database").expect("corrupt store");
+    std::fs::write(root.join("store.db"), b"not a database").expect("corrupt store");
 }
 
-/// Run raw SQL on the notes database under `root`, for state the binary
+/// Run raw SQL on the database under `root`, for state the binary
 /// never writes (a bad record).
 pub fn execute(root: &Path, sql: &str) {
     tmpl_cli_store::test_support::execute(&tmpl_cli_store::Store::open(root), sql)

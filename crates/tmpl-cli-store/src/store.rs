@@ -1,7 +1,7 @@
 //! The [`Store`] facade: one data directory, read as a snapshot, written in
 //! one transaction.
 //!
-//! The notes live in one SQLite database, `<root>/notes.db`, with its `-wal`
+//! The records live in one SQLite database, `<root>/store.db`, with its `-wal`
 //! and `-shm` beside it, set up by the driver (`crate::driver::sqlite`) and
 //! reached through the kit's `cw_sqlite`. A read opens a read-only
 //! connection that takes no lock and writes nothing of its own (STD-01 R31)
@@ -15,13 +15,13 @@
 //! that is a symbolic link, owned by another user, or open to any group or
 //! other permission bit (STD-05 R9).
 //!
-//! The store decides nothing about notes: which id comes next, which notes a
-//! listing returns and when a command is refused are the note app's rules.
+//! The store decides nothing about a record: which id comes next, which
+//! records a listing returns and when a command is refused are an app's rules.
 
 use crate::driver::sqlite::{self, STORE_FILE};
 use crate::error::{Error, Result};
 use crate::repository::audit::{AUDIT_LOCK_FILE, line};
-use crate::repository::{Audit, Snapshot, Tx, first_bad};
+use crate::repository::{Audit, Snapshot, Tx};
 use cw_fs::Lock;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -29,7 +29,7 @@ use std::time::Duration;
 /// How long a writer waits for another writer before refusing (STD-03 R7).
 const DEFAULT_LOCK_WAIT: Duration = Duration::from_secs(10);
 
-/// A note store rooted at one data directory.
+/// A store rooted at one data directory.
 #[derive(Clone, Debug)]
 pub struct Store {
     root: PathBuf,
@@ -54,8 +54,8 @@ impl Store {
         self
     }
 
-    /// The notes database, `<root>/notes.db`. Public for the note app,
-    /// which names it in an outcome and in its refusals.
+    /// The database, `<root>/store.db`. Public for the apps, which name it
+    /// in an outcome and in their refusals.
     #[must_use]
     pub fn path(&self) -> PathBuf {
         self.root.join(STORE_FILE)
@@ -68,8 +68,9 @@ impl Store {
         self.root.join(line::AUDIT_FILE)
     }
 
-    /// The data directory.
-    pub(crate) fn root(&self) -> &Path {
+    /// The data directory. Public for the apps, which report it.
+    #[must_use]
+    pub fn root(&self) -> &Path {
         &self.root
     }
 
@@ -82,6 +83,15 @@ impl Store {
     ///
     /// The store's typed [`Error`], translated into `cw_base::Error` here at
     /// the crate's boundary; `downcast_ref::<Error>()` gives it back.
+    ///
+    /// ```
+    /// let temp = cw_testkit::TempRoot::new("TMPL_CLI")?;
+    /// let store = tmpl_cli_store::Store::open(temp.path().join("data"));
+    /// let snapshot = store.read()?;
+    /// assert_eq!(snapshot.format(), None, "no database yet");
+    /// assert!(!store.root().exists(), "a read creates nothing");
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     pub fn read(&self) -> std::result::Result<Snapshot, cw_base::Error> {
         Ok(self.snapshot()?)
     }
@@ -115,9 +125,11 @@ impl Store {
         let db = sqlite::open(&self.root, self.lock_wait);
         let path = db.path();
         db.write(|tx| {
-            if let Some(bad) = first_bad(tx, path)? {
+            // example:begin
+            if let Some(bad) = crate::repository::note::first_bad(tx, path)? {
                 return Err(Failed::from(Error::BadRecord(bad)));
             }
+            // example:end
             apply(&mut Tx::new(tx, path)).map_err(Failed)
         })
         .map_err(|Failed(err)| err)

@@ -49,7 +49,7 @@ fn blank_trailing_cells_do_not_leave_padding_or_color_escapes() {
         Cell::plain(" "),
         Cell {
             text: String::new(),
-            role: Role::Warn,
+            role: Role::Muted,
         },
     ]];
     let text = render(&COLUMNS, &rows, None, Color::Ansi);
@@ -82,13 +82,13 @@ fn color_is_applied_to_cells_only_when_allowed() {
         Cell::plain("1"),
         Cell {
             text: "urgent".into(),
-            role: Role::Warn,
+            role: Role::Muted,
         },
         Cell::plain("-"),
     ]];
     assert!(!render(&COLUMNS, &rows, None, Color::Plain).contains('\x1b'));
     let colored = render(&COLUMNS, &rows, None, Color::Ansi);
-    assert!(colored.contains("\x1b[33murgent\x1b[0m"));
+    assert!(colored.contains("\x1b[90murgent\x1b[0m"));
     assert!(
         !colored.lines().next().unwrap().contains('\x1b'),
         "headers are never colored"

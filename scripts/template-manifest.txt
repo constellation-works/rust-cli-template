@@ -1,0 +1,100 @@
+# What scripts/init.sh removes, rewrites or replaces for each kind, and what
+# scripts/check-template.py checks. One entry per line:
+#
+#   example PATH               the note example; removed by cli-bare and workspace
+#   crates PATH                the crates; removed by workspace
+#   template PATH              the template's own; removed by every kind, and a
+#                              change to it needs no version bump
+#   regions PATH               a file with marked regions (below)
+#   generated PATH             rewritten by init.sh in every kind
+#   overlay KIND PATH SOURCE   for KIND, SOURCE (a template path) replaces PATH
+#
+# Regions are lines between a begin and an end marker, written in the file's
+# own comment syntax, e.g. `// example:begin` or `<!-- example:end -->`:
+#
+#   example:begin / example:end    removed by cli-bare and workspace
+#   crates:begin / crates:end      removed by workspace
+#   template:begin / template:end  removed by every kind; inside one, a line
+#                                  `copy: <text>` becomes <text> in the copy,
+#                                  with __VERSION__ and __KIND__ filled in
+#
+# Each kind drops only the marker lines of a region it keeps. Outside these
+# entries and regions, no shipped file names the note example.
+
+# The note example.
+example crates/tmpl-cli/src/command/note.rs
+example crates/tmpl-cli/src/command/tests/note.rs
+example crates/tmpl-cli/src/output/note.rs
+example crates/tmpl-cli/src/output/tests/note.rs
+example crates/tmpl-cli/tests/note.rs
+example crates/tmpl-cli/tests/goldens/help/note.txt
+example crates/tmpl-cli/tests/goldens/help/note-add.txt
+example crates/tmpl-cli/tests/goldens/help/note-list.txt
+example crates/tmpl-cli/tests/goldens/help/note-show.txt
+example crates/tmpl-cli/tests/goldens/output/note-list.json
+example crates/tmpl-cli/tests/goldens/output/note-list.plain.txt
+example crates/tmpl-cli/tests/goldens/output/note-list.table.txt
+example crates/tmpl-cli/tests/goldens/output/note-show.json
+example crates/tmpl-cli/tests/goldens/output/note-show.plain.txt
+example crates/tmpl-cli/tests/goldens/output/note-show.table.txt
+example crates/tmpl-cli-core/src/app/note
+example crates/tmpl-cli-core/tests/note.rs
+example crates/tmpl-cli-store/src/contract/note.rs
+example crates/tmpl-cli-store/src/contract/tests/note.rs
+example crates/tmpl-cli-store/src/driver/sqlite/schema/note.rs
+example crates/tmpl-cli-store/src/repository/note.rs
+example docs/design/tmpl-cli
+
+# The crates and what only they use.
+crates crates
+crates Cargo.lock
+crates docs/usage.md
+
+# The template's own files.
+template scripts/init.sh
+template scripts/template-manifest.txt
+template scripts/check-template.py
+template scripts/check-template-version.sh
+template scripts/template
+template .github/workflows/template.yml
+template crates/tmpl-cli/tests/template.rs
+
+# Rewritten for the copy.
+generated about.md
+generated template.toml
+
+# Replaced per kind.
+overlay cli-bare crates/tmpl-cli/tests/goldens/help/root.txt scripts/template/cli-bare/crates/tmpl-cli/tests/goldens/help/root.txt
+overlay workspace ARCHITECTURE.md scripts/template/workspace/ARCHITECTURE.md
+
+# Files with regions.
+regions AGENTS.md
+regions ARCHITECTURE.md
+regions CHANGELOG.md
+regions Cargo.toml
+regions Makefile
+regions README.md
+regions docs/development.md
+regions docs/usage.md
+regions scripts/check-dependency-direction.sh
+regions crates/tmpl-cli/src/cli.rs
+regions crates/tmpl-cli/src/command/mod.rs
+regions crates/tmpl-cli/src/command/tests/mod.rs
+regions crates/tmpl-cli/src/error.rs
+regions crates/tmpl-cli/src/help.rs
+regions crates/tmpl-cli/src/output/color.rs
+regions crates/tmpl-cli/src/output/mod.rs
+regions crates/tmpl-cli/src/output/payload.rs
+regions crates/tmpl-cli/src/output/tests/mod.rs
+regions crates/tmpl-cli/tests/cli.rs
+regions crates/tmpl-cli/tests/golden.rs
+regions crates/tmpl-cli/tests/support/mod.rs
+regions crates/tmpl-cli-core/src/app/mod.rs
+regions crates/tmpl-cli-core/src/runtime/mod.rs
+regions crates/tmpl-cli-core/src/test_support.rs
+regions crates/tmpl-cli-store/src/contract/mod.rs
+regions crates/tmpl-cli-store/src/contract/tests/mod.rs
+regions crates/tmpl-cli-store/src/driver/sqlite/schema/mod.rs
+regions crates/tmpl-cli-store/src/error.rs
+regions crates/tmpl-cli-store/src/repository/mod.rs
+regions crates/tmpl-cli-store/src/store.rs

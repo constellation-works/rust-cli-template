@@ -46,7 +46,7 @@ import subprocess
 import sys
 
 WIDTH = 100
-ALLOWED_SINGULARS = set()
+ALLOWED_SINGULARS = {"status"}
 GENERATED = "@generated"
 
 URL = re.compile(r"^(//[/!]?|/\*[*!]?|\*)?\s*<?[A-Za-z][A-Za-z0-9+.-]*://\S+?>?[.,;:)]*(\s*\*/)?$")

@@ -11,9 +11,11 @@ UPDATE ?=
 # `STANDARDS_STRICT=1` makes a missing docs/standards/ a failure (CI sets it).
 STANDARDS_STRICT ?=
 # GitHub Actions sets CI=true. There a missing gate tool fails the gate;
-# locally it warns and skips or falls back (STD-04 R10, decision in
-# docs/design/tmpl-cli/4_decisions.md).
+# locally it warns and skips or falls back (STD-04 R10).
 CI ?=
+# The crates of this workspace. With none yet (a new workspace), every Cargo
+# target says so and passes, so the gates hold from the first commit.
+CRATES := $(wildcard crates/*/Cargo.toml)
 
 # $(call missing_tool,<tool>,<what it provides>): fail under CI, else warn.
 define missing_tool
@@ -37,12 +39,19 @@ help:
 	@echo "  make ci               Everything above; what CI runs"
 	@echo "  make build | fmt | install | clean"
 
+# ---------------------------------------------------------------------------
+# Cargo targets: skipped while the workspace has no crate
+# ---------------------------------------------------------------------------
+
+ifeq ($(strip $(CRATES)),)
+
+build fmt fmt-check clippy deny test goldens install clean:
+	@echo "$@: no crates/*/Cargo.toml yet; skipping" >&2
+
+else
+
 build:
 	$(CARGO) build --workspace $(LOCKED)
-
-# ---------------------------------------------------------------------------
-# Gates
-# ---------------------------------------------------------------------------
 
 fmt:
 	$(CARGO) fmt --all
@@ -59,18 +68,6 @@ fmt-check:
 		echo "error: rustfmt.toml sets an option that is unstable on this toolchain (STD-12 R11)" >&2; exit 1; \
 	fi; \
 	exit $$status
-
-# Source-only structure checks: dependency direction (STD-02 R1-R6), unit-test
-# module reachability (STD-02 R19), terminal/stream ownership (STD-01 R17),
-# singular names (STD-12 R1) and the source style rustfmt cannot check
-# (STD-12 R12, R13, R16, R19).
-structure:
-	./scripts/check-dependency-direction.sh
-	./scripts/check-test-modules.sh
-	./scripts/check-terminal-guard.sh
-	./scripts/check-singular-names.sh
-	./scripts/check-source-style.sh
-	sh scripts/check-private-task-ids.sh
 
 clippy:
 	$(CARGO) clippy --workspace --all-targets $(LOCKED) -- -D warnings
@@ -117,20 +114,50 @@ goldens:
 		UPDATE_GOLDENS=$(if $(UPDATE),1,0) $(CARGO) test -p $(BINARY) --test golden $(LOCKED); \
 	fi
 
+install:
+	$(CARGO) build --release --bin $(BINARY) $(LOCKED)
+	install -d $(INSTALL_BIN_DIR)
+	install -m 755 target/release/$(BINARY) $(INSTALL_BIN_DIR)/$(BINARY)
+
+clean:
+	$(CARGO) clean
+
+endif
+
+# ---------------------------------------------------------------------------
+# Gates that need no build
+# ---------------------------------------------------------------------------
+
+# Source-only structure checks: dependency direction (STD-02 R1-R6), unit-test
+# module reachability (STD-02 R19), terminal/stream ownership (STD-01 R17),
+# singular names (STD-12 R1) and the source style rustfmt cannot check
+# (STD-12 R12, R13, R16, R19).
+structure:
+	./scripts/check-dependency-direction.sh
+	./scripts/check-test-modules.sh
+	./scripts/check-terminal-guard.sh
+	./scripts/check-singular-names.sh
+	./scripts/check-source-style.sh
+	sh scripts/check-private-task-ids.sh
+# template:begin
+# The template's own gate: the example stays removable (scripts/template-manifest.txt).
+	python3 -I scripts/check-template.py
+# template:end
+
 # The constellation standards this repo adopted are vendored under
-# docs/standards/ by operations/scripts/sync-standards.sh, which also writes
-# check.sh. Until then this warns and passes, so a fresh copy of the template
-# builds; with STANDARDS_STRICT=1 (set in CI) a missing vendor fails.
+# docs/standards/ with the check.sh that verifies them. Without it this warns
+# and passes; with STANDARDS_STRICT=1 (set in CI) it fails.
+STANDARDS_HINT := Outside the constellation umbrella the standards are plain vendored files that docs/standards/check.sh only verifies; restore docs/standards/ from the copy this repository came from.
 standards-check:
 	@if [ -f docs/standards/check.sh ]; then \
 		sh docs/standards/check.sh; \
 	elif [ "$(STANDARDS_STRICT)" = "1" ]; then \
-		echo "error: standards not vendored yet (no docs/standards/check.sh)." >&2; \
-		echo "       from the constellation root: operations/scripts/sync-standards.sh --adopt STD-01,STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09,STD-12 <this repo>" >&2; \
+		echo "error: standards not vendored (no docs/standards/check.sh)." >&2; \
+		echo "       $(STANDARDS_HINT)" >&2; \
 		exit 1; \
 	else \
-		echo "warning: standards not vendored yet (no docs/standards/check.sh); skipping." >&2; \
-		echo "         from the constellation root: operations/scripts/sync-standards.sh --adopt STD-01,STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09,STD-12 <this repo>" >&2; \
+		echo "warning: standards not vendored (no docs/standards/check.sh); skipping." >&2; \
+		echo "         $(STANDARDS_HINT)" >&2; \
 	fi
 
 # Pre-handoff gate for agents: no compile, and every parity check CI runs
@@ -149,15 +176,3 @@ ci-lint: clippy deny
 
 # Full pass. Keep aligned with .github/workflows/ci.yml.
 ci: ci-fast ci-lint test goldens
-
-# ---------------------------------------------------------------------------
-# Install
-# ---------------------------------------------------------------------------
-
-install:
-	$(CARGO) build --release --bin $(BINARY) $(LOCKED)
-	install -d $(INSTALL_BIN_DIR)
-	install -m 755 target/release/$(BINARY) $(INSTALL_BIN_DIR)/$(BINARY)
-
-clean:
-	$(CARGO) clean

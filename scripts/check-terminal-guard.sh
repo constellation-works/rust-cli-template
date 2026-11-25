@@ -7,6 +7,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# A workspace with no crate yet has nothing to check.
+if [[ ! -d crates ]]; then
+  echo "terminal-guard: no crates yet; nothing to check"
+  exit 0
+fi
+
 OUTPUT_DIR=crates/tmpl-cli/src/output
 PATTERN='is_terminal|IsTerminal|io::stdout|io::stderr|"NO_COLOR"|"CLICOLOR_FORCE"|"TERM"|"COLUMNS"|TMPL_CLI_FORMAT|println!|eprintln!|print!|eprint!'
 

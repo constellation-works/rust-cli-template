@@ -10,7 +10,7 @@
 //! `note/support.rs` for what they share, and `note/tests/` beside them.
 //! STD-02 R18: split along responsibilities, not by length alone.
 
-use crate::output::{NotePayload, Output};
+use crate::output::{NotePayload, Output, Payload};
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::{ArgAction, Args, Subcommand};
 use std::num::NonZeroUsize;
@@ -143,26 +143,26 @@ fn output(outcome: Outcome) -> Output {
         Outcome::Added { note, path } => {
             // Name what was written and where (STD-01 R30); `id` is in the payload.
             let notice = format!("added note {} to {}", note.id, path.display());
-            Output::Note {
-                note: NotePayload::from(&note),
+            Output {
                 notice: Some(notice),
-                warnings: Vec::new(),
+                ..Output::new(Payload::Note(NotePayload::from(&note)))
             }
         }
         Outcome::Listed {
             list,
             filter,
             bad_records,
-        } => Output::Notes {
-            notes: list.notes.iter().map(NotePayload::from).collect(),
-            total: list.total,
+        } => Output {
+            payload: Payload::Notes {
+                notes: list.notes.iter().map(NotePayload::from).collect(),
+                total: list.total,
+            },
             notice: list_notice(&filter, &list),
             warnings: bad_records.iter().map(ToString::to_string).collect(),
         },
-        Outcome::Shown { note, bad_records } => Output::Note {
-            note: NotePayload::from(&note),
-            notice: None,
+        Outcome::Shown { note, bad_records } => Output {
             warnings: bad_records.iter().map(ToString::to_string).collect(),
+            ..Output::new(Payload::Note(NotePayload::from(&note)))
         },
     }
 }

@@ -2,13 +2,13 @@
 //!
 //! A test that needs a store the public API never writes (a bad record, an
 //! id at the end of the range, a database from a newer build) runs raw SQL
-//! on the notes database here, so no crate outside this one names
+//! on the database here, so no crate outside this one names
 //! `rusqlite`. Production builds never enable the feature.
 
 use crate::Store;
 use crate::error::Error;
 
-/// Run `sql` (one or more statements) in one write transaction on the notes
+/// Run `sql` (one or more statements) in one write transaction on the
 /// database of `store`, creating the data directory and the database, at
 /// the current schema, when they are absent.
 ///

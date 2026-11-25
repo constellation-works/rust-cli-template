@@ -1,5 +1,5 @@
 use crate::cli::{Cli, every_command};
-use crate::command::{Command, NoteCommand};
+use crate::command::Command;
 use crate::output::FormatArg;
 use clap::{CommandFactory, Parser};
 use std::ffi::OsString;
@@ -13,28 +13,24 @@ fn the_command_tree_is_internally_consistent() {
 #[test]
 fn global_flags_parse_before_and_after_the_subcommand() {
     // STD-01 R4.
-    let before = Cli::try_parse_from([
-        "tmpl-cli", "--format", "json", "--root", "/r", "note", "list",
-    ])
-    .unwrap();
-    let after = Cli::try_parse_from([
-        "tmpl-cli", "note", "list", "--format", "json", "--root", "/r",
-    ])
-    .unwrap();
+    let before =
+        Cli::try_parse_from(["tmpl-cli", "--format", "json", "--root", "/r", "status"]).unwrap();
+    let after =
+        Cli::try_parse_from(["tmpl-cli", "status", "--format", "json", "--root", "/r"]).unwrap();
     for cli in [before, after] {
         assert_eq!(cli.global.requested_format(), Some(FormatArg::Json));
         assert_eq!(cli.global.root.as_deref(), Some(std::path::Path::new("/r")));
-        assert!(matches!(cli.command, Command::Note(NoteCommand::List(_))));
+        assert!(matches!(cli.command, Command::Status(_)));
     }
 }
 
 #[test]
 fn json_is_shorthand_for_format_json_and_conflicts_with_format() {
-    let cli = Cli::try_parse_from(["tmpl-cli", "note", "list", "--json"]).unwrap();
+    let cli = Cli::try_parse_from(["tmpl-cli", "status", "--json"]).unwrap();
     assert_eq!(cli.global.requested_format(), Some(FormatArg::Json));
     for conflicting in [
-        &["tmpl-cli", "--json", "note", "list", "--format", "table"][..],
-        &["tmpl-cli", "note", "list", "--json", "--format", "auto"][..],
+        &["tmpl-cli", "--json", "status", "--format", "table"][..],
+        &["tmpl-cli", "status", "--json", "--format", "auto"][..],
     ] {
         let args: Vec<OsString> = conflicting.iter().map(OsString::from).collect();
         let err = Cli::parse_args(&args).unwrap_err();
@@ -44,7 +40,7 @@ fn json_is_shorthand_for_format_json_and_conflicts_with_format() {
             "{conflicting:?} should be a usage error"
         );
     }
-    let redundant: Vec<OsString> = ["tmpl-cli", "--json", "note", "list", "--format", "json"]
+    let redundant: Vec<OsString> = ["tmpl-cli", "--json", "status", "--format", "json"]
         .iter()
         .map(OsString::from)
         .collect();

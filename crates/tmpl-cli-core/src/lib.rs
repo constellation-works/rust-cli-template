@@ -1,7 +1,7 @@
 //! The tmpl-cli apps as a library.
 //!
 //! - [`app`]: one module per subject a user names on the command line
-//!   (today `note`), each with its `Command`, `Outcome`, `Error`, one `exec`,
+//!   (`status`, and any other), each with its `Command`, `Outcome`, `Error`, one `exec`,
 //!   its flows and its pure rules;
 //! - `runtime`: the context an app runs against, the one chokepoint every
 //!   app's `exec` forwards to and the audit guard;
@@ -13,7 +13,7 @@
 //! `cw-base`, re-exported as [`Error`] and [`Kind`]. A surface so
 //! names only this crate. This crate never parses arguments and never touches
 //! the terminal. Anything another surface (an MCP server, a desktop app)
-//! would need to see the same notes belongs here, not in the CLI crate.
+//! would need to see the same records belongs here, not in the CLI crate.
 
 // Library code never prints; diagnostics go through `tracing` (STD-02 R15).
 #![deny(clippy::print_stderr, clippy::print_stdout)]
