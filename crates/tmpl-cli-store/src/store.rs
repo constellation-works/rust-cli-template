@@ -103,22 +103,23 @@ impl Store {
     /// lock file is created belong in its own read before this call
     /// (STD-02 R34).
     ///
+    /// `apply` returns the workspace's error type too: a caller's own
+    /// refusal inside the lock crosses the store's boundary already
+    /// translated, so nothing of another crate's typed error passes through
+    /// the store.
+    ///
     /// # Errors
     ///
-    /// `apply`'s own error, or the store's typed [`Error`] translated into
-    /// `cw_base::Error` here at the crate's boundary, which `E` converts
-    /// from.
-    pub fn write<T, E>(
+    /// `apply`'s error as it returned it, or the store's typed [`Error`]
+    /// translated into `cw_base::Error` here at the crate's boundary.
+    pub fn write<T>(
         &self,
         label: &str,
-        apply: impl FnOnce(&mut Tx<'_>) -> std::result::Result<T, E>,
-    ) -> std::result::Result<T, E>
-    where
-        E: From<cw_base::Error>,
-    {
-        let (_lock, mut doc) = self.begin(label).map_err(cw_base::Error::from)?;
+        apply: impl FnOnce(&mut Tx<'_>) -> std::result::Result<T, cw_base::Error>,
+    ) -> std::result::Result<T, cw_base::Error> {
+        let (_lock, mut doc) = self.begin(label)?;
         let value = apply(&mut Tx::new(&mut doc))?;
-        self.commit(&doc).map_err(cw_base::Error::from)?;
+        self.commit(&doc)?;
         Ok(value)
     }
 

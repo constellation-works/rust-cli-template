@@ -22,12 +22,15 @@ pub(super) fn add(ctx: &Ctx<'_>, new: NewNote) -> Result<Outcome, Error> {
     }
     // The id is decided again inside the write, against what the store holds
     // under the lock: anything read before it may be stale.
+    // Inside the lock the flow's own refusal is translated into the
+    // workspace's error type, which is what the store's write returns; its
+    // code and its typed form (by `downcast_ref`) are kept.
     let note = store.write("note add", |tx| {
         let id = rules::next_id(tx.notes().all())
-            .ok_or_else(|| Error::IdExhausted { path: store.path() })?;
+            .ok_or_else(|| cw_base::Error::from(Error::IdExhausted { path: store.path() }))?;
         let note = new.into_note(id, now);
         tx.notes().put(note.clone());
-        Ok::<_, Error>(note)
+        Ok(note)
     })?;
     let path = store.path();
     tracing::debug!(id = %note.id, path = %path.display(), "added note");
