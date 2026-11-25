@@ -125,7 +125,7 @@ pub enum Error {
     /// A write would make the store file larger than reads accept, so it was
     /// refused and the file left as it was.
     #[error(
-        "{} would grow to {size} bytes, past the store's limit of {cap} bytes; nothing was written",
+        "{} would grow to {size} bytes, past the store's limit of {cap} bytes; it was left unchanged",
         path.display()
     )]
     WouldExceedCap {
