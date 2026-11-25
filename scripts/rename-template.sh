@@ -45,6 +45,23 @@ esac
 [[ -d "$ROOT/crates/$PH_KEBAB" ]] \
   || die "no crates/$PH_KEBAB under $ROOT; this copy was already renamed"
 
+# A crate named like a kit crate the workspace depends on would share its Rust
+# name in the same target (an app named `cw-testkit` and the kit's dev-only
+# `cw-testkit` both import as `cw_testkit`). The kit crates are the `cw-*` keys
+# of the root Cargo.toml's [workspace.dependencies]; each crate this name
+# produces is checked against them.
+kit_crates="$(awk '
+  /^\[/ { section = $0; next }
+  section == "[workspace.dependencies]" && match($0, /^cw-[a-z0-9-]+[[:space:]]*=/) {
+    key = substr($0, 1, RLENGTH); sub(/[[:space:]]*=$/, "", key); print key
+  }' "$ROOT/Cargo.toml" 2>/dev/null || true)"
+for crate in "$NAME" "$NAME-core" "$NAME-store"; do
+  while IFS= read -r kit; do
+    [[ -n "$kit" && "$crate" == "$kit" ]] \
+      && die "'$NAME' would name crate $crate, which collides with the kit crate $kit the template depends on; pick another"
+  done <<<"$kit_crates"
+done
+
 SNAKE="${NAME//-/_}"
 UPPER="$(printf '%s' "$SNAKE" | tr '[:lower:]' '[:upper:]')"
 
