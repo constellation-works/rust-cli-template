@@ -1,42 +1,63 @@
-//! What the surface decides about a failure: the exit code, the remedy to
-//! print, and its own one failure (output that could not be written).
+//! What the surface decides about a failure: the remedy to print, and its
+//! own failures (output that could not be written, a command line that does
+//! not parse).
 //!
 //! Every failure a command can end with is the workspace's one error type,
 //! `tmpl_cli_core::Error` (STD-02 R11). Units translate into it beside their
-//! own typed errors (STD-02 R12), so nothing here converts one. Usage errors
-//! never reach it: clap reports them and exits 2 before a command runs.
+//! own typed errors (STD-02 R12), so nothing here converts one. How a
+//! failure is shown and the exit code its kind calls for are the kit's:
+//! `cw_cli::Sink::report` writes it and returns its `cw_cli::Exit`.
 
-use std::io;
 use tmpl_cli_core::{Error, Kind};
 
-/// Writing the result to stdout failed for a reason other than a closed pipe.
+/// The surface's own failures.
 #[derive(Debug, thiserror::Error)]
-#[error("cannot write output")]
-struct OutputError(#[source] io::Error);
-
-/// The surface's one translator: an output failure as the workspace's error
-/// type (STD-02 R12).
-pub(crate) fn output_error(source: io::Error) -> Error {
-    Error::new(Kind::Io, "output_error", OutputError(source))
+enum SurfaceError {
+    /// The kit could not write the output.
+    #[error(transparent)]
+    Output(cw_cli::Error),
+    /// The command line does not parse: clap's own sentence.
+    #[error("{0}")]
+    Usage(String),
 }
 
-/// The process exit code. Every kind of command failure exits 1; only usage
-/// errors exit 2 (STD-01 R20). clap reports today's usage errors before a
-/// command runs, so no command fails with `Kind::Usage` yet; one that does
-/// exits 2 like clap. Exhaustive, so a new kind decides here, and a further
-/// code would need documenting in the command's help.
-pub(crate) fn exit_code(err: &Error) -> u8 {
-    match err.kind() {
-        Kind::Usage => 2,
-        Kind::NotFound
-        | Kind::Refused
-        | Kind::Busy
-        | Kind::Corrupt
-        | Kind::Incompatible
-        | Kind::Config
-        | Kind::Io
-        | Kind::Internal => 1,
+impl SurfaceError {
+    /// A stable `snake_case` code for this failure (STD-01 R19).
+    fn code(&self) -> &'static str {
+        match self {
+            Self::Output(cw_cli::Error::Output(_)) => "output_error",
+            Self::Output(cw_cli::Error::Encode(_)) => "output_encode_error",
+            Self::Output(cw_cli::Error::Summaries { .. }) => "help_summaries",
+            Self::Usage(_) => "usage_error",
+        }
     }
+
+    /// How this failure is classified.
+    fn kind(&self) -> Kind {
+        match self {
+            Self::Output(err) => err.kind(),
+            Self::Usage(_) => Kind::Usage,
+        }
+    }
+}
+
+/// The surface's one translator into the workspace's error type
+/// (STD-02 R12).
+impl From<SurfaceError> for Error {
+    fn from(err: SurfaceError) -> Self {
+        Self::new(err.kind(), err.code(), err)
+    }
+}
+
+/// An output failure as the workspace's error type.
+pub(crate) fn output_error(source: cw_cli::Error) -> Error {
+    SurfaceError::Output(source).into()
+}
+
+/// A command line that does not parse, as the workspace's error type:
+/// `message` is clap's sentence, without its `error: ` prefix.
+pub(crate) fn usage_error(message: &str) -> Error {
+    SurfaceError::Usage(message.to_owned()).into()
 }
 
 /// Each fix this surface knows, keyed on the error's stable code (STD-02

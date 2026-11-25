@@ -5,9 +5,10 @@
 //! `<id>`, never real ids or tracker numbers (STD-01 R23).
 
 use crate::command::Command;
-use crate::output::FormatArg;
 use clap::error::ErrorKind;
 use clap::{Args, CommandFactory, FromArgMatches, Parser};
+use cw_cli::Format;
+use cw_cli::help::{Group, grouped};
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -26,6 +27,25 @@ const ROOT_EXAMPLES: &str = concat!(
     "\n",
     "Exit status: 0 on success, 1 when a command fails, 2 on a usage error.",
 );
+
+/// The root help's command groups, in order; the kit renders each command
+/// under its heading with its one-line summary.
+const GROUPS: &[Group<'_>] = &[
+    // example:begin
+    Group {
+        heading: "Notes",
+        commands: &["note"],
+    },
+    // example:end
+    Group {
+        heading: "Store",
+        commands: &["status"],
+    },
+    Group {
+        heading: "Help",
+        commands: &["help"],
+    },
+];
 
 /// A command-line tool with a private local store.
 #[derive(Debug, Parser)]
@@ -54,7 +74,7 @@ pub(crate) struct GlobalArgs {
     /// Output format; auto is a table on a terminal, tab-separated lines otherwise,
     /// and json is one JSON document [default: $TMPL_CLI_FORMAT, else auto]
     #[arg(long, global = true, value_enum, value_name = "FORMAT", help_heading = GLOBAL)]
-    pub(crate) format: Option<FormatArg>,
+    pub(crate) format: Option<Format>,
 
     /// Shorthand for --format json [default: false]
     #[arg(long, global = true, help_heading = GLOBAL)]
@@ -73,14 +93,13 @@ impl Cli {
         args: &[OsString],
         help_width: Option<usize>,
     ) -> Result<Self, clap::Error> {
-        let matches =
-            crate::help::with_groups(Self::command(), help_width).try_get_matches_from(args)?;
+        let matches = root(help_width).try_get_matches_from(args)?;
         let cli = Self::from_arg_matches(&matches)?;
         if cli.global.json
             && cli
                 .global
                 .format
-                .is_some_and(|format| format != FormatArg::Json)
+                .is_some_and(|format| format != Format::Json)
         {
             return Err(Self::command().error(
                 ErrorKind::ArgumentConflict,
@@ -94,13 +113,43 @@ impl Cli {
 impl GlobalArgs {
     /// The output format the flags ask for, or `None` to defer to the
     /// environment and then `auto`.
-    pub(crate) fn requested_format(&self) -> Option<FormatArg> {
+    pub(crate) fn requested_format(&self) -> Option<Format> {
         if self.json {
-            Some(FormatArg::Json)
+            Some(Format::Json)
         } else {
             self.format
         }
     }
+}
+
+/// The command tree with its root help grouped by the kit, wrapped to
+/// `help_width` (`None` keeps one line per command).
+fn root(help_width: Option<usize>) -> clap::Command {
+    grouped(Cli::command(), GROUPS, help_width)
+}
+
+/// The format a command line that failed to parse asked for, so the usage
+/// error can be reported in it (STD-01 R19). Parsing failed, so this reads
+/// the raw arguments up to `--`: `--json`, `--format <value>` or
+/// `--format=<value>`, the last one winning. A value that names no format
+/// asks for text; `None` defers to `TMPL_CLI_FORMAT`.
+pub(crate) fn raw_requested_format(args: &[OsString]) -> Option<Format> {
+    let named = |value: &str| Format::parse(value).unwrap_or(Format::Auto);
+    let mut requested = None;
+    let mut iter = args.iter().skip(1).map(|os_arg| os_arg.to_string_lossy());
+    while let Some(arg) = iter.next() {
+        match arg.as_ref() {
+            "--" => break,
+            "--json" => requested = Some(Format::Json),
+            "--format" => requested = Some(iter.next().map_or(Format::Auto, |value| named(&value))),
+            other => {
+                if let Some(value) = other.strip_prefix("--format=") {
+                    requested = Some(named(value));
+                }
+            }
+        }
+    }
+    requested
 }
 
 /// Every command path in the CLI tree, starting with the root (`"tmpl-cli"`),
@@ -123,7 +172,7 @@ pub fn every_command() -> Vec<(String, clap::Command)> {
             path.pop();
         }
     }
-    let mut root = crate::help::with_groups(Cli::command(), None);
+    let mut root = root(None);
     root.build();
     let mut out = Vec::new();
     collect(&root, &mut vec![String::from("tmpl-cli")], &mut out);

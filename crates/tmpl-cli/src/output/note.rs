@@ -1,13 +1,10 @@
-//! The `note` example's payloads and their rendering: one function per
-//! shape and mode. Every rendering reads the same [`NotePayload`], so no
-//! mode can show a value the others lack.
+//! The `note` example's payloads and their human views: the table a list
+//! is, the one-row table and the detail text a single note is. The kit's
+//! sink picks the view for its mode and writes the payload itself as JSON,
+//! so no mode can show a value the others lack.
 
-use super::color::role_for_priority;
-use super::render::write_json;
-use super::sink::{OutputMode, Sink};
-use super::table::{self, Align, Cell, Column};
+use cw_cli::{Cell, Column, Role, Table};
 use serde::Serialize;
-use std::io::{self, Write};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 use tmpl_cli_core::contract::{Note, Priority};
@@ -61,135 +58,54 @@ pub(crate) struct ListPayload<'a> {
     pub(crate) truncated: bool,
 }
 
-const LIST_COLUMNS: [Column; 5] = [
-    Column {
-        header: "ID",
-        align: Align::Right,
-        truncate: false,
-    },
-    Column {
-        header: "PRIORITY",
-        align: Align::Left,
-        truncate: false,
-    },
-    Column {
-        header: "TITLE",
-        align: Align::Left,
-        truncate: true,
-    },
-    Column {
-        header: "TAGS",
-        align: Align::Left,
-        truncate: false,
-    },
-    Column {
-        header: "CREATED",
-        align: Align::Left,
-        truncate: false,
-    },
-];
-
-/// A list: table, tab-separated lines, or the JSON envelope carrying the
-/// notes, `total` and `truncated` (STD-01 R34). `total` is how many matched.
-pub(crate) fn list(
-    out: &mut dyn Write,
-    sink: &Sink,
-    notes: &[NotePayload],
-    total: usize,
-) -> io::Result<()> {
-    match sink.mode {
-        OutputMode::Json => write_json(
-            out,
-            &ListPayload {
-                notes,
-                total,
-                truncated: notes.len() < total,
-            },
-        ),
-        // An empty list prints nothing, not a lone header (STD-01 R16).
-        OutputMode::Table if notes.is_empty() => Ok(()),
-        OutputMode::Table => {
-            let rows: Vec<Vec<Cell>> = notes.iter().map(list_row).collect();
-            out.write_all(table::render(&LIST_COLUMNS, &rows, sink.width, sink.color).as_bytes())
-        }
-        OutputMode::Plain => notes
-            .iter()
-            .try_for_each(|note| writeln!(out, "{}", plain_line(note))),
+/// The one mapping from domain values to colour roles (STD-01 R18).
+pub(super) fn role_for_priority(priority: Priority) -> Role {
+    match priority {
+        Priority::High => Role::Warn,
+        Priority::Low => Role::Muted,
+        Priority::Normal => Role::Neutral,
     }
 }
 
-/// One record: a field-per-line detail view, one tab-separated line, or a
-/// JSON object. The detail view never truncates: it is where a truncated
-/// table cell is read in full (STD-01 R15).
-pub(crate) fn detail(out: &mut dyn Write, sink: &Sink, note: &NotePayload) -> io::Result<()> {
-    match sink.mode {
-        OutputMode::Json => write_json(out, note),
-        OutputMode::Plain => writeln!(out, "{}", plain_line(note)),
-        OutputMode::Table => {
-            let priority = super::color::paint(
-                note.priority.as_str(),
-                role_for_priority(note.priority),
-                sink.color,
-            );
-            let body = note
-                .body
-                .as_deref()
-                .map(sanitize_for_display)
-                .unwrap_or_else(|| String::from("-"))
-                .replace('\n', "\n          ");
-            writeln!(out, "id        {}", note.id)?;
-            writeln!(out, "title     {}", note.title)?;
-            writeln!(out, "priority  {priority}")?;
-            writeln!(out, "tags      {}", tags_cell(&note.tags))?;
-            writeln!(out, "created   {}", timestamp(note))?;
-            writeln!(out, "body      {body}")
-        }
+/// A list's human view: a table, or one tab-separated line per note with
+/// no header (STD-01 R9, R14). An empty list prints nothing (STD-01 R16).
+pub(super) fn list_table(notes: &[NotePayload]) -> Table {
+    let mut table = Table::new([
+        Column::new("ID").right(),
+        Column::new("PRIORITY"),
+        Column::new("TITLE").truncatable(),
+        Column::new("TAGS"),
+        Column::new("CREATED"),
+    ]);
+    for note in notes {
+        table.push([
+            Cell::new(note.id.to_string()),
+            Cell::new(note.priority.as_str()).role(role_for_priority(note.priority)),
+            Cell::new(note.title.clone()),
+            Cell::new(tags_cell(&note.tags)),
+            Cell::new(timestamp(note)),
+        ]);
     }
+    table
 }
 
-/// Neutralize control characters other than newline and tab so terminal
-/// escape sequences and carriage returns cannot reach stdout raw.
-fn sanitize_for_display(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '\r' && chars.peek() == Some(&'\n') {
-            continue;
-        }
-        if ch == '\n' || ch == '\t' || !ch.is_control() {
-            out.push(ch);
-        } else {
-            for escaped in ch.escape_default() {
-                out.push(escaped);
-            }
-        }
-    }
-    out
-}
-
-fn list_row(note: &NotePayload) -> Vec<Cell> {
-    vec![
-        Cell::plain(note.id.to_string()),
-        Cell {
-            text: note.priority.as_str().to_owned(),
-            role: role_for_priority(note.priority),
-        },
-        Cell::plain(note.title.clone()),
-        Cell::plain(tags_cell(&note.tags)),
-        Cell::plain(timestamp(note)),
-    ]
-}
-
-/// `id  priority  title  tags  created_at`, tab-separated. The body is left
-/// out because it may span lines; `--json` and `note show` carry it.
-pub(crate) fn plain_line(note: &NotePayload) -> String {
+/// One note as a field-per-line detail view, for a reader at a terminal or
+/// asking for a table. It never truncates: it is where a cut table cell is
+/// read in full (STD-01 R15). A body's line breaks are kept, indented under
+/// its column, and a CR before a line feed is dropped; the sink escapes
+/// every other control character.
+pub(super) fn detail_text(note: &NotePayload) -> String {
+    let body = note.body.as_deref().map_or_else(
+        || String::from("-"),
+        |body| body.replace("\r\n", "\n").replace('\n', "\n          "),
+    );
     format!(
-        "{}\t{}\t{}\t{}\t{}",
+        "id        {}\ntitle     {}\npriority  {}\ntags      {}\ncreated   {}\nbody      {body}\n",
         note.id,
-        note.priority.as_str(),
         note.title,
+        note.priority.as_str(),
         tags_cell(&note.tags),
-        timestamp(note)
+        timestamp(note),
     )
 }
 

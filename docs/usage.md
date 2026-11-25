@@ -10,9 +10,18 @@ tmpl-cli status --json
 
 `status` shows the data directory and the store's format (`-` in a pipe and
 `null` with `--json` until a command has created the database). It reads
-only and creates nothing. A command displays a table on a terminal and
-tab-separated lines in a pipe. With `--json`, a result is one JSON document
-on stdout, and errors are a single object with `error` and `code` on stderr.
+only and creates nothing.
+
+The command line's behaviour is the cw-kit's (`cw-cli`), shared by every
+constellation CLI. A command displays a table on a terminal and
+tab-separated lines in a pipe, and writes only its result to stdout;
+notices, warnings and errors go to stderr. A failure is an `error:` line,
+followed by a `hint:` line when there is a known fix. With `--json`, a
+result is one JSON document on one line of stdout, and a failure is one
+object on stderr: `{"error": ..., "code": ..., "hint": ...}`, with `hint`
+`null` when there is none. An ESC or other terminal control character in
+stored text is shown as an escape (`\u{1b}`), never sent to the terminal
+raw.
 <!-- example:begin -->
 
 ## Notes
@@ -54,7 +63,9 @@ kit's, then the CLI's own); `make goldens UPDATE=1` rewrites it:
 
 Unset, the output format is `auto` (`--format auto|table|json`, `--json`),
 logging is at `warn` (try `debug`), color is on for a terminal, tables fit
-the terminal's width, and the audit log records no actor.
+the terminal's width (`COLUMNS`, else the size the terminal reports), and
+the audit log records no actor. A `TMPL_CLI_LOG` that does not parse is
+reported once as a warning and logging stays at `warn`.
 
 The environment is read once at start. An empty variable counts as unset
 (`TMPL_CLI_LOG=` logs at `warn`).
@@ -86,7 +97,8 @@ stderr after its output.
 
 ## Troubleshooting
 
-Exit status is 0 on success, 1 when a command fails and 2 on a usage error.
+Exit status is 0 on success, 1 when a command fails and 2 on a usage error;
+the kit maps each kind of failure to its code.
 If a file cannot be found, check the resolved data directory (`tmpl-cli
 status`) and use `--root <DIR>` to select a different one. If the CLI
 refuses a file's permissions, follow the remedy in the error. The store

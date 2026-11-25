@@ -1,7 +1,12 @@
-//! The environment variables the CLI reads beyond the kit's, each declared
-//! once. `sink` reads them through these declarations, and [`VARS`] lists
-//! them beside the kit's own list (`tmpl_cli_core::env::KIT_VARS`) for the
-//! usage table, `crate::env_table`, which `docs/usage.md` holds.
+//! The environment variables the CLI reads beyond the ones the kit
+//! declares, for the usage table. [`VARS`] lists them beside the kit's own
+//! list (`tmpl_cli_core::env::KIT_VARS`) in `crate::env_table`, which
+//! `docs/usage.md` holds.
+//!
+//! The two here are read by the kit itself (`cw_cli::Terminal::decide`),
+//! which `cw_app` does not declare yet; they are declared here only so the
+//! table keeps listing them, and go once the kit declares them. A variable
+//! the CLI reads itself is declared here and read through its declaration.
 
 use tmpl_cli_core::EnvVar;
 

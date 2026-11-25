@@ -27,7 +27,7 @@ A new crate goes under `crates/` and gets:
 | Crate | Kind | Owns | Internal and kit dependencies | Banned |
 |-------|------|------|-------------------------------|--------|
 
-The cw-kit (`cw-base`, `cw-fs`, `cw-sqlite`, `cw-app`, with `cw-testkit` as
+The cw-kit (`cw-base`, `cw-fs`, `cw-sqlite`, `cw-app`, `cw-cli`, with `cw-testkit` as
 a dev-dependency only) from
 [constellation-works/satellites](https://github.com/constellation-works/satellites)
 is pinned to one commit in the root `Cargo.toml` `[workspace.dependencies]`.

@@ -81,8 +81,6 @@ regions crates/tmpl-cli/src/cli.rs
 regions crates/tmpl-cli/src/command/mod.rs
 regions crates/tmpl-cli/src/command/tests/mod.rs
 regions crates/tmpl-cli/src/error.rs
-regions crates/tmpl-cli/src/help.rs
-regions crates/tmpl-cli/src/output/color.rs
 regions crates/tmpl-cli/src/output/mod.rs
 regions crates/tmpl-cli/src/output/payload.rs
 regions crates/tmpl-cli/src/output/tests/mod.rs

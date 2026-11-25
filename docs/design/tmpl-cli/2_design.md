@@ -62,12 +62,15 @@ alone, so it runs in `make ci-fast` without compiling.
 1. `main` captures the environment once with the kit's `Env::capture()`
    (the only read of the process environment) and hands it to `run` with
    the arguments, which parses them with `Cli::parse_args`. `--help`/`--version` go to
-   stdout (exit 0); a usage error goes to stderr (exit 2) — as one JSON
-   object when the raw arguments or `TMPL_CLI_FORMAT` asked for JSON.
-2. `Sink::from_env` resolves, from the captured `Env`, the output mode (flag > `TMPL_CLI_FORMAT`
-   > auto), color (`NO_COLOR`, `CLICOLOR_FORCE`, `TERM`, TTY) and width
-   (`COLUMNS`, terminals only). Nothing else in the program asks these
-   questions; `scripts/check-terminal-guard.sh` rejects any attempt.
+   stdout (exit 0); a usage error goes to stderr (exit 2) through the kit's
+   `Sink::report` — as one JSON object when the raw arguments or
+   `TMPL_CLI_FORMAT` asked for JSON.
+2. The kit (`cw-cli`) decides once, from one probe of the streams and the
+   captured `Env`, the output mode (flag > `TMPL_CLI_FORMAT` > auto), color
+   (`NO_COLOR`, `CLICOLOR_FORCE`, `TERM`, TTY, for stdout and stderr each)
+   and width (`COLUMNS`, else the terminal's size; terminals only), and
+   opens the `Sink` every byte goes through. Nothing in the template asks
+   these questions; `scripts/check-terminal-guard.sh` rejects any attempt.
 3. `tmpl_cli_core::start` builds the runtime: the kit resolves the data
    directory from the captured `Env` (`--root` > `TMPL_CLI_ROOT` >
    `$HOME/.tmpl-cli`), and the runtime holds the store there, the system
@@ -90,25 +93,29 @@ alone, so it runs in `make ci-fast` without compiling.
    line that could not be written comes back as an `AuditWarning` that the
    surface prints on stderr after the payload or JSON error object, leaving
    the exit code alone.
-5. `output::finish` renders the payload for the sink (writing any bad-record
-   warnings and notices to stderr in every mode), or reports the error
-   (`error: …` line, or `{"error","code"}` in JSON mode) and returns exit 1.
-   A write that fails with `BrokenPipe` ends the process with exit 0 and no
-   message.
+5. `output::finish` hands the payload to the sink (writing any bad-record
+   warnings and notices to stderr in every mode), or has the kit report the
+   error (an `error: …` line and a `hint:` line when the surface knows the
+   fix, or `{"error","code","hint"}` in JSON mode) with the exit code its
+   kind calls for. A closed reader ends the writes, not the command, and
+   the process exits 0 with no message.
 
 stdout carries only the payload. Notices (nothing matched, the list was cut,
 `added note <id> to <file>`), errors and `tracing` logs (`TMPL_CLI_LOG`,
-default `warn`; an unparseable filter is reported and ignored) go to stderr.
+default `warn`; an unparseable filter is reported and ignored; the kit's
+`Logging`) go to stderr.
 
 ## 3. Rendering
 
-Every mode renders the same `NotePayload`. `table` is borderless, one header
+Every mode renders the same `NotePayload`; the layout is the kit's `Table`.
+`table` is borderless, one header
 row, two-space gutters, the ID column right-aligned, absent cells as `-`,
-priority colored by role (high → warn, low → muted) when color is allowed.
+priority colored by role (high → warn, low → muted) when color is allowed
+(the `note show` detail view is uncoloured: the kit escapes its text whole).
 On a terminal with a known width the TITLE column shrinks and ends in `…`;
 `note show` and `--json` always carry the full title. `plain` (auto in a
 pipe) is one tab-separated line per record without a header. `json` is one
-pretty-printed document; for a list it is always the envelope `{"notes",
+document on one line; for a list it is always the envelope `{"notes",
 "total", "truncated"}`. A single-record list is still a table; an empty list
 prints nothing (or the envelope with no notes) plus one stderr line naming
 the filters. Filters apply before `--limit`, and a cut list says so on stderr
