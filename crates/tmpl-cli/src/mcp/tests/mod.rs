@@ -1,9 +1,5 @@
 //! Unit tests for the MCP surface, one file per source file (STD-02 R19).
 
-// example:begin
-mod input;
-
-// example:end
 use crate::cli::every_command;
 use crate::command::StatusArgs;
 use crate::mcp::tools;

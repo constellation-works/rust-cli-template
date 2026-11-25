@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/check-dependency-direction.sh — STD-02 R1–R6, R16, R17 for this workspace.
+# scripts/check-dependency-direction.sh — STD-02 R1–R6, R16, R17, R39 for this workspace.
 #
 # Two layers of checks, neither of which compiles, so the gate runs in
 # `make ci-fast`:
@@ -16,6 +16,10 @@
 #      a new member forces a decision. Needs cargo and jq.
 #   2. Module edges inside a crate, as grep and grouped-import bans over
 #      non-test sources.
+#   3. No import cycle between units (STD-02 R6, R39):
+#      `scripts/check-module-cycles.sh` checks each crate's top-level modules
+#      and the modules of each top-level directory. Cargo refuses a cyclic
+#      crate graph itself.
 #
 # File access, the process environment and spawning a process are refused
 # by clippy, not here: `clippy.toml` lists the std paths (and
@@ -380,6 +384,9 @@ done
 
 # Crate edges last: the module bans above run even where Cargo cannot.
 check_crate_edges
+
+# The module import graph is acyclic (STD-02 R6, R39).
+./scripts/check-module-cycles.sh || fail=1
 
 if [[ "$fail" -eq 0 ]]; then
   echo "dependency-direction: ok"

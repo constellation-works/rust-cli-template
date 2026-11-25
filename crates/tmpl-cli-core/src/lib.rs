@@ -7,7 +7,9 @@
 //!   [`cw_app::exec`];
 //! - `composition`: [`start`] builds the [`Runtime`] every command runs
 //!   against from the environment `main` captured ([`Env`]): the data
-//!   directory, the store, the clock and the audit log there.
+//!   directory, the store, the clock and the audit log there;
+//! - `environment`: [`capture_env`], the one read of the process environment,
+//!   which `main` calls once.
 //!
 //! The command path is the kit's `cw-app`: its chokepoint starts the audit
 //! record of a mutating command, runs it and returns a [`Finished`]; the
@@ -43,10 +45,13 @@ pub mod app;
 
 mod composition;
 
+mod environment;
+
 pub use composition::{APP, Runtime, State, start};
 pub use cw_app::env;
 pub use cw_app::{AuditWarning, Env, EnvVar, Finished, Origin, Surface};
 pub use cw_base::{Error, Kind};
+pub use environment::capture_env;
 pub use tmpl_cli_store::contract;
 
 #[cfg(test)]

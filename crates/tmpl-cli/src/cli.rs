@@ -5,13 +5,14 @@
 //! `<id>`, never real ids or tracker numbers (STD-01 R23).
 
 use crate::command::Command;
-use crate::mcp::{MCP_EXAMPLES, McpArgs};
 use clap::error::ErrorKind;
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 use cw_cli::Format;
 use cw_cli::help::{Group, grouped};
 use std::ffi::OsString;
 use std::path::PathBuf;
+use tmpl_cli_core::APP;
+use tmpl_cli_core::env::{FORMAT, ROOT};
 
 /// Help heading for the flags every command accepts.
 const GLOBAL: &str = "Global options";
@@ -69,6 +70,18 @@ pub(crate) struct Cli {
     pub(crate) command: Invocation,
 }
 
+/// Arguments to `mcp`: none of its own; `--root` picks the data directory
+/// every tool runs against. The server itself is `crate::mcp`.
+#[derive(Debug, Args)]
+pub(crate) struct McpArgs {}
+
+const MCP_EXAMPLES: &str = "\
+Examples:
+  tmpl-cli mcp
+  tmpl-cli --root ~/data mcp
+
+Point an MCP client at the command. It serves until its input closes.";
+
 /// What an invocation does: run one command, or serve every command as a
 /// tool.
 #[derive(Debug, Subcommand)]
@@ -84,13 +97,26 @@ pub(crate) enum Invocation {
 /// Flags accepted before or after any subcommand (STD-01 R4).
 #[derive(Debug, Args)]
 pub(crate) struct GlobalArgs {
-    /// Data directory [default: $TMPL_CLI_ROOT, else ~/.tmpl-cli]
-    #[arg(long, global = true, value_name = "DIR", help_heading = GLOBAL)]
+    // The data directory. Its help names the variable from the kit's
+    // declaration (STD-01 R25), so no variable name is typed here.
+    #[arg(
+        long,
+        global = true,
+        value_name = "DIR",
+        help = root_help(),
+        help_heading = GLOBAL
+    )]
     pub(crate) root: Option<PathBuf>,
 
-    /// Output format; auto is a table on a terminal, tab-separated lines otherwise,
-    /// and json is one JSON document [default: $TMPL_CLI_FORMAT, else auto]
-    #[arg(long, global = true, value_enum, value_name = "FORMAT", help_heading = GLOBAL)]
+    // The output format; its help is derived the same way.
+    #[arg(
+        long,
+        global = true,
+        value_enum,
+        value_name = "FORMAT",
+        help = format_help(),
+        help_heading = GLOBAL
+    )]
     pub(crate) format: Option<Format>,
 
     /// Shorthand for --format json [default: false]
@@ -137,6 +163,25 @@ impl GlobalArgs {
             self.format
         }
     }
+}
+
+/// `--root`'s help: the variable's name comes from its declaration
+/// (`tmpl_cli_core::env::ROOT`), the default directory from the program's
+/// name (STD-01 R25).
+fn root_help() -> String {
+    format!(
+        "Data directory [default: ${}, else ~/.{APP}]",
+        ROOT.name_for(APP)
+    )
+}
+
+/// `--format`'s help, its variable named from `tmpl_cli_core::env::FORMAT`.
+fn format_help() -> String {
+    format!(
+        "Output format; auto is a table on a terminal, tab-separated lines otherwise, \
+         and json is one JSON document [default: ${}, else auto]",
+        FORMAT.name_for(APP)
+    )
 }
 
 /// The command tree with its root help grouped by the kit, wrapped to

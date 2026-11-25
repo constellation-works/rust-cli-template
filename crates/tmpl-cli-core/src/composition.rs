@@ -5,9 +5,9 @@
 //! `--root` the surface was given, opens the [`Store`] there, and builds the
 //! kit's [`cw_app::Runtime`] over it, which audits to the same directory and
 //! reads the system clock. The process environment is read once, by
-//! `Env::capture()` in `main`; everything here is a pure function of that
-//! value, so a test builds one with `Env::from_vars` (`clippy.toml` refuses
-//! any other read of the process).
+//! `capture_env()` (the `environment` module), called from `main`; everything
+//! here is a pure function of that value, so a test builds one with
+//! `Env::from_vars` (`clippy.toml` refuses any other read of the process).
 
 use cw_app::Env;
 use cw_app::env::{HOME, ROOT};

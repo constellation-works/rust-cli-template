@@ -4,7 +4,8 @@ allowed-idents-below-min-chars = []
 
 # File, environment and process boundaries (STD-02 R3, R5): the template
 # reaches files through the kit's cw_fs (in the store), reads the process
-# environment once through cw_app::Env::capture() (in main), and spawns no
+# environment once through cw_app::Env::capture() (in the core's environment.rs,
+# called by main; STD-02 R7), and spawns no
 # process (a template that must spawn one uses cw_supervise). The two lints
 # are denied in the workspace lint table; an exemption is a module-level
 # `#![expect(..., reason = "...")]`, never an allow.
@@ -39,12 +40,12 @@ disallowed-methods = [
   { path = "std::fs::soft_link", reason = "file access goes through cw_fs in the store" },
   { path = "std::fs::symlink_metadata", reason = "file metadata goes through cw_fs in the store" },
   { path = "std::fs::write", reason = "write atomically with cw_fs in the store" },
-  { path = "std::env::var", reason = "read a variable from the cw_app::Env that main captured" },
-  { path = "std::env::var_os", reason = "read a variable from the cw_app::Env that main captured" },
-  { path = "std::env::vars", reason = "read variables from the cw_app::Env that main captured" },
-  { path = "std::env::vars_os", reason = "read variables from the cw_app::Env that main captured" },
-  { path = "std::env::set_var", reason = "the process environment is read once, by cw_app::Env::capture() in main, and never changed" },
-  { path = "std::env::remove_var", reason = "the process environment is read once, by cw_app::Env::capture() in main, and never changed" },
+  { path = "std::env::var", reason = "read a variable from the cw_app::Env that main captured with tmpl_cli_core::capture_env()" },
+  { path = "std::env::var_os", reason = "read a variable from the cw_app::Env that main captured with tmpl_cli_core::capture_env()" },
+  { path = "std::env::vars", reason = "read variables from the cw_app::Env that main captured with tmpl_cli_core::capture_env()" },
+  { path = "std::env::vars_os", reason = "read variables from the cw_app::Env that main captured with tmpl_cli_core::capture_env()" },
+  { path = "std::env::set_var", reason = "the process environment is read once, by tmpl_cli_core::capture_env(), and never changed" },
+  { path = "std::env::remove_var", reason = "the process environment is read once, by tmpl_cli_core::capture_env(), and never changed" },
   { path = "std::env::current_dir", reason = "discover no path: the data directory comes from cw_app::Env (env.app(..).data_dir)" },
   { path = "std::env::set_current_dir", reason = "discover no path: the data directory comes from cw_app::Env (env.app(..).data_dir)" },
   { path = "std::env::home_dir", reason = "discover no path: the data directory comes from cw_app::Env (env.app(..).data_dir)" },
@@ -52,7 +53,7 @@ disallowed-methods = [
   { path = "std::env::current_exe", reason = "discover no path: the data directory comes from cw_app::Env" },
   { path = "std::env::args", reason = "main reads the arguments once, with std::env::args_os(), and passes them down" },
   { path = "std::env::args_os", reason = "main reads the arguments once and passes them down" },
-  { path = "cw_app::Env::capture", reason = "main captures the environment once and passes the cw_app::Env down" },
+  { path = "cw_app::Env::capture", reason = "main calls tmpl_cli_core::capture_env() once and passes the cw_app::Env down" },
   { path = "std::process::Command::output", reason = "the template spawns no process; use cw_supervise if one must" },
   { path = "std::process::Command::status", reason = "the template spawns no process; use cw_supervise if one must" },
   { path = "std::process::Command::spawn", reason = "the template spawns no process; use cw_supervise if one must" },

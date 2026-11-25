@@ -61,8 +61,10 @@ alone, so it runs in `make ci-fast` without compiling.
 
 ## 2. The life of an invocation
 
-1. `main` captures the environment once with the kit's `Env::capture()`
-   (the only read of the process environment) and hands it to `run` with
+1. `main` has the core capture the environment once
+   (`tmpl_cli_core::capture_env()`, over the kit's `Env::capture()`, the
+   only read of the process environment, which STD-02 R7 keeps out of the
+   CLI crate) and hands it to `run` with
    the arguments, which parses them with `Cli::parse_args`. `--help`/`--version` go to
    stdout (exit 0); a usage error goes to stderr (exit 2) through the kit's
    `Sink::report` — as one JSON object when the raw arguments or
@@ -224,7 +226,7 @@ and reads no environment of its own.
 |------|-------------|-------|
 | `cargo fmt --check` on stable, with `rustfmt.toml` at `max_width = 100` and only stable options | `ci-fast` | formatting (STD-12 R11); an option stable rustfmt calls unstable fails the gate |
 | `check-architecture-map.sh` | `ci-fast` | the architecture map (STD-02 R43): every crate from `cargo metadata` has a section in `ARCHITECTURE.md` and each of its top-level modules is named there, every path the doc writes in code formatting exists, and every crate root and top-level module begins with a `//!` line |
-| `check-dependency-direction.sh` | `ci-fast` | crate edges from Cargo's package graph and module layering by grep (STD-02 R1–R6), no `std::net` in the store or the core, `rusqlite` only in the store and only through `cw_sqlite`, schema statements only in `driver/sqlite/schema/` and step lists only in its `mod.rs`, no repository path named in the core, every app's `exec` forwarding to `cw_app::exec` and no audit code outside the kit, no clock-defaulted timestamps (R16), retired paths stay gone (R17) |
+| `check-dependency-direction.sh` | `ci-fast` | crate edges from Cargo's package graph and module layering by grep (STD-02 R1–R6), no import cycle between a crate's top-level modules or between the modules of one layer (`check-module-cycles.sh`; R6, R39), no `std::net` in the store or the core, `rusqlite` only in the store and only through `cw_sqlite`, schema statements only in `driver/sqlite/schema/` and step lists only in its `mod.rs`, no repository path named in the core, every app's `exec` forwarding to `cw_app::exec` and no audit code outside the kit, no clock-defaulted timestamps (R16), retired paths stay gone (R17) |
 | `check-test-modules.sh` | `ci-fast` | every sibling unit-test file is declared (STD-02 R19) |
 | `check-terminal-guard.sh` | `ci-fast` | one owner for streams, TTY and color env (STD-01 R12, R17) |
 | `check-singular-names.sh` | `ci-fast` | module names (paths and `mod` declarations), source directories and source files are singular; `tests`, `examples` and `benches` only where Cargo and STD-02 R19 fix them (STD-12 R1) |
@@ -232,7 +234,7 @@ and reads no environment of its own.
 | `check-private-task-ids.sh` | `ci-fast` | public tree excludes private task IDs outside the vendored canon |
 | `check-readme.py` and `generate-feature-board.py --check` | `ci-fast` | README size and local links (STD-09 R2, R12), the design feature board (STD-06 R9) |
 | `docs/standards/check.sh` | `ci-fast` (`standards-check`) | vendored standards (warns until vendored; fails in CI) |
-| `clippy --all-targets -D warnings` with the STD-02 lint table and its adoptable additions, plus STD-12's lints and `clippy.toml` | `ci-lint` | no unwrap/expect/print/dbg, no lock across await, no wildcard enum arms, no narrowing `as`; no one-letter binding (`min_ident_chars`, no allowed idents; STD-12 R14), no glob import (`wildcard_imports`, `enum_glob_use`; R15), every public item documented (`missing_docs`; R18); and, through `clippy.toml`'s `disallowed_methods` and `disallowed_types` (denied), no `std::fs` call or file type, no `std::env` read, no `Env::capture` outside `main.rs`, and no spawned or ended process, aliases and tests included, each exemption a module-level `#![expect]` |
+| `clippy --all-targets -D warnings` with the STD-02 lint table and its adoptable additions, plus STD-12's lints and `clippy.toml` | `ci-lint` | no unwrap/expect/print/dbg, no lock across await, no wildcard enum arms, no narrowing `as`; no one-letter binding (`min_ident_chars`, no allowed idents; STD-12 R14), no glob import (`wildcard_imports`, `enum_glob_use`; R15), every public item documented (`missing_docs`; R18); and, through `clippy.toml`'s `disallowed_methods` and `disallowed_types` (denied), no `std::fs` call or file type, no `std::env` read, no `Env::capture` outside the core's `environment.rs` and no argument read outside `main.rs`, and no spawned or ended process, aliases and tests included, each exemption a module-level `#![expect]` |
 | `cargo deny check` | `ci-lint` | advisories, licenses, sources |
 | nextest `--no-tests=fail` (timeouts in `.config/nextest.toml`, no retries), then `cargo test --doc` | `test` | behaviour, and runnable doc examples |
 | help and output goldens from the built binary, and the MCP `tools/list` golden | `goldens` | the public surfaces (STD-01 R24) |

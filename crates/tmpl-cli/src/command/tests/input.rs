@@ -1,4 +1,4 @@
-use crate::mcp::input::{parsed, parsed_list, parsed_option};
+use crate::command::input::{parsed, parsed_list, parsed_option};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
