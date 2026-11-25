@@ -10,7 +10,7 @@
 //! `note/support.rs` for what they share, and `note/tests/` beside them.
 //! STD-02 R18: split along responsibilities, not by length alone.
 
-use crate::mcp::input::{parsed, parsed_list, parsed_option};
+use crate::command::input::{parsed, parsed_list, parsed_option};
 use crate::output::{NotePayload, Output, Payload};
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::{ArgAction, Args, Subcommand};

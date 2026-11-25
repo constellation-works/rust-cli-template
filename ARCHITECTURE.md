@@ -27,7 +27,7 @@ pin is a change of its own). Every kit crate is pinned to that one rev.
 
 | Crate | Kind | Owns | Internal and kit dependencies | Banned |
 |-------|------|------|-------------------------------|--------|
-| `tmpl-cli` | binary `tmpl-cli` | `main` (the one read of the process: `Env::capture()` and the arguments), argument declarations, the mapping from arguments to an app's `Command`, each command's human view, settling the audit record and printing its warning, the remedy for each error. The only stdout, stderr and terminal access, all of it through `cw-cli`: the terminal decision, the sink, error rendering with the exit code, logging and grouped root help are the kit's. The second surface, an MCP server (`tmpl-cli mcp`) with one tool per command, is `cw-mcp`'s. | `tmpl-cli-core`, `cw-cli`, `cw-mcp`; `cw-testkit`, `cw-mcp` (its `test-support`) and `tmpl-cli-store` (its `test-support`) as dev-dependencies only | `tmpl-cli-store` as a normal dependency, every other kit crate, `rusqlite`, `tracing-subscriber`, any terminal crate, `rustix` |
+| `tmpl-cli` | binary `tmpl-cli` | `main` (the one read of the arguments; it calls the core's `capture_env()` for the environment, STD-02 R7), argument declarations, the mapping from arguments to an app's `Command`, each command's human view, settling the audit record and printing its warning, the remedy for each error. The only stdout, stderr and terminal access, all of it through `cw-cli`: the terminal decision, the sink, error rendering with the exit code, logging and grouped root help are the kit's. The second surface, an MCP server (`tmpl-cli mcp`) with one tool per command, is `cw-mcp`'s. | `tmpl-cli-core`, `cw-cli`, `cw-mcp`; `cw-testkit`, `cw-mcp` (its `test-support`) and `tmpl-cli-store` (its `test-support`) as dev-dependencies only | `tmpl-cli-store` as a normal dependency, every other kit crate, `rusqlite`, `tracing-subscriber`, any terminal crate, `rustix` |
 | `tmpl-cli-core` | library | The apps, each a `cw_app::App`, and composition (the runtime every command runs against). | `tmpl-cli-store`, `cw-base`, `cw-app`; `cw-testkit` and the store's `test-support` as dev-dependencies only | `cw-fs`, `cw-sqlite`, `cw-cli`, `cw-mcp`, `rusqlite`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
 | `tmpl-cli-store` | library | The data directory: the database's driver, one repository per record, the record shapes (`contract`), and the store's stable code for each of the kit's errors. No audit code or file: the audit log is `cw-app`'s. It names no file primitive and no SQLite crate of its own: it reaches the directory through `cw-fs` and the database through `cw-sqlite`, and names `rusqlite` only through its re-export. | `cw-base`, `cw-fs`, `cw-sqlite`; `cw-testkit` as a dev-dependency only | `cw-cli`, `cw-mcp`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix`, `rusqlite` as a dependency of its own |
 
@@ -63,11 +63,11 @@ main.rs              Env::capture() and the arguments, once; run
 lib.rs               probe the streams, parse, open the kit's sink, start logging and the runtime, dispatch, print an audit warning
 cli.rs               the root command, the global flags, the root help's groups (rendered by cw_cli::help::grouped); Invocation: a command, or mcp
 command/<noun>.rs    arguments -> app::<app>::Command; exec; Outcome -> payload; render, then settle
+<!-- example:begin -->
+command/input.rs     how a text argument is read from a tool's JSON: through the type's own FromStr
+<!-- example:end -->
 mcp/                 the MCP surface: one cw_mcp::Tool per command, served by `tmpl-cli mcp`
   mod.rs             tools(): each command's Args as the input, its summary as the description, its handler as the call; server, serve
-<!-- example:begin -->
-  input.rs           how a text argument is read from a tool's JSON: through the type's own FromStr
-<!-- example:end -->
 output/              payloads and each command's human view, written through the kit's sink
   mod.rs             finish: emit or report through cw_cli::Sink; usage errors, help and version
   payload.rs         the payloads every mode renders
@@ -84,8 +84,10 @@ A command handler maps the parsed arguments to the app's `Command`, calls
 the `Outcome` into an output payload, has it rendered, and then settles the
 audit record, handing back any `AuditWarning`. It opens no store, resolves
 no path, reads no environment variable and decides nothing about a record.
-`main` captures the environment once with the kit's `Env::capture()`, the
-only read of the process environment. The presentation variables
+`main` reads the arguments and has the core capture the environment once
+(`tmpl_cli_core::capture_env()`, over the kit's `Env::capture()`), the only
+read of the process environment; no read of it lives in this crate
+(STD-02 R7). The presentation variables
 (`TMPL_CLI_FORMAT`, `TMPL_CLI_LOG`, `NO_COLOR`, `CLICOLOR_FORCE`, `TERM`,
 `COLUMNS`) are interpreted by `cw-cli` alone: `lib.rs` probes the streams
 once and the kit's `Terminal::decide` makes the one decision about colour,
@@ -126,6 +128,7 @@ app/
     add.rs list.rs show.rs   one flow per command
     rule.rs          the note rules: the next id, a stored note from a new one, list selection
 <!-- example:end -->
+environment.rs       capture_env(): the one read of the process environment (Env::capture()), called once by main
 composition.rs       start: the data directory (the kit's, from Env), the Store, Runtime = cw_app::Runtime<Store>, Ctx (what a flow receives); its Error (no data directory)
 ```
 
@@ -276,7 +279,12 @@ Three mechanisms hold these rules, each where it is exact:
 - **grep** over non-test sources (the same script): module-to-module rules,
   `crate::` imports (grouped ones too), `std::net`, and names that are not
   paths clippy can resolve. `rusqlite` and `cw_sqlite` are refused outside
-  `tmpl-cli-store` in tests too.
+  `tmpl-cli-store` in tests too. The same script runs
+  `scripts/check-module-cycles.sh`, which reads the `crate::` and `super::`
+  paths into an import graph and fails on a cycle between a crate's
+  top-level modules or between the modules of one layer, such as the
+  core's `app/` (STD-02 R6, R39); code both ends need moves to the lower
+  module.
 
 By clippy, in every crate:
 
@@ -285,8 +293,8 @@ By clippy, in every crate:
 - No `std::env` function (`var`, `var_os`, `vars`, `vars_os`, `set_var`,
   `remove_var`, `current_dir`, `set_current_dir`, `home_dir`, `temp_dir`,
   `current_exe`, `args`, `args_os`) and no `Env::capture`: the environment
-  is read once, in the binary's `main.rs`, the one exemption in production
-  code.
+  is read once, in the core's `environment.rs`, and the arguments once, in the
+  binary's `main.rs`; those are the two exemptions in production code.
 - No `Command::output`, `status` or `spawn`, no `CommandExt::exec`, no
   `std::process::Child`, `exit` or `abort`: the template spawns no process
   (a project that must spawn one uses the kit's `cw_supervise`).

@@ -59,7 +59,8 @@ there.
 | Concern | File |
 |---------|------|
 | Root command, global flags, parsing, root help groups | [crates/tmpl-cli/src/cli.rs](../../../crates/tmpl-cli/src/cli.rs) |
-| Environment capture (the one read of the process) | [crates/tmpl-cli/src/main.rs](../../../crates/tmpl-cli/src/main.rs) |
+| Environment capture (the one read of the process environment) | [crates/tmpl-cli-core/src/environment.rs](../../../crates/tmpl-cli-core/src/environment.rs) |
+| The one read of the arguments | [crates/tmpl-cli/src/main.rs](../../../crates/tmpl-cli/src/main.rs) |
 | The runtime: data directory, store, clock, audit log | [crates/tmpl-cli-core/src/composition.rs](../../../crates/tmpl-cli-core/src/composition.rs) |
 | Noun dispatch | [crates/tmpl-cli/src/command/mod.rs](../../../crates/tmpl-cli/src/command/mod.rs) |
 | `note` subcommands, flags, help, mapping to the app, empty-result notice | [crates/tmpl-cli/src/command/note.rs](../../../crates/tmpl-cli/src/command/note.rs) |

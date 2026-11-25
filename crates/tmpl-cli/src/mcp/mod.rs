@@ -4,7 +4,7 @@
 //! A tool is a second mapping onto the same command, not a second command:
 //! its input is the command's own clap `Args` struct (which also derives
 //! `Deserialize` and `JsonSchema`; a text argument is read through its
-//! type's `FromStr`, as the example's `input.rs` shows), its description is the
+//! type's `FromStr`, as the example's `command/input.rs` shows), its description is the
 //! command's summary, and its function wraps the input in the CLI's
 //! [`Command`] and calls the same handler, [`command::run`], which runs the
 //! app through `app::<app>::exec` and the kit's `cw_app::exec`. So the tool
@@ -19,10 +19,6 @@
 //! To add a tool for a new command: give its `Args` the same derives as
 //! `StatusArgs`, and add one line to [`tools`].
 
-// example:begin
-pub(crate) mod input;
-
-// example:end
 use crate::cli::Cli;
 use crate::command::{self, Command, StatusArgs};
 // example:begin
@@ -30,24 +26,12 @@ use crate::command::{AddArgs, ListArgs, NoteCommand, ShowArgs};
 // example:end
 use crate::error::{TOOL_PANICKED, encode_error, mcp_error};
 use crate::output::Payload;
-use clap::{Args, CommandFactory};
+use clap::CommandFactory;
 use cw_mcp::schemars::JsonSchema;
 use cw_mcp::{Access, Server, ServerInfo, Tool};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tmpl_cli_core::{APP, Error, Origin, Runtime, State};
-
-/// Arguments to `mcp`: none of its own; `--root` picks the data directory
-/// every tool runs against.
-#[derive(Debug, Args)]
-pub(crate) struct McpArgs {}
-
-pub(crate) const MCP_EXAMPLES: &str = "\
-Examples:
-  tmpl-cli mcp
-  tmpl-cli --root ~/data mcp
-
-Point an MCP client at the command. It serves until its input closes.";
 
 /// Every tool, one per command, in the order `tools/list` gives them.
 pub(crate) fn tools() -> Vec<Tool<State>> {

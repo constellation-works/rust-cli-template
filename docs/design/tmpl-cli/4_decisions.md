@@ -1081,22 +1081,6 @@ Each rule below is a recorded deviation until the follow-up that brings the
 template into line closes it. That follow-up is not part of the change that
 re-vendors. Each line names the rule and what is unmet.
 
-- **STD-01@4 §R25**: the help text types `$TMPL_CLI_ROOT` and
-  `$TMPL_CLI_FORMAT` by hand (in doc comments). The rest is met: each
-  variable is declared once (the kit's in `cw_app::env`, the CLI's own in
-  `output/env.rs`), read through its declaration, and `docs/usage.md`'s
-  table is rendered from the declarations and pinned by a golden test. The
-  kit's own declarations carry no default or flag for `FORMAT` and `LOG`
-  (`auto` and `--format`, `warn`), so the usage document states those in
-  prose under the table.
-- **STD-02@8 §R6**: `scripts/check-dependency-direction.sh` has no module
-  import-cycle check. (The `clippy.toml` baseline and the removal of the
-  grep bans it covers are met: see "Clippy holds the file, environment and
-  process boundaries".)
-- **STD-02@8 §R7**: the binary crate reads the environment: its `main`
-  captures it once with the kit's `Env::capture()`, as the kit asks, and
-  `cw-cli` interprets the presentation variables and the log filter from
-  that captured value.
 - **STD-06@2 §R4**: the numbered design docs and the doc templates in
   `docs/design/_templates/` carry `last_updated`, not `created_date` and
   `updated_date`.
@@ -1115,6 +1099,21 @@ re-vendors. Each line names the rule and what is unmet.
 - **STD-09@3 §R26**: there is no root `CONTRIBUTING.md`. `docs/development.md`
   holds the setup and checks, and says how agents may be used only through a
   link to `AGENTS.md`.
+
+Closed since:
+
+- **STD-01@4 §R25**: the `--root` and `--format` help names its variable
+  from the kit's declaration (`cli.rs`, `root_help` and `format_help`), so
+  no variable name is typed by hand anywhere in the source.
+- **STD-02@8 §R6**: `scripts/check-module-cycles.sh`, run by
+  `scripts/check-dependency-direction.sh`, rejects an import cycle between
+  a crate's top-level modules and between the modules of one layer (R39).
+  It found three in the CLI crate (`cli`, `command` and `mcp`), broken by
+  declaring the `mcp` arguments in `cli.rs` and moving the tool-input
+  helpers under `command/`.
+- **STD-02@8 §R7**: the environment is captured in the core
+  (`crates/tmpl-cli-core/src/environment.rs::capture_env`); the CLI crate's
+  `main` reads only the arguments.
 
 ### Consequences
 
@@ -1281,7 +1280,7 @@ crate names it.
 ## The MCP surface is a second mapping onto the same commands
 
 **Recorded:** 2026-11-25
-**Code anchors:** `crates/tmpl-cli/src/mcp/mod.rs::tools`, `call`; `crates/tmpl-cli/src/mcp/input.rs`; `crates/tmpl-cli/src/command/note.rs::AddArgs`; `crates/tmpl-cli/src/output/payload.rs::Payload::json`; `crates/tmpl-cli/tests/mcp.rs`
+**Code anchors:** `crates/tmpl-cli/src/mcp/mod.rs::tools`, `call`; `crates/tmpl-cli/src/command/input.rs`; `crates/tmpl-cli/src/command/note.rs::AddArgs`; `crates/tmpl-cli/src/output/payload.rs::Payload::json`; `crates/tmpl-cli/tests/mcp.rs`
 
 ### Context
 
