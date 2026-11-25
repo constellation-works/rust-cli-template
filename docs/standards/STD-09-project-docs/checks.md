@@ -30,4 +30,7 @@ The gate that enforces each rule in [STD-09](STD-09.md), or `review-only`. Ship 
 | R24 | review-only |
 | R25 | review-only |
 | R26 | review-only |
-| R27 | review-only |
+| R27 | Canon lint (`line_wrapped`) in `.orbit-plugin/lib/standards/canon.py`, run by `standards.status` and `standards.amend`. |
+| R28 | review-only. Optionally, a CI check over `docs/runbooks/` verifies each non-template file matches `^RB-[0-9]{2}-[a-z0-9-]+\.md$` and its frontmatter `id` matches the filename stem. |
+| R29 | review-only. Optionally, a CI frontmatter lint checks that every frontmatter block carries `created_date` and `updated_date` matching `^[0-9]{4}-[0-9]{2}-[0-9]{2}$` and rejects `created`, `updated` and `last_updated`. |
+| R30 | review-only. A frontmatter lint MAY validate `last_validated` as `YYYY-MM-DD` when present. |

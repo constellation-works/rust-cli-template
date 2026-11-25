@@ -4,8 +4,8 @@ title: Economy — bounded agent context, delta-only records, one channel per as
 summary: Normative rules for designing anything an agent or operator reads repeatedly (prompts, briefs, tool results, task comments, checkpoints, errors, logs, reports) with an economical mindset — a fixed size that does not grow with history, each fact once and referenced by id, delta-only records, machine bookkeeping kept out of the readable body, asks in their own channel, outcome first, one-line errors with the diagnostic behind a detail view and repeats collapsed, and the steady-state and repeated size stated before it ships — while errors, logs and audit records stay complete and structured when stored; follow it in any project where agents produce or consume text.
 tags: [standard, agents, tokens, design]
 version: 3
-created: 2026-11-15
-updated: 2026-11-23
+created_date: 2026-11-15
+updated_date: 2026-11-25
 last_validated: 2026-11-15
 related: [STD-01-cli-surface, STD-07-ui-ux]
 ---

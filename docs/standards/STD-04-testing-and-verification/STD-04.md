@@ -4,8 +4,8 @@ title: Testing and verification — test design, hermetic tests, honest gates, d
 summary: Normative rules for how a change is tested and verified — boundary-first tests with unit tests only by admission, regression tests that drive the real entry point and fail before the fix, no weakened guards, behaviour-only and hermetic tests, visible skips, root-caused flakes, gates that cannot pass vacuously, regenerated artifacts, docs claims and examples as contracts, and the evidence whoever makes the change (human or agent) must produce before calling it done; follow it in any project with tests, CI or docs.
 tags: [standard, testing, verification, ci, docs, agents]
 version: 2
-created: 2026-09-26
-updated: 2026-10-03
+created_date: 2026-09-26
+updated_date: 2026-11-25
 last_validated: 2026-10-03
 related: [STD-01-cli-surface, STD-02-rust-architecture-and-errors, STD-03-concurrency-and-process-safety, STD-05-security-boundaries, STD-06-design-docs-and-feature-tracking]
 ---

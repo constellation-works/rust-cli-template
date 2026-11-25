@@ -4,8 +4,8 @@ title: Concurrency and process safety — locks, channels, durable writes, state
 summary: Normative rules for async locking, bounded queues and waits, cleanup guards, atomic and locked durable writes, version skew and append-only migrations, subprocess supervision and process identity, pinned inputs and interference-scoped guards, ownership-proven destruction, outcome-unknown remote calls, test-fixture safety and resource ceilings; follow it in any project that runs concurrent code, spawns processes, talks to peers, or persists state.
 tags: [standard, concurrency, subprocess, testing, durability, migrations, git, rust, python]
 version: 2
-created: 2026-09-26
-updated: 2026-09-26
+created_date: 2026-09-26
+updated_date: 2026-11-25
 last_validated: 2026-09-26
 related: [STD-01-cli-surface, STD-02-rust-architecture-and-errors, STD-04-testing-and-verification, STD-05-security-boundaries]
 ---

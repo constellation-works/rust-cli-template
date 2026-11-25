@@ -4,8 +4,8 @@ title: Security boundaries — authority, filesystem containment, child environm
 summary: Normative trust-boundary rules for constellation CLIs and small local services — authority from host-owned state, symlink-safe path containment, private local state, allowlisted child environments, value-based redaction at the durability boundary, loopback surfaces that check Host and Origin, no phoning home, digest-bound consent, pinned and verified supply chain, CSPRNG tokens; follow it in any tool that runs untrusted children, persists state, or listens on a socket.
 tags: [standard, security, sandbox, secrets, redaction, supply-chain, network]
 version: 1
-created: 2026-09-26
-updated: 2026-09-26
+created_date: 2026-09-26
+updated_date: 2026-11-25
 last_validated: 2026-09-26
 related: [STD-01-cli-surface, STD-02-rust-architecture-and-errors, STD-03-concurrency-and-process-safety, STD-04-testing-and-verification]
 ---
