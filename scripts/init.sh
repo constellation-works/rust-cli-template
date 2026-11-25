@@ -116,7 +116,8 @@ case "$KIND" in
 esac
 
 # --- 1. overlays, removals and regions ---------------------------------------
-for overlay in "${overlays[@]}"; do
+# The `+` form: bash 3.2 (macOS) treats an empty array as unset under `set -u`.
+for overlay in ${overlays[@]+"${overlays[@]}"}; do
   read -r target source <<<"$overlay"
   mkdir -p "$(dirname "$ROOT/$target")"
   cp "$ROOT/$source" "$ROOT/$target"
