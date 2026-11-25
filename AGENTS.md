@@ -16,7 +16,7 @@ Before the first commit, trace one real command against [ARCHITECTURE.md](ARCHIT
 ## Rules
 
 - Work only on authorized scope. Neither implementation nor a PR request authorizes merging.
-- Don't add a crate, or a dependency between crates, without updating [`ARCHITECTURE.md`](ARCHITECTURE.md) and `scripts/check-dependency-direction.sh` in the same change (STD-02 R6).
+- Don't add a crate, or a dependency between crates, without updating [`ARCHITECTURE.md`](ARCHITECTURE.md) and `scripts/check-dependency-direction.sh` in the same change (STD-02 R6). Every crate and every top-level module has its place in `ARCHITECTURE.md` and a first-line `//!` doc; `scripts/check-architecture-map.sh`, part of `make structure`, fails on a unit the map misses, a path it names that does not exist, or a unit without that doc (STD-02 R43).
 - Update affected docs in the same PR as the code. Stale docs are a review blocker. Edit `AGENTS.md` only when a rule, a command or a pointer in it changes; a new feature is described in its own docs.
 - Don't touch `CHANGELOG.md` during tasks; it is compiled at release time.
 - Use integration tests or goldens first (STD-04 R23). Every test must exercise behavior (STD-02 R21). No text-matching tests (`include_str!` plus `contains()` over source or copy).

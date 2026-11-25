@@ -2,7 +2,9 @@
 
 The layer model that `scripts/check-dependency-direction.sh` enforces
 (STD-02 R1, R6). A lower layer never imports a higher one. Adding a crate or
-an edge changes this file and that script in the same commit.
+an edge changes this file and that script in the same commit. Every crate
+and top-level module has its place here, and every path written in code
+formatting exists (`scripts/check-architecture-map.sh`, STD-02 R43).
 
 ## Crates
 
@@ -106,8 +108,7 @@ composition.rs       start: the data directory (the kit's, from Env), the Store,
   and commits in one `store.write(|tx| …)`, re-checking inside the closure
   anything that must be atomic with the write.
 - An app may call another only through what its `mod.rs` exports. There is
-  no `app/common`, `app/shared` or `app/util`: code two apps need goes to
-  the lower app.
+  no common, shared or util app: code two apps need goes to the lower app.
 - Errors: each unit keeps a typed enum for its own matching (the app's
   `Error`, composition's, the store's) and translates it into
   `cw_base::Error` in one `From` impl beside the enum, naming its `Kind` and
@@ -163,7 +164,7 @@ test_support.rs      behind the `test-support` feature: raw SQL on the database,
   A statement that changes the schema appears only under `schema/`.
   A record's repository (`repository/<record>.rs`) holds its SQL and the
   mapping between a row and the contract types, run on the reader `Store::read` opened or the
-  transaction `Store::write` began. There is no `driver/fs/`, and no audit
+  transaction `Store::write` began. There is no file-system driver, and no audit
   repository: the audit log is `cw-app`'s.
 - **The record-access seam.** A caller reaches a record only through
   `snapshot.<record>()` in a read and `tx.<record>()` in a write. The store's public surface names no `rusqlite` or
@@ -235,14 +236,14 @@ Checked by grep over non-test sources, except that `rusqlite` and
   `cw_sqlite` type. Nothing names the audit log, its lock or `cw_app`.
   `contract/` imports no `driver`, `repository`, `Store`, file access
   or SQLite, and defines no `check_*` function and reads no clock. There is
-  no `db/` and no `driver/fs/`. The crate reads no environment
+  no db module and no file-system driver. The crate reads no environment
   variable and discovers no path.
 - `tmpl-cli-core`: no `std::fs`, `std::net`, `std::process`, `tempfile`,
   `rustix`, `cw_fs`, `cw_sqlite` or `rusqlite` anywhere, and no
   `tmpl_cli_store::repository` path: a record is reached through
   `snapshot.<record>()` or `tx.<record>()`. Nothing names `home_dir` or
   `current_dir`. Every app's `mod.rs` forwards to `cw_app::exec::<`. No
-  `app/common`, `app/shared` or `app/util`. An app's `rule` names no
+  common, shared or util app. An app's `rule` names no
   `composition`, `cw_app`, `Ctx`, `Store`, `Snapshot` or `Tx`.
 - Every crate's `src/`, tests included: only `tmpl-cli/src/main.rs` names
   `std::env`, and there only `std::env::args_os()`; only it calls
