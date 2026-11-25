@@ -51,6 +51,7 @@ example docs/design/tmpl-cli
 crates crates
 crates Cargo.lock
 crates docs/usage.md
+crates docs/architecture
 
 # The template's own files.
 template scripts/init.sh
@@ -63,6 +64,7 @@ template crates/tmpl-cli/tests/template.rs
 
 # Rewritten for the copy.
 generated about.md
+generated docs/INDEX.md
 generated template.toml
 
 # Replaced per kind.
@@ -77,7 +79,12 @@ regions CHANGELOG.md
 regions Cargo.toml
 regions Makefile
 regions README.md
-regions docs/development.md
+regions CONTRIBUTING.md
+regions SECURITY.md
+regions docs/architecture/README.md
+regions docs/architecture/tmpl-cli.md
+regions docs/architecture/tmpl-cli-core.md
+regions docs/architecture/tmpl-cli-store.md
 regions docs/usage.md
 regions scripts/check-dependency-direction.sh
 regions crates/tmpl-cli/src/cli.rs

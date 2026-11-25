@@ -1,4 +1,4 @@
-.PHONY: help build test goldens fmt fmt-check clippy deny structure standards-check docs-check feature-board ci-fast ci-lint ci install clean
+.PHONY: help build test goldens fmt fmt-check clippy deny structure standards-check docs-check feature-board doc-index ci-fast ci-lint ci install clean
 
 CARGO ?= cargo
 # Every build uses the committed Cargo.lock as is; a stale lock fails instead
@@ -36,6 +36,7 @@ help:
 	@echo "  make goldens UPDATE=1 Regenerate goldens after an intended surface change"
 	@echo "  make standards-check  Run the vendored standards check (docs/standards/check.sh)"
 	@echo "  make feature-board    Regenerate the design feature board"
+	@echo "  make doc-index        Regenerate docs/INDEX.md from each document's summary"
 	@echo "  make ci               Everything above; what CI runs"
 	@echo "  make build | fmt | install | clean"
 
@@ -168,9 +169,14 @@ docs-check:
 	python3 scripts/check-readme.py
 	python3 scripts/check-doc-frontmatter.py
 	python3 scripts/generate-feature-board.py --check
+	python3 scripts/check-doc-links.py
+	python3 scripts/generate-doc-index.py --check
 
 feature-board:
 	python3 scripts/generate-feature-board.py
+
+doc-index:
+	python3 scripts/generate-doc-index.py
 
 ci-fast: fmt-check structure standards-check docs-check
 

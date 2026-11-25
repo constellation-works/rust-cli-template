@@ -1059,6 +1059,7 @@ The tracked-file gate enforces this policy for private Orbit IDs.
 ## Rules the template does not yet meet after the 829a01d re-vendor
 
 **Recorded:** 2026-11-25
+**Closed:** 2026-11-25: every rule below is met.
 
 ### Context
 
@@ -1078,22 +1079,9 @@ in full by the gates added with it.
 
 ### Decision
 
-Each rule below is a recorded deviation until the follow-up that brings the
-template into line closes it. That follow-up is not part of the change that
-re-vendors. Each line names the rule and what is unmet.
-
-- **STD-09@3 §R16**: there is no generated `docs/INDEX.md` and no CI check
-  that it is current.
-- **STD-09@3 §R17**: no link and anchor check covers the root and `docs/`
-  Markdown; `scripts/check-readme.py` checks `README.md` only.
-- **STD-09@3 §R23**: there is no `docs/architecture/README.md` and no page
-  per crate.
-- **STD-09@3 §R25**: there is no `SECURITY.md`.
-- **STD-09@3 §R26**: there is no root `CONTRIBUTING.md`. `docs/development.md`
-  holds the setup and checks, and says how agents may be used only through a
-  link to `AGENTS.md`.
-
-Closed since:
+Each rule below was a recorded deviation until the follow-up that brought
+the template into line closed it, in changes apart from the one that
+re-vendored. Each line names the rule and how it is now met.
 
 - **STD-01@4 §R25**: the `--root` and `--format` help names its variable
   from the kit's declaration (`cli.rs`, `root_help` and `format_help`), so
@@ -1119,13 +1107,30 @@ Closed since:
   the record was written) asks of every document with frontmatter, and the
   check holds that too. The vendored `docs/standards/` is the one gap: see
   "The vendored standards carry no project frontmatter".
+- **STD-09@3 §R16**: `scripts/generate-doc-index.py` renders
+  `docs/INDEX.md` from the summaries; `make docs-check` fails when the
+  committed file differs, and `scripts/init.sh` regenerates it for a copy.
+- **STD-09@3 §R17**: `scripts/check-doc-links.py`, in `make docs-check`,
+  resolves every relative link and heading anchor in the root and `docs/`
+  Markdown, with the parser `scripts/check-readme.py` uses for the README.
+- **STD-09@3 §R23**: `docs/architecture/README.md` gives the end-to-end
+  data flow and links one page per crate, each with What it owns, Main
+  modules, Dependencies and Entry points. The layering rules and the
+  dependency table stay in `ARCHITECTURE.md` alone (§R21); the pages link
+  to it.
+- **STD-09@3 §R25**: `SECURITY.md` gives private reporting (GitHub's private
+  vulnerability reporting), the scope and the known limits.
+- **STD-09@3 §R26**: the contributing guide moved from the docs folder to a
+  root `CONTRIBUTING.md`, with setup, the required checks and a section on
+  using agents.
 
 ### Consequences
 
-- A reviewer checks a change against the vendored versions, and finds each
-  gap above already recorded rather than introduced by the change.
-- Cost: until the follow-up lands, a project made from the template inherits
-  these gaps along with the record of them.
+- A reviewer checks a change against the vendored versions; each rule above
+  now has a gate or, where the canon leaves it to review (STD-09 §R23,
+  §R25, §R26), a document a reviewer reads.
+- Cost: while the record was open, a project made from the template
+  inherited these gaps along with the record of them.
 
 ## The vendored standards carry no project frontmatter
 

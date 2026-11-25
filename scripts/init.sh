@@ -198,7 +198,7 @@ agents: "—"
 # $NAME — codebase card
 
 Machine-readable layout entry for **$NAME**, read by the constellation front-door index
-([\`../../operations/scripts/index.sh\`](../../operations/scripts/index.sh)) to render the
+(\`operations/scripts/index.sh\` in the umbrella) to render the
 Codebases table. The human front door is [\`README.md\`](README.md) and the agent guide is
 [\`AGENTS.md\`](AGENTS.md); keep \`summary\` here in sync with them.
 CARD
@@ -244,12 +244,15 @@ leftover="$( (find "$ROOT" "${prune[@]}" -o -type f -print0 \
 $leftover"
 
 # --- 5. generated files ------------------------------------------------------
-# The kind may have removed a design folder: regenerate the feature board.
+# The kind may have removed a design folder or a document: regenerate the
+# feature board and the documentation index (STD-09 R16).
 if command -v python3 >/dev/null 2>&1; then
   python3 "$ROOT/scripts/generate-feature-board.py" >/dev/null \
     || echo "init: warning: the feature board did not regenerate; run make feature-board" >&2
+  python3 "$ROOT/scripts/generate-doc-index.py" >/dev/null \
+    || echo "init: warning: docs/INDEX.md did not regenerate; run make doc-index" >&2
 else
-  echo "init: warning: python3 not found; run make feature-board before make ci" >&2
+  echo "init: warning: python3 not found; run make feature-board and make doc-index before make ci" >&2
 fi
 # The new name sorts differently from the placeholder, so let cargo re-sort
 # Cargo.lock (no dependency version changes; offline first) and rustfmt

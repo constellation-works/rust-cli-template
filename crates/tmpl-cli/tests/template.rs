@@ -368,16 +368,13 @@ fn the_template_gate_fails_on_a_note_reference_outside_the_example() {
     let out = gate(&copy);
     assert!(out.status.success(), "{}", stderr(&out));
 
-    let text = copy.read("docs/development.md");
-    copy.write(
-        "docs/development.md",
-        &format!("{text}\nAdd a note first.\n"),
-    );
+    let text = copy.read("CONTRIBUTING.md");
+    copy.write("CONTRIBUTING.md", &format!("{text}\nAdd a note first.\n"));
     copy.write("crates/tmpl-cli/src/notes_extra.rs", "//! extra\n");
     let out = gate(&copy);
     assert_eq!(out.status.code(), Some(1));
     let err = stderr(&out);
-    assert!(err.contains("docs/development.md:"), "{err}");
+    assert!(err.contains("CONTRIBUTING.md:"), "{err}");
     assert!(
         err.contains("crates/tmpl-cli/src/notes_extra.rs: names the note example"),
         "{err}"
@@ -385,7 +382,7 @@ fn the_template_gate_fails_on_a_note_reference_outside_the_example() {
 
     // An unbalanced marker and an unlisted file with markers fail too.
     copy.write(
-        "docs/development.md",
+        "CONTRIBUTING.md",
         &format!("{text}<!-- example:begin -->\n"),
     );
     fs::remove_file(copy.path("crates/tmpl-cli/src/notes_extra.rs")).unwrap();
@@ -395,7 +392,7 @@ fn the_template_gate_fails_on_a_note_reference_outside_the_example() {
     );
     let err = stderr(&gate(&copy));
     assert!(
-        err.contains("docs/development.md: unclosed example region"),
+        err.contains("CONTRIBUTING.md: unclosed example region"),
         "{err}"
     );
     assert!(err.contains("LICENSE.extra: has region markers"), "{err}");

@@ -15,7 +15,7 @@ agents: "—"
 # rust-cli-template — codebase card
 
 Machine-readable layout entry for **rust-cli-template**, read by the constellation front-door index
-([`../../operations/scripts/index.sh`](../../operations/scripts/index.sh)) to render the
+(`operations/scripts/index.sh` in the umbrella) to render the
 Codebases table. The human front door is [`README.md`](README.md) and the agent guide is
 [`AGENTS.md`](AGENTS.md); keep `summary` here in sync with them. A copy made with
 `scripts/init.sh` gets its own placeholder card instead of this one, listing the standards its
