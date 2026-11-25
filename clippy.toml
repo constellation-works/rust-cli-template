@@ -2,6 +2,9 @@
 # lint's default list (`i`, `j`, `x`, `y`, `z`, `w`, `n`) is emptied.
 allowed-idents-below-min-chars = []
 
+# STD-02 R36: a function takes at most one bool; a second is a mode enum.
+max-fn-params-bools = 1
+
 # File, environment and process boundaries (STD-02 R3, R5): the template
 # reaches files through the kit's cw_fs (in the store), reads the process
 # environment once through cw_app::Env::capture() (in the core's environment.rs,

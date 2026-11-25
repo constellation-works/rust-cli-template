@@ -51,15 +51,15 @@ pub fn env_table() -> String {
 /// Run the CLI against `args`, the process arguments, and `env`, the
 /// environment `main` captured once.
 #[must_use]
-pub fn run(args: Vec<OsString>, env: &Env) -> ExitCode {
+pub fn run(args: &[OsString], env: &Env) -> ExitCode {
     // One probe of the streams; the kit decides colour, width and mode
     // from it and the captured environment.
     let probe = Probe::detect();
     let help_width = output::decide(env, probe, None).width();
-    let cli = match cli::Cli::parse_args(&args, help_width) {
+    let cli = match cli::Cli::parse_args(args, help_width) {
         Ok(cli) => cli,
         Err(err) => {
-            let requested = cli::raw_requested_format(&args);
+            let requested = cli::raw_requested_format(args);
             return output::finish_parse_error(&err, env, probe, requested);
         }
     };

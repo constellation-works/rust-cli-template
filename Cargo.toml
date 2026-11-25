@@ -94,6 +94,17 @@ min_ident_chars = "warn"
 # STD-12 R15: no glob imports, apart from the lints' own default exceptions.
 wildcard_imports = "warn"
 enum_glob_use = "warn"
+# STD-02 R35: every suppression is #[expect(..., reason = "...")]; an
+# #[allow] only with a reason.
+allow_attributes_without_reason = "warn"
+allow_attributes = "warn"
+# STD-02 R36: at most one bool parameter (threshold in clippy.toml).
+fn_params_excessive_bools = "warn"
+# STD-02 R38: visible Rc/Arc clones, no Rc<String>, no by-value parameter
+# that is only read.
+clone_on_ref_ptr = "warn"
+rc_buffer = "warn"
+needless_pass_by_value = "warn"
 
 [workspace.lints.rust]
 # STD-12 R18: every public item carries a doc comment.
