@@ -119,7 +119,10 @@ lib.rs               re-exports: Store, Snapshot, Tx, Error, contracts, reposito
 store.rs             Store::open, read() -> Snapshot, write(|tx| …), audit()
 driver/
   mod.rs             one module per storage mechanism
-  sqlite/mod.rs      the notes database: STORE_FILE, MIGRATIONS (the schema steps), open() -> cw_sqlite::Db; no query
+  sqlite/mod.rs      the notes database: STORE_FILE, open() -> cw_sqlite::Db; no query, no schema statement
+  sqlite/schema/
+    mod.rs           MIGRATIONS: the one append-only ordered list of every table's steps, each named
+    note.rs          the note table's steps as named items (CREATE_NOTE)
 repository/
   mod.rs             Snapshot (one reader), Tx (one write transaction)
   notes.rs           notes: the SQL and row mapping; all, get, bad records; put
@@ -136,9 +139,14 @@ test_support.rs      behind the `test-support` feature: raw SQL on the notes dat
 
 - **A driver sets one storage mechanism up once and returns a handle; a
   repository is one record's use of it.** `driver/sqlite/` holds only this
-  project's part of SQLite (the file, the lock wait, the schema steps) and
-  returns the kit's `cw_sqlite::Db`; the kit is the mechanism. It runs no
-  query. A statement that changes the schema appears only there.
+  project's part of SQLite and returns the kit's `cw_sqlite::Db`; the kit is
+  the mechanism. Its `mod.rs` holds the file name and `open()`, with no
+  query and no schema statement. Its `schema/` holds one module per table,
+  each exporting that table's steps as named items, and in `schema/mod.rs`
+  the one append-only `MIGRATIONS` list naming every step in order. A step
+  added later to an earlier table goes at the end of that list; per-table
+  lists are never concatenated, so no shipped step is renumbered (STD-03
+  R23). A statement that changes the schema appears only under `schema/`.
   `repository/notes.rs` holds the notes' SQL and the mapping between a row
   and the contract types, run on the reader `Store::read` opened or the
   transaction `Store::write` began. There is no `driver/fs/`: the audit
@@ -200,7 +208,8 @@ Checked by grep over non-test sources, except that `rusqlite` and
   `tempfile` or `rustix`, and `rusqlite` only as `cw_sqlite::rusqlite`.
   A statement that changes the schema (`CREATE`, `ALTER` or `DROP` of a
   table, index, view or trigger, `PRAGMA user_version`, a `Step`) appears
-  only under `driver/sqlite/`. No public item names a `rusqlite` or
+  only under `driver/sqlite/schema/`, and only `schema/mod.rs` declares a
+  list of steps. No public item names a `rusqlite` or
   `cw_sqlite` type. `db/audit.rs` names neither `cw_fs` nor `cw_sqlite`.
   `contracts/` imports no `db`, `driver`, `repository`, `Store`, file access
   or SQLite, and defines no `check_*` function and reads no clock. There is

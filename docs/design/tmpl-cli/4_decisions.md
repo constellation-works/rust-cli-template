@@ -406,7 +406,7 @@ registry ships empty.
   they are upgraded, because a JSON file has no way to open read-only for
   just the fields an old build knows.
 - Update (2026-11-25): for the notes this registry is replaced by the
-  database's append-only `MIGRATIONS` in `driver/sqlite/` (see
+  database's append-only `MIGRATIONS` in `driver/sqlite/schema/` (see
   [The notes are a SQLite database](#the-notes-are-a-sqlite-database)); the
   rule is the same, keyed on `PRAGMA user_version`. The audit line keeps
   its own `format` and `UPGRADES` in `db/audit.rs`.
@@ -899,7 +899,7 @@ is deleted, and the template keeps three crates.
 ## The notes are a SQLite database
 
 **Recorded:** 2026-11-25
-**Code anchors:** `crates/tmpl-cli-store/src/driver/sqlite/mod.rs::MIGRATIONS`, `::open`; `crates/tmpl-cli-store/src/repository/notes.rs`; `crates/tmpl-cli-store/src/store.rs::Store::read`, `::Store::write`; `crates/tmpl-cli-store/src/contracts/note.rs::NoteId::MAX`
+**Code anchors:** `crates/tmpl-cli-store/src/driver/sqlite/mod.rs::open`; `crates/tmpl-cli-store/src/driver/sqlite/schema/mod.rs::MIGRATIONS`; `crates/tmpl-cli-store/src/driver/sqlite/schema/note.rs::CREATE_NOTE`; `crates/tmpl-cli-store/src/repository/notes.rs`; `crates/tmpl-cli-store/src/store.rs::Store::read`, `::Store::write`; `crates/tmpl-cli-store/src/contracts/note.rs::NoteId::MAX`
 
 ### Context
 
@@ -915,9 +915,10 @@ example store moves onto it and that the audit log stays an append-only file.
 The notes live in `<root>/notes.db`, opened only through `cw_sqlite::Db`.
 
 - **A driver sets one storage mechanism up once and returns a handle; a
-  repository is one record's use of it.** `driver/sqlite/` holds the file
-  name, the lock wait and the schema steps, and returns the `Db`; it runs
-  no query. `repository/notes.rs` holds the notes' SQL and the mapping
+  repository is one record's use of it.** `driver/sqlite/mod.rs` holds the
+  file name and the lock wait and returns the `Db`; it runs no query. Its
+  `schema/` holds one module per table, exporting that table's steps as
+  named items, and `schema/mod.rs` names every step in one ordered list. `repository/notes.rs` holds the notes' SQL and the mapping
   between a row and the contract types, run on the reader `Store::read`
   opened or the transaction `Store::write` began. There is no `driver/fs/`:
   the audit repository uses `cw_fs` directly, and the audit files move with
@@ -925,7 +926,9 @@ The notes live in `<root>/notes.db`, opened only through `cw_sqlite::Db`.
 - **The schema is an append-only list of steps** from version 1, with a
   `STRICT` table, RFC 3339 UTC text timestamps and the tags as a JSON array
   checked by `json_valid`. A statement that changes the schema appears only
-  in `driver/sqlite/`.
+  in `driver/sqlite/schema/`. The list names each step rather than joining
+  per-table lists, so a later step for an earlier table goes at the end and
+  no shipped step is renumbered (STD-03 R23).
 - **The record-access seam.** The core reaches a record only through
   `snapshot.<record>()` and `tx.<record>()`. The store's public surface has
   no `rusqlite` or `cw_sqlite` type, no borrow from a connection or a

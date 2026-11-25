@@ -36,8 +36,9 @@ app's `exec` forwards to, the audit guard) and `composition` (the only code
 that reads the environment or picks the data directory, the store and the
 clock). `tmpl-cli-store` owns
 the data directory: the `Store` facade (one read, one write transaction)
-over `driver/sqlite/` (the notes database's file, lock wait and schema
-steps, handed out as a `cw_sqlite::Db`; no query), one repository per record
+over `driver/sqlite/` (the notes database's file and lock wait, and in
+`schema/` one module per table and the one ordered step list, handed out as
+a `cw_sqlite::Db`; no query), one repository per record
 (`notes`: the notes' SQL and row mapping; `audit`), `db/audit.rs` (the
 persisted audit line) and the record shapes in `contracts/`. A driver sets
 one storage mechanism up once and returns a handle; a repository is one
@@ -110,7 +111,9 @@ in every mode.
 The notes live in one SQLite database, `notes.db`, with SQLite's
 `notes.db-wal` and `notes.db-shm` beside it, opened through the kit's
 `cw_sqlite` (WAL, `synchronous = FULL`, owner-only files, no link followed).
-Its schema is the driver's append-only `MIGRATIONS` list (version 1: one
+Its schema is the driver's append-only `MIGRATIONS` list in
+`driver/sqlite/schema/mod.rs`, naming each table's steps from
+`schema/<table>.rs` (version 1: one
 `STRICT` `note` table, timestamps as RFC 3339 UTC text, tags as a JSON
 array in a text column checked by `json_valid`), keyed on
 `PRAGMA user_version`. Every read and write first checks that the data
@@ -172,7 +175,7 @@ exit code.
 | Gate | Make target | Holds |
 |------|-------------|-------|
 | `cargo fmt --check` | `ci-fast` | formatting |
-| `check-dependency-direction.sh` | `ci-fast` | crate and module layering (STD-02 R1–R6), file access only in the store, `rusqlite` only in the store and only through `cw_sqlite`, schema statements only in `driver/sqlite/`, no repository path named in the core, environment reads only in the core's `composition.rs`, no clock-defaulted timestamps (R16), retired paths stay gone (R17) |
+| `check-dependency-direction.sh` | `ci-fast` | crate and module layering (STD-02 R1–R6), file access only in the store, `rusqlite` only in the store and only through `cw_sqlite`, schema statements only in `driver/sqlite/schema/` and step lists only in its `mod.rs`, no repository path named in the core, environment reads only in the core's `composition.rs`, no clock-defaulted timestamps (R16), retired paths stay gone (R17) |
 | `check-test-modules.sh` | `ci-fast` | every sibling unit-test file is declared (STD-02 R19) |
 | `check-terminal-guard.sh` | `ci-fast` | one owner for streams, TTY and color env (STD-01 R12, R17) |
 | `check-private-task-ids.sh` | `ci-fast` | public tree excludes private task IDs outside the vendored canon |

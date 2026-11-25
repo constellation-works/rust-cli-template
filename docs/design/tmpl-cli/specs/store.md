@@ -38,11 +38,15 @@ leave unreadable state.
 ## Schema
 
 The schema is the driver's `MIGRATIONS` in
-`crates/tmpl-cli-store/src/driver/sqlite/mod.rs`, an append-only list of
-steps keyed on `PRAGMA user_version`: step `n` takes the database from
-version `n - 1` to `n`. A shipped step is never edited, reordered or
-removed; a change is a new step. A statement that changes the schema
-appears only there (`scripts/check-dependency-direction.sh`).
+`crates/tmpl-cli-store/src/driver/sqlite/schema/mod.rs`, an append-only list
+of steps keyed on `PRAGMA user_version`: step `n` takes the database from
+version `n - 1` to `n`. Each table's steps are named items in its own
+module, `schema/<table>.rs` (`schema/note.rs` for the note table), and the
+list names each one in order. A shipped step is never edited, reordered or
+removed; a change is a new step at the end of the list, even for an earlier
+table, so the list is never built by concatenating per-table lists. A
+statement that changes the schema appears only under `schema/`
+(`scripts/check-dependency-direction.sh`).
 
 Version 1 is one `STRICT` table:
 

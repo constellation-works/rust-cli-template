@@ -235,15 +235,24 @@ ban "$STORE/contracts" 'fn check_|now_utc|SystemTime'                      "cont
 # rusqlite is named only through the kit's re-export (cw_sqlite::rusqlite),
 # never as a crate of its own.
 ban "$STORE"         '(^|[^:[:alnum:]_])rusqlite::|extern crate rusqlite'  "the store names rusqlite only through cw_sqlite's re-export"
-# A statement that changes the schema appears only in driver/sqlite/: the
-# schema is the driver's append-only list of steps.
+# A statement that changes the schema appears only in driver/sqlite/schema/:
+# one module per table and the one ordered list of steps.
 schema_hits=$(grep -rnHiE --include='*.rs' --exclude-dir=tests \
     '\b(create|alter|drop)[[:space:]]+(table|index|view|trigger)\b|pragma[[:space:]]+user_version|Step::(sql|function)' \
-    "$STORE" 2>/dev/null | grep -v "^$STORE/driver/sqlite/" | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)
+    "$STORE" 2>/dev/null | grep -v "^$STORE/driver/sqlite/schema/" | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)
 if [[ -n "$schema_hits" ]]; then
   echo "$schema_hits" >&2
-  err "a statement that changes the schema belongs in driver/sqlite/"
+  err "a statement that changes the schema belongs in driver/sqlite/schema/"
 fi
+# A table's module exports named steps; only schema/mod.rs lists them, one by
+# one, so a later step for an earlier table goes at the end (STD-03 R23).
+list_hits=$(grep -rnHE --include='*.rs' '&\[(cw_sqlite::)?Step\]|\[(cw_sqlite::)?Step;' \
+    "$STORE/driver/sqlite/schema" 2>/dev/null | grep -v "^$STORE/driver/sqlite/schema/mod.rs:" || true)
+if [[ -n "$list_hits" ]]; then
+  echo "$list_hits" >&2
+  err "a table's schema module exports named steps; only driver/sqlite/schema/mod.rs lists them"
+fi
+[[ -e "$STORE/driver/sqlite/schema/mod.rs" ]] || err "store/driver/sqlite/schema/mod.rs: the one ordered list of schema steps is missing"
 # No mechanism in the store's public surface: a public item names no
 # rusqlite or cw_sqlite type. (A pub(crate) item may.)
 ban "$STORE"         '^[[:space:]]*pub[[:space:]]+(fn|struct|enum|type|use|const|static|trait)[^;{]*(rusqlite|cw_sqlite|Connection|Transaction|Reader|\bDb\b)' "the store's public surface names no rusqlite or cw_sqlite type"

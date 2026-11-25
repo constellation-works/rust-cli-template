@@ -5,7 +5,8 @@
 //! query and knows no record's rules. A repository (`crate::repository`) is
 //! one record's use of that handle.
 //!
-//! - `sqlite`: the notes database: its file, its lock wait and its schema
-//!   steps, opened as a `cw_sqlite::Db`.
+//! - `sqlite`: the notes database: its file and lock wait in `mod.rs`, and
+//!   in `schema/` one module per table and the one ordered step list,
+//!   opened as a `cw_sqlite::Db`.
 
 pub(crate) mod sqlite;
