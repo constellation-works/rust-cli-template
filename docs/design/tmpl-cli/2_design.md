@@ -45,7 +45,7 @@ one storage mechanism up once and returns a handle; a repository is one
 record's use of it. The core reaches a record only through
 `snapshot.<record>()` and `tx.<record>()`. The foundation is the cw-kit from
 [constellation-works/satellites](https://github.com/constellation-works/satellites),
-pinned to commit `13e8954eee4967ad1565bdea8738d36ab0d38b3e`: `cw-base` (the
+pinned to commit `5c4c4573ad1d30d0cf55c7b9298c0c6b22dc235b`: `cw-base` (the
 one error type every unit translates its typed error into, with its `Kind`
 and stable code), which the store and the core name; `cw-fs` (appends,
 locking and private-state checks, mechanism only) and `cw-sqlite` (one
