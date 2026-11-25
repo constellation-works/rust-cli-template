@@ -845,7 +845,7 @@ integration test.
 The workspace depends on the kit's `cw-base` (`Error`, `Kind`, a clock) and
 `cw-fs` (atomic write, append, bounded read, listing, removal, private
 directories, owner-only checks, one advisory lock) as git dependencies
-pinned to commit `5c4c4573ad1d30d0cf55c7b9298c0c6b22dc235b`, since no release
+pinned to commit `9c9cc998720f0a75041be3451c14fbaf80f29dc8`, since no release
 is published; `deny.toml` allows that one git source. The foundation crate
 is deleted, and the template keeps three crates.
 

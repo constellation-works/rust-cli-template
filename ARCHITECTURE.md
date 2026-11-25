@@ -17,7 +17,7 @@ tmpl-cli  ->  tmpl-cli-core  ->  tmpl-cli-store
 dev-dependency only), all from
 [constellation-works/satellites](https://github.com/constellation-works/satellites),
 a git dependency pinned in the root `Cargo.toml` to commit
-`5c4c4573ad1d30d0cf55c7b9298c0c6b22dc235b` (no release is published yet; moving the
+`9c9cc998720f0a75041be3451c14fbaf80f29dc8` (no release is published yet; moving the
 pin is a change of its own). Every kit crate is pinned to that one rev.
 
 | Crate | Kind | Owns | Internal and kit dependencies | Banned |
