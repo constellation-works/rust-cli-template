@@ -83,8 +83,11 @@ pub(crate) fn mcp_error(source: cw_mcp::Error) -> Error {
 /// The code an MCP tool that panicked is answered with.
 pub(crate) const TOOL_PANICKED: &str = "tool_panicked";
 
-/// A command line that does not parse, as the workspace's error type:
-/// `message` is clap's sentence, without its `error: ` prefix.
+/// A command line that is not usable as typed, as the workspace's error
+/// type, which `Sink::report` exits 2 for: clap's sentence without its
+/// `error: ` prefix, or a check of the surface's own that clap cannot
+/// express (`GlobalArgs::check`). A command handler raises one the same
+/// way.
 pub(crate) fn usage_error(message: &str) -> Error {
     SurfaceError::Usage(message.to_owned()).into()
 }

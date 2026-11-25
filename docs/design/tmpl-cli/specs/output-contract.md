@@ -32,10 +32,14 @@ value means auto. Off a terminal there are no escapes and no truncation.
 ## JSON list envelope
 
 `note list --json` is always
-`{"notes": [<note>, ...], "total": <integer>, "truncated": <boolean>}`:
+`{"notes": [<note>, ...], "total": <integer>, "truncated": <boolean>, "warnings": [<skipped>, ...]}`:
 `total` counts the notes that matched the filters, and `truncated` is true
-when `--limit` returned fewer. No matches is `{"notes": [], "total": 0,
-"truncated": false}`. When a list is cut, stderr also says `showing N of M
+when `--limit` returned fewer. `warnings` names each record the list
+skipped because it could not be read, as
+`{"record": "note <id>" | "row <id>", "reason": <string>}`, in store order;
+it is `[]` when none was skipped, never omitted, and stderr warns of each
+one too. The list still exits 0. No matches is `{"notes": [], "total": 0,
+"truncated": false, "warnings": []}`. When a list is cut, stderr also says `showing N of M
 matching notes` in every mode.
 
 ## JSON fields (note)

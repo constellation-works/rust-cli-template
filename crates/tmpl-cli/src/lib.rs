@@ -64,6 +64,9 @@ pub fn run(args: &[OsString], env: &Env) -> ExitCode {
         }
     };
     let mut sink = output::sink(output::decide(env, probe, cli.global.requested_format()));
+    if let Err(err) = cli.global.check() {
+        return output::fail(&mut sink, &err);
+    }
     Logging::from_env(env, APP).init();
     let runtime = match tmpl_cli_core::start(env, cli.global.root.as_deref()) {
         Ok(runtime) => runtime,

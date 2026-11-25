@@ -9,7 +9,7 @@
 use serde::Serialize;
 // example:begin
 
-use super::note::{ListPayload, NotePayload};
+use super::note::{ListPayload, NotePayload, SkippedRecord};
 // example:end
 
 /// The store's status as every output mode sees it.
@@ -61,6 +61,8 @@ pub(crate) enum Payload {
         /// How many matched before the limit; more than `notes.len()` when
         /// the list was cut.
         total: usize,
+        /// The records skipped because they could not be read.
+        skipped: Vec<SkippedRecord>,
     },
     /// A single note (`show`, `add`).
     Note(NotePayload),
@@ -74,10 +76,15 @@ impl Payload {
         match self {
             Self::Status(status) => Json::Status(status),
             // example:begin
-            Self::Notes { notes, total } => Json::Notes(ListPayload {
+            Self::Notes {
+                notes,
+                total,
+                skipped,
+            } => Json::Notes(ListPayload {
                 notes,
                 total: *total,
                 truncated: notes.len() < *total,
+                warnings: skipped,
             }),
             Self::Note(note) => Json::Note(note),
             // example:end

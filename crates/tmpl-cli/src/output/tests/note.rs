@@ -19,7 +19,11 @@ fn note(id: u64, tags: &[&str]) -> NotePayload {
 }
 
 fn notes(notes: Vec<NotePayload>, total: usize) -> Payload {
-    Payload::Notes { notes, total }
+    Payload::Notes {
+        notes,
+        total,
+        skipped: Vec::new(),
+    }
 }
 
 #[test]
@@ -43,7 +47,7 @@ fn an_empty_list_is_empty_stdout_in_human_modes_and_an_empty_envelope_in_json() 
         serde_json::from_str(&piped(Format::Json, notes(Vec::new(), 0))).unwrap();
     assert_eq!(
         json,
-        serde_json::json!({"notes": [], "total": 0, "truncated": false})
+        serde_json::json!({"notes": [], "total": 0, "truncated": false, "warnings": []})
     );
 }
 

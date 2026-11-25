@@ -5,14 +5,14 @@
 //! `<id>`, never real ids or tracker numbers (STD-01 R23).
 
 use crate::command::Command;
-use clap::error::ErrorKind;
+use crate::error::usage_error;
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 use cw_cli::Format;
 use cw_cli::help::{Group, grouped};
 use std::ffi::OsString;
 use std::path::PathBuf;
-use tmpl_cli_core::APP;
 use tmpl_cli_core::env::{FORMAT, ROOT};
+use tmpl_cli_core::{APP, Error};
 
 /// Help heading for the flags every command accepts.
 const GLOBAL: &str = "Global options";
@@ -125,35 +125,34 @@ pub(crate) struct GlobalArgs {
 }
 
 impl Cli {
-    /// Parse a command line, including the checks clap cannot express.
-    ///
-    /// `conflicts_with` does not see a global flag given at a different
-    /// subcommand level (`--json status --format table`), so the
-    /// `--json`/`--format` conflict is checked here and reported as the same
-    /// usage error (exit 2) clap would have produced. `help_width` is the
-    /// width root help wraps to, `None` off a terminal.
+    /// Parse a command line as clap declares it. `help_width` is the width
+    /// root help wraps to, `None` off a terminal. The checks clap cannot
+    /// express are [`GlobalArgs::check`]'s.
     pub(crate) fn parse_args(
         args: &[OsString],
         help_width: Option<usize>,
     ) -> Result<Self, clap::Error> {
         let matches = root(help_width).try_get_matches_from(args)?;
-        let cli = Self::from_arg_matches(&matches)?;
-        if cli.global.json
-            && cli
-                .global
-                .format
-                .is_some_and(|format| format != Format::Json)
-        {
-            return Err(Self::command().error(
-                ErrorKind::ArgumentConflict,
-                "--json cannot be used with a --format other than json",
-            ));
-        }
-        Ok(cli)
+        Self::from_arg_matches(&matches)
     }
 }
 
 impl GlobalArgs {
+    /// The checks clap cannot express, as the surface's own usage error
+    /// (exit 2, through the kit's `Sink::report` like any other failure).
+    ///
+    /// `conflicts_with` does not see a global flag given at a different
+    /// subcommand level (`--json status --format table`), so the
+    /// `--json`/`--format` conflict is checked here.
+    pub(crate) fn check(&self) -> Result<(), Error> {
+        if self.json && self.format.is_some_and(|format| format != Format::Json) {
+            return Err(usage_error(
+                "--json cannot be used with a --format other than json",
+            ));
+        }
+        Ok(())
+    }
+
     /// The output format the flags ask for, or `None` to defer to the
     /// environment and then `auto`.
     pub(crate) fn requested_format(&self) -> Option<Format> {

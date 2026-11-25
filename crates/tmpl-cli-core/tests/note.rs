@@ -427,3 +427,26 @@ fn encode_failure_is_not_io_and_names_no_path() {
         "encode error must not invent a path: {msg}"
     );
 }
+
+#[test]
+fn an_add_is_audited_and_its_line_reads_back_through_the_kits_reader() {
+    // STD-01 R31: a mutating command leaves one audit line, in the kit's
+    // format, that the kit's own reader parses back.
+    let dir = tempdir();
+    let store = Store::open(dir.path());
+    let note = store
+        .add(new_note("audited", &[], Priority::Normal), NOW)
+        .unwrap();
+    store.list(&ListFilter::default()).unwrap();
+    let lines = cw_app::AuditLog::new(store.root())
+        .read(cw_fs::Cap::bytes(1 << 20))
+        .unwrap();
+    let [Ok(record)] = lines.as_slice() else {
+        panic!("one audit line, for the add alone: {lines:?}");
+    };
+    assert_eq!(record.command, "note add");
+    assert_eq!(record.status, cw_app::Status::Success);
+    assert_eq!(record.surface.as_deref(), Some("cli"));
+    assert_eq!(record.target, Some(note.id.to_string()));
+    assert_eq!(record.error_code, None);
+}
