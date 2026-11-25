@@ -1,9 +1,45 @@
 use crate::Store;
 use crate::contracts::{AuditEvent, AuditStatus, Note, NoteId, Priority};
 use crate::error::Error;
+use cw_fs::{Error as FsError, Lock};
+use std::path::Path;
+use std::sync::mpsc;
+use std::thread::JoinHandle;
 use std::time::Duration;
 use time::OffsetDateTime;
-use tmpl_cli_common::fs::{Error as FsError, LockGuard};
+
+/// A lock held by another thread until this is dropped: cw-fs refuses a
+/// thread that asks again for a lock it holds (`Reentrant`), so the other
+/// writer must be another thread, as it would be another process.
+struct HeldElsewhere {
+    release: Option<mpsc::Sender<()>>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl Drop for HeldElsewhere {
+    fn drop(&mut self) {
+        drop(self.release.take());
+        if let Some(thread) = self.thread.take() {
+            thread.join().unwrap();
+        }
+    }
+}
+
+fn hold_elsewhere(path: &Path) -> HeldElsewhere {
+    let path = path.to_path_buf();
+    let (taken_tx, taken_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel::<()>();
+    let thread = std::thread::spawn(move || {
+        let _lock = Lock::acquire(&path, "test", Duration::from_secs(1)).unwrap();
+        taken_tx.send(()).unwrap();
+        let _ = release_rx.recv();
+    });
+    taken_rx.recv().unwrap();
+    HeldElsewhere {
+        release: Some(release_tx),
+        thread: Some(thread),
+    }
+}
 
 fn new_note(title: &str) -> Note {
     Note {
@@ -17,7 +53,7 @@ fn new_note(title: &str) -> Note {
 }
 
 /// Store one note in one write, as the note app's add does.
-fn add(store: &Store, note: Note) -> Result<(), Error> {
+fn add(store: &Store, note: Note) -> Result<(), cw_base::Error> {
     store.write("note add", |tx| {
         tx.notes().put(note);
         Ok(())
@@ -40,11 +76,13 @@ fn event(command: &str) -> AuditEvent {
 fn add_refuses_when_another_writer_holds_the_lock_and_writes_nothing() {
     let dir = crate::db::tests::private_tempdir();
     let store = Store::open(dir.path()).with_lock_wait(Duration::from_millis(60));
-    let _held =
-        LockGuard::acquire(&dir.path().join(".lock"), "test", Duration::from_secs(1)).unwrap();
+    let _held = hold_elsewhere(&dir.path().join(".lock"));
     let err = add(&store, new_note("blocked")).unwrap_err();
     assert_eq!(err.code(), "store_locked", "got {err:?}");
-    assert!(matches!(err, Error::Fs(FsError::Locked { .. })));
+    assert!(matches!(
+        err.downcast_ref::<Error>(),
+        Some(Error::Fs(FsError::Locked { .. }))
+    ));
     assert!(!dir.path().join(crate::STORE_FILE).exists());
 }
 
@@ -71,8 +109,7 @@ fn record_audit_succeeds_while_the_store_lock_is_held() {
     let dir = crate::db::tests::private_tempdir();
     let deadline = Duration::from_millis(80);
     let store = Store::open(dir.path()).with_lock_wait(deadline);
-    let _held =
-        LockGuard::acquire(&dir.path().join(".lock"), "test", Duration::from_secs(1)).unwrap();
+    let _held = hold_elsewhere(&dir.path().join(".lock"));
     let started = std::time::Instant::now();
     let err = add(&store, new_note("blocked")).unwrap_err();
     assert_eq!(err.code(), "store_locked");
@@ -90,15 +127,13 @@ fn record_audit_succeeds_while_the_store_lock_is_held() {
 fn record_audit_waits_for_the_audit_lock() {
     let dir = crate::db::tests::private_tempdir();
     let store = Store::open(dir.path()).with_lock_wait(Duration::from_millis(60));
-    let _held = LockGuard::acquire(
-        &dir.path().join(".audit.lock"),
-        "test",
-        Duration::from_secs(1),
-    )
-    .unwrap();
+    let _held = hold_elsewhere(&dir.path().join(".audit.lock"));
     let err = store.audit().append(&event("note add")).unwrap_err();
     assert!(
-        matches!(err, Error::Fs(FsError::Locked { .. })),
+        matches!(
+            err.downcast_ref::<Error>(),
+            Some(Error::Fs(FsError::Locked { .. }))
+        ),
         "got {err:?}"
     );
     assert!(!store.audit_path().exists());
@@ -112,11 +147,50 @@ fn record_audit_encode_failure_is_not_io_and_names_no_path() {
     let mut bad_event = event("note add");
     bad_event.at = OffsetDateTime::new_utc(bad_date, time::Time::MIDNIGHT);
     let err = store.audit().append(&bad_event).unwrap_err();
-    assert!(matches!(err, Error::Encode { .. }), "got {err:?}");
+    assert!(
+        matches!(err.downcast_ref::<Error>(), Some(Error::Encode { .. })),
+        "got {err:?}"
+    );
     assert_eq!(err.code(), "encode_error");
     let msg = err.to_string();
     assert!(
         !msg.contains(&dir.path().display().to_string()) && !msg.contains("audit.jsonl"),
         "encode error must not name an untouched path: {msg}"
     );
+}
+
+#[test]
+fn a_write_that_would_pass_the_size_limit_is_refused_and_the_store_left_readable() {
+    // A write must never leave a store its own reads refuse (STD-02 R16).
+    let dir = crate::db::tests::private_tempdir();
+    let probe = Store::open(dir.path());
+    add(&probe, new_note("first")).unwrap();
+    let one_note = std::fs::read(probe.path()).unwrap();
+    let cap = u64::try_from(one_note.len()).unwrap() + 8;
+    let store = Store::open(dir.path()).with_cap(cw_fs::Cap::bytes(cap));
+    let mut second = new_note("second, which does not fit");
+    second.id = NoteId::try_from(2).unwrap();
+    let err = add(&store, second).unwrap_err();
+    assert_eq!(err.code(), "store_too_large", "got {err:?}");
+    assert_eq!(std::fs::read(store.path()).unwrap(), one_note);
+    assert_eq!(store.read().unwrap().notes().all().len(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_write_through_a_symlinked_root_is_refused_before_any_side_effect() {
+    // STD-02 R34: the public write checks the root before it creates the
+    // directory or the lock file, as the audit append does.
+    let dir = crate::db::tests::private_tempdir();
+    let target = dir.path().join("target");
+    std::fs::create_dir(&target).unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let link = dir.path().join("link");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+    let err = add(&Store::open(&link), new_note("refused")).unwrap_err();
+    assert_eq!(err.code(), "store_symlink", "got {err:?}");
+    assert_eq!(std::fs::read_dir(&target).unwrap().count(), 0);
 }

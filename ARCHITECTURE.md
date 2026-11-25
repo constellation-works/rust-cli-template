@@ -8,24 +8,37 @@ an edge changes this file and that script in the same commit.
 
 ```
 tmpl-cli  ->  tmpl-cli-core  ->  tmpl-cli-store
-                    |                  |
-                    +--> tmpl-cli-common <--+
+                    |              |        |
+                    +--> cw-base <-+        +--> cw-fs -> cw-base
 ```
 
-| Crate | Kind | Owns | Internal dependencies | Banned |
-|-------|------|------|-----------------------|--------|
-| `tmpl-cli` | binary `tmpl-cli` | Argument declarations, the mapping from arguments to an app's `Command`, rendering, exit codes. The only stdout, stderr and terminal access. | `tmpl-cli-core` | `tmpl-cli-store` |
-| `tmpl-cli-core` | library | The apps, the runtime they share, and composition. | `tmpl-cli-common`, `tmpl-cli-store` | `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
-| `tmpl-cli-store` | library | The data directory: the persisted document, one repository per record, and the record shapes (`contracts`). It names no file primitive; it reaches the directory through the foundation's `fs`. | `tmpl-cli-common` | `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
-| `tmpl-cli-common` | library (foundation) | The one error type every unit translates into, and file access for a private data directory. The only crate that names `std::fs`. | — | every internal crate; `clap`, `tracing-subscriber`, `serde_json`, any terminal crate |
+`cw-base` and `cw-fs` are the cw-kit, from
+[constellation-works/satellites](https://github.com/constellation-works/satellites),
+a git dependency pinned in the root `Cargo.toml` to commit
+`320e07f8d41c218c57f57a9f50820a2b6c34fb98` (no release is published yet; moving the
+pin is a change of its own).
 
-The binary names only `tmpl-cli-core`. The core re-exports the store's
-record shapes as `tmpl_cli_core::contracts` and the foundation's error type
-as `tmpl_cli_core::Error` and `tmpl_cli_core::Kind`, so a surface needs no
-second dependency. Why the
-crates are laid out by app, and why a foundation crate:
+| Crate | Kind | Owns | Internal and kit dependencies | Banned |
+|-------|------|------|-------------------------------|--------|
+| `tmpl-cli` | binary `tmpl-cli` | Argument declarations, the mapping from arguments to an app's `Command`, rendering, exit codes. The only stdout, stderr and terminal access. | `tmpl-cli-core` | `tmpl-cli-store`, every kit crate |
+| `tmpl-cli-core` | library | The apps, the runtime they share, and composition. | `tmpl-cli-store`, `cw-base`; `cw-fs` as a dev-dependency only | `cw-fs`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
+| `tmpl-cli-store` | library | The data directory: the persisted document, one repository per record, the record shapes (`contracts`), and the store's stable code for each of the kit's file errors. It names no file primitive; it reaches the directory through `cw-fs`. | `cw-base`, `cw-fs` | `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
+
+`scripts/check-dependency-direction.sh` reads these edges from Cargo's own
+package graph (`cargo metadata --no-deps --locked`), so a quoted or renamed
+dependency is seen by its package. It holds each crate's kit list: a normal
+or build dependency on a `cw-*` crate outside it fails the check, and so
+does a dev-dependency outside the kit list and the dev-only kit list. The
+one dev-only kit edge is `tmpl-cli-core` to `cw-fs`: its integration tests
+match the kit's file error behind a store failure, while its sources never
+name `cw_fs`. The binary names
+only `tmpl-cli-core`. The core re-exports the store's record shapes as
+`tmpl_cli_core::contracts` and the kit's error type as
+`tmpl_cli_core::Error` and `tmpl_cli_core::Kind`, so a surface needs no
+second dependency. Why the crates are laid out by app, and why the
+foundation is the kit:
 [docs/design/tmpl-cli/4_decisions.md](docs/design/tmpl-cli/4_decisions.md#the-template-is-laid-out-by-app-in-three-crates),
-[the foundation decision](docs/design/tmpl-cli/4_decisions.md#one-error-type-and-file-access-live-in-a-foundation-crate).
+[the kit decision](docs/design/tmpl-cli/4_decisions.md#the-foundation-is-the-cw-kit).
 
 ## `tmpl-cli` (binary)
 
@@ -50,7 +63,7 @@ environment into `Env` once; `output/` alone reads the presentation variables
 ## `tmpl-cli-core`
 
 ```
-lib.rs               pub mod apps; Env; contracts (re-exported from the store); Error, Kind (from the foundation)
+lib.rs               pub mod apps; Env; contracts (re-exported from the store); Error, Kind (from cw-base)
 apps/
   note/
     mod.rs           Command, Outcome, Error, exec (forwards to runtime::exec), run: dispatch only
@@ -82,11 +95,14 @@ test_support.rs      behind the `test-support` feature: Ctx and each app's run
   context, the chokepoint or the audit guard.
 - `runtime` is crate-private and imports no app.
 - Errors: each unit keeps a typed enum for its own matching (the app's
-  `Error`, composition's, the store's) and translates it into the
-  foundation's `Error` in one `From` impl beside the enum. `exec` returns the
-  foundation's type, whatever the app; `run` returns the app's typed one. An
-  app's enum holds its own refusals and one `Store(#[from] …)` variant, so a
-  flow uses `?` on a store call with no hand-written conversion.
+  `Error`, composition's, the store's) and translates it into
+  `cw_base::Error` in one `From` impl beside the enum, naming its `Kind` and
+  its stable code. `exec` returns that type, whatever the app; `run` returns the app's typed one. An
+  app's enum holds its own refusals and one `Store(#[from] cw_base::Error)`
+  variant, so a flow uses `?` on a store call with no hand-written
+  conversion. What crosses a crate boundary is `cw_base::Error`: every public
+  store operation returns it, translated at the store's edge, and a caller
+  that needs the store's variant gets it back with `downcast_ref`.
 - `composition.rs` is the only place in the core that reads an environment
   variable or discovers a path. Nothing in the core touches a file: the data
   directory is reached through the store.
@@ -106,7 +122,7 @@ repository/
 contracts/
   note.rs            Note, NoteId, Title, Body, Tag, Priority, NoteError
   audit.rs           AuditEvent, AuditStatus
-error.rs             Error, its translator into the foundation's Error; BadRecord and its locator and reason
+error.rs             Error (a code for every cw_fs::Error variant), its translator into cw_base::Error; BadRecord and its locator and reason
 ```
 
 - One repository per record, never per command. The store holds no rule of
@@ -120,55 +136,40 @@ error.rs             Error, its translator into the foundation's Error; BadRecor
   run on its own read first.
 - `Store` is one concrete type; a trait is added when a second backend exists.
 
-## `tmpl-cli-common` (foundation)
+## The cw-kit (`cw-base`, `cw-fs`)
 
-```
-lib.rs               pub mod error; pub mod fs; re-exports Error, Kind
-error/
-  mod.rs             Error: a unit's typed error with its Kind and stable code
-  kind.rs            Kind: how a failure is classified, by what the caller can do
-fs/
-  fsio.rs            atomic write, append, advisory lock, bounded reads, directory
-                     listing, private removal, owner-only checks; knows no record
-  error.rs           Error: what a file operation fails with, and its Kind
-```
+Not part of this workspace: crates from
+[constellation-works/satellites](https://github.com/constellation-works/satellites)
+at the pinned commit. Each crate's README there is its contract.
 
-- It is grouped by subject in a folder each: no file beside `lib.rs`, and no
-  folder named `util`, `helpers`, `types` or the like. It depends on no
-  other crate of the workspace and reads no environment variable.
-- `error/`: `Error` wraps a unit's typed error whole. Its `Display` and
-  source chain are the typed error's own; `kind()` and `code()` are what a
-  caller reads without knowing the unit, and `downcast_ref` gives the typed
-  error back to a caller that does. Only a unit's translator builds one.
-  `Kind` is exhaustive on purpose, so a new kind breaks every surface's
-  match until it decides.
-- `fs/` is the only code in the workspace that names `std::fs`. It is
-  mechanism only: a caller hands it a path and bytes, and it knows no record
-  and no file name. Its typed `Error` (I/O, locked, symlink, foreign owner,
-  permissions) is wrapped by the calling unit, which gives each variant a
-  stable code: the store's `Error::Fs`. `error/` never imports it.
+- `cw-base`: `Error` wraps a unit's typed error whole, with a `Kind` and the
+  project's stable code. Its `Display` and source chain are the typed
+  error's own; `downcast_ref` gives the typed error back. `Kind` is
+  exhaustive on purpose (`Usage`, `NotFound`, `Refused`, `Busy`, `Corrupt`,
+  `Incompatible`, `Config`, `Io`, `Internal`), so a new kind breaks every
+  surface's match until it decides.
+- `cw-fs`: atomic write, append, bounded read, listing, removal, private
+  directories, owner-only checks and one advisory lock with a deadline;
+  mechanism only, knowing no record and no file name. Its `Error` has a
+  `Kind` and no code: the store wraps it as `Error::Fs` and names a code for
+  every variant.
 
 ## Module rules
 
 Checked by grep over non-test sources:
 
-- `tmpl-cli-common`: only `fs/` names `std::fs`, `std::net`, `std::process`,
-  `tempfile` or `rustix`; every other folder also defines no `check_*`
-  function, reads no clock and imports no `crate::fs`. Nothing names
-  `std::env`. No file beside `lib.rs` at
-  the top of `src/`, and no folder named for no responsibility.
 - `tmpl-cli-store`: nothing names `std::fs`, `std::net`, `std::process`,
-  `tempfile` or `rustix`. `db/format.rs` and `db/audit.rs` do not name the
-  foundation's `fs`. `contracts/` imports no `db`, `repository`, `Store` or
+  `tempfile` or `rustix`. `db/format.rs` and `db/audit.rs` do not name
+  `cw_fs`. `contracts/` imports no `db`, `repository`, `Store` or
   file access, and defines no `check_*` function and reads no clock. There
   is no `db/fsio.rs`. The crate reads no environment variable and discovers
   no path.
 - `tmpl-cli-core`: no `std::fs`, `std::net`, `std::process`, `tempfile`,
-  `rustix` or `tmpl_cli_common::fs` anywhere. Only `composition.rs` names `std::env`, `home_dir` or
+  `rustix` or `cw_fs` anywhere. Only `composition.rs` names `std::env`, `home_dir` or
   `current_dir`. `runtime/` imports no `crate::apps`. No `apps/common`,
   `apps/shared` or `apps/util`. An app's `rules` names no `runtime`,
   `composition`, `Store`, `Snapshot` or `Tx`.
-- `tmpl-cli`: nothing names `tmpl_cli_store` or `tmpl_cli_common`. `commands/` names no `std::env`,
+- `tmpl-cli`: nothing names `tmpl_cli_store`, `cw_base` or `cw_fs`. `commands/` names no `std::env`,
   `std::fs`, `Store`, `Runtime` or `Ctx`. `output/` imports no `cli` or
   `commands`.
 - Only `tmpl-cli/src/output/` touches stdout, stderr, `IsTerminal` or the

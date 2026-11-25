@@ -11,18 +11,19 @@
 //! timed out on `.lock` still records its failure line within one deadline.
 //! New directories are created `0700` and new files `0600` (STD-05 R8), and
 //! every load refuses state that is a symbolic link, owned by another user,
-//! or writable by group or others (STD-05 R9).
+//! or open to any group or other permission bit (STD-05 R9). The mechanism
+//! is the kit's `cw_fs`; the store names the files and the codes.
 //!
 //! The store decides nothing about notes: which id comes next, which notes a
 //! listing returns and when a command is refused are the note app's rules.
 
 use crate::db::format::{self, StoreDocument};
-use crate::db::{AUDIT_LOCK_FILE, LOCK_FILE, STORE_FILE, audit};
+use crate::db::{AUDIT_LOCK_FILE, LOCK_FILE, STORE_CAP, STORE_FILE, audit};
 use crate::error::{Error, Result};
 use crate::repository::{Audit, Snapshot, Tx};
+use cw_fs::Lock;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use tmpl_cli_common::fs::{self as fsio, LockGuard};
 
 /// How long a writer waits for another writer before refusing (STD-03 R7).
 const DEFAULT_LOCK_WAIT: Duration = Duration::from_secs(10);
@@ -32,6 +33,8 @@ const DEFAULT_LOCK_WAIT: Duration = Duration::from_secs(10);
 pub struct Store {
     root: PathBuf,
     lock_wait: Duration,
+    /// The most bytes the store file may hold, read or written.
+    cap: cw_fs::Cap,
 }
 
 impl Store {
@@ -42,7 +45,15 @@ impl Store {
         Self {
             root: root.into(),
             lock_wait: DEFAULT_LOCK_WAIT,
+            cap: STORE_CAP,
         }
+    }
+
+    /// A smaller size limit, so a test can reach it without writing 64 MiB.
+    #[cfg(test)]
+    pub(crate) fn with_cap(mut self, cap: cw_fs::Cap) -> Self {
+        self.cap = cap;
+        self
     }
 
     /// Override how long a writer waits for the lock.
@@ -72,12 +83,17 @@ impl Store {
 
     /// Everything the store holds, read once. A missing store reads as an
     /// empty one. Takes no lock and writes nothing.
-    pub fn read(&self) -> Result<Snapshot> {
+    ///
+    /// # Errors
+    ///
+    /// The store's typed [`Error`], translated into `cw_base::Error` here at
+    /// the crate's boundary; `downcast_ref::<Error>()` gives it back.
+    pub fn read(&self) -> std::result::Result<Snapshot, cw_base::Error> {
         Ok(Snapshot::new(self.load()?))
     }
 
-    /// Change the store in one transaction: create the data directory if
-    /// needed, take `.lock` (recording `label` as the holder), re-read the
+    /// Change the store in one transaction: check the data directory and
+    /// create it if needed, take `.lock` (recording `label` as the holder), re-read the
     /// store under the lock, run `apply` against it, and replace the file
     /// atomically if `apply` succeeds. Nothing is written when `apply` fails.
     ///
@@ -86,25 +102,62 @@ impl Store {
     /// (STD-02 R16, R31). Checks a caller wants made before the directory or
     /// lock file is created belong in its own read before this call
     /// (STD-02 R34).
-    pub fn write<T, E>(
+    ///
+    /// `apply` returns the workspace's error type too: a caller's own
+    /// refusal inside the lock crosses the store's boundary already
+    /// translated, so nothing of another crate's typed error passes through
+    /// the store.
+    ///
+    /// # Errors
+    ///
+    /// `apply`'s error as it returned it, or the store's typed [`Error`]
+    /// translated into `cw_base::Error` here at the crate's boundary.
+    pub fn write<T>(
         &self,
         label: &str,
-        apply: impl FnOnce(&mut Tx<'_>) -> std::result::Result<T, E>,
-    ) -> std::result::Result<T, E>
-    where
-        E: From<Error>,
-    {
-        fsio::create_private_dir(&self.root).map_err(Error::from)?;
-        let _lock = self.lock(label)?;
-        // Re-read under the lock: anything read before it may be stale.
-        let mut doc = self.load()?;
-        if let Some(bad) = doc.bad_records.first() {
-            return Err(Error::BadRecord(bad.clone()).into());
-        }
+        apply: impl FnOnce(&mut Tx<'_>) -> std::result::Result<T, cw_base::Error>,
+    ) -> std::result::Result<T, cw_base::Error> {
+        let (_lock, mut doc) = self.begin(label)?;
         let value = apply(&mut Tx::new(&mut doc))?;
-        let path = self.path();
-        fsio::write_atomic(&path, &format::encode(&doc)?).map_err(Error::from)?;
+        self.commit(&doc)?;
         Ok(value)
+    }
+
+    /// Everything a write does before `apply`: check the data directory,
+    /// create it when absent, take the lock, and re-read the store under it,
+    /// refusing bad records.
+    ///
+    /// The directory is checked (a link, another user's, open to others)
+    /// before anything is created in it, so a refused root gains no lock
+    /// file (STD-02 R34).
+    fn begin(&self, label: &str) -> Result<(Lock, StoreDocument)> {
+        if !cw_fs::inspect_dir(&self.root)? {
+            cw_fs::create_private_dir(&self.root)?;
+        }
+        let lock = self.lock(label)?;
+        // Re-read under the lock: anything read before it may be stale.
+        let doc = self.load()?;
+        if let Some(bad) = doc.bad_records.first() {
+            return Err(Error::BadRecord(bad.clone()));
+        }
+        Ok((lock, doc))
+    }
+
+    /// Replace the store file with `doc`, unless it would be larger than
+    /// reads accept: a write must never leave a store its own reads refuse.
+    fn commit(&self, doc: &StoreDocument) -> Result<()> {
+        let path = self.path();
+        let bytes = format::encode(doc)?;
+        let size = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+        if size > self.cap.get() {
+            return Err(Error::WouldExceedCap {
+                path,
+                size,
+                cap: self.cap.get(),
+            });
+        }
+        cw_fs::write_atomic(&path, &bytes)?;
+        Ok(())
     }
 
     /// The audit log's repository.
@@ -113,28 +166,38 @@ impl Store {
         Audit::new(self)
     }
 
-    pub(crate) fn lock(&self, label: &str) -> Result<LockGuard> {
-        Ok(LockGuard::acquire(
+    pub(crate) fn lock(&self, label: &str) -> Result<Lock> {
+        Ok(warn_on_holder_error(Lock::acquire(
             &self.root.join(LOCK_FILE),
             label,
             self.lock_wait,
-        )?)
+        )?))
     }
 
-    pub(crate) fn audit_lock(&self, label: &str) -> Result<LockGuard> {
-        Ok(LockGuard::acquire(
+    pub(crate) fn audit_lock(&self, label: &str) -> Result<Lock> {
+        Ok(warn_on_holder_error(Lock::acquire(
             &self.root.join(AUDIT_LOCK_FILE),
             label,
             self.lock_wait,
-        )?)
+        )?))
     }
 
     fn load(&self) -> Result<StoreDocument> {
         let path = self.path();
-        if !fsio::inspect_dir(&self.root)? || !fsio::inspect_file(&path)? {
+        if !cw_fs::inspect_dir(&self.root)? || !cw_fs::inspect_file(&path)? {
             return Ok(StoreDocument::empty());
         }
-        let bytes = fsio::read(&path)?;
+        let bytes = cw_fs::read(&path, self.cap)?;
         format::decode(&path, &bytes)
     }
+}
+
+/// Fail open (STD-02 R31): the holder record only explains a timeout to the
+/// next waiter (STD-03 R7), so the kit holds the lock even when it could not
+/// write the record, and the store reports that as a warning.
+fn warn_on_holder_error(lock: Lock) -> Lock {
+    if let Some(error) = lock.holder_error() {
+        tracing::warn!(path = %lock.path().display(), %error, "could not record the lock holder");
+    }
+    lock
 }

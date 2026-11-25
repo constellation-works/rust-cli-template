@@ -6,10 +6,10 @@
 //! Nothing else in the core reads an environment variable or discovers a
 //! path (`scripts/check-dependency-direction.sh`).
 
+use cw_base::Kind;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
-use tmpl_cli_common::Kind;
 use tmpl_cli_store::Store;
 
 /// Why composition could not resolve what an app runs against.
@@ -39,7 +39,7 @@ impl Error {
 
 /// Composition's one translator into the workspace's error type
 /// (STD-02 R12).
-impl From<Error> for tmpl_cli_common::Error {
+impl From<Error> for cw_base::Error {
     fn from(err: Error) -> Self {
         Self::new(err.kind(), err.code(), err)
     }

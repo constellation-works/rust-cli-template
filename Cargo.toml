@@ -1,12 +1,11 @@
 [workspace]
 resolver = "3"
-# Four crates laid out by app over one foundation, and why:
+# Three crates laid out by app over the cw-kit, and why:
 # docs/design/tmpl-cli/4_decisions.md ("The template is laid out by app in
-# three crates", "One error type and file access live in a foundation
-# crate"). A new member needs a policy entry in
-# scripts/check-dependency-direction.sh and a row in ARCHITECTURE.md.
+# three crates", "The foundation is the cw-kit"). A new member needs a
+# policy entry in scripts/check-dependency-direction.sh and a row in
+# ARCHITECTURE.md.
 members = [
-    "crates/tmpl-cli-common",
     "crates/tmpl-cli-store",
     "crates/tmpl-cli-core",
     "crates/tmpl-cli",
@@ -15,23 +14,25 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-# 1.89 stabilized `File::lock`/`File::try_lock`, which the store's advisory
-# lock uses instead of a third-party crate.
+# 1.89 stabilized `File::try_lock`, which cw-fs's advisory lock uses; the
+# kit states the same floor.
 rust-version = "1.89"
 license = "MIT"
 repository = "https://github.com/constellation-works/tmpl-cli"
 
 [workspace.dependencies]
-tmpl-cli-common = { path = "crates/tmpl-cli-common" }
+# The cw-kit (https://github.com/constellation-works/satellites): the one
+# error type and a clock (cw-base), and file access for a private data
+# directory (cw-fs). No release is published yet, so the workspace pins a
+# commit of the satellites `agent-main`; moving the pin is a change of its own.
+cw-base = { git = "https://github.com/constellation-works/satellites", rev = "320e07f8d41c218c57f57a9f50820a2b6c34fb98" }
+cw-fs = { git = "https://github.com/constellation-works/satellites", rev = "320e07f8d41c218c57f57a9f50820a2b6c34fb98" }
 tmpl-cli-store = { path = "crates/tmpl-cli-store" }
 tmpl-cli-core = { path = "crates/tmpl-cli-core" }
 # No `color` or `wrap_help`: both make clap query the terminal itself, and the
 # output sink is the only place allowed to do that (STD-01 R17). Help is plain
 # text everywhere, which also keeps the help goldens byte-stable.
 clap = { version = "4", default-features = false, features = ["std", "derive", "help", "usage", "error-context", "suggestions"] }
-# Unix only: the process's effective uid, for the store ownership check
-# (STD-05 R9). std has no safe `geteuid`; tempfile already builds rustix.
-rustix = { version = "1", default-features = false, features = ["std", "process"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"

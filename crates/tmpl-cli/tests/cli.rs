@@ -621,7 +621,7 @@ mod unix {
         let out = fx.run(&["note", "list"]);
         assert_eq!(out.status.code(), Some(1));
         assert!(
-            text(&out.stderr).contains("chmod 600"),
+            text(&out.stderr).contains("chmod -- 600"),
             "stderr: {}",
             text(&out.stderr)
         );

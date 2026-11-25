@@ -15,8 +15,8 @@ pub use rules::{ListFilter, NewNote, NoteList};
 
 use crate::composition::Env;
 use crate::runtime::{self, App, AuditMeta, Ctx};
+use cw_base::Kind;
 use std::path::PathBuf;
-use tmpl_cli_common::Kind;
 use tmpl_cli_store::BadRecord;
 use tmpl_cli_store::contracts::{Note, NoteId};
 
@@ -115,9 +115,10 @@ pub enum Error {
         /// The store file.
         path: PathBuf,
     },
-    /// The store refused or failed.
+    /// The store refused or failed: the store's typed error, already in the
+    /// workspace's error type, as every store operation returns it.
     #[error(transparent)]
-    Store(#[from] tmpl_cli_store::Error),
+    Store(#[from] cw_base::Error),
 }
 
 impl Error {
@@ -147,10 +148,10 @@ impl Error {
 /// The `note` app's one translator into the workspace's error type
 /// (STD-02 R12). A store failure crosses as the store's own error, so its
 /// typed form stays reachable.
-impl From<Error> for tmpl_cli_common::Error {
+impl From<Error> for cw_base::Error {
     fn from(err: Error) -> Self {
         match err {
-            Error::Store(store) => store.into(),
+            Error::Store(store) => store,
             err @ (Error::NotFound { .. } | Error::IdExhausted { .. }) => {
                 Self::new(err.kind(), err.code(), err)
             }
@@ -168,7 +169,7 @@ impl From<Error> for tmpl_cli_common::Error {
 pub fn exec<R>(
     env: &Env,
     command: Command,
-    finish: impl FnOnce(Result<Outcome, tmpl_cli_common::Error>) -> R,
+    finish: impl FnOnce(Result<Outcome, cw_base::Error>) -> R,
 ) -> R {
     runtime::exec::<NoteApp, R>(env, command, finish)
 }

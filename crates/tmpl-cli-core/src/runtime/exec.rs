@@ -13,7 +13,7 @@
 
 use super::{AuditGuard, AuditMeta, Ctx, Runtime};
 use crate::composition::Env;
-use tmpl_cli_common::Error;
+use cw_base::Error;
 
 /// What an app supplies to run through the chokepoint.
 pub(crate) trait App {

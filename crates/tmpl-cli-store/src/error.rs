@@ -8,9 +8,9 @@
 //! (STD-02 R12).
 
 use crate::contracts::{NoteError, NoteId};
+use cw_base::Kind;
 use std::fmt;
 use std::path::PathBuf;
-use tmpl_cli_common::{Kind, fs};
 
 /// Where a bad record sits in the store file: its note id when readable,
 /// otherwise its 1-based line number in the file.
@@ -67,20 +67,32 @@ pub struct BadRecord {
     pub reason: BadRecordReason,
 }
 
+impl BadRecord {
+    /// This record as the store's refusal (`store_bad_record`), in the
+    /// workspace's error type: what an app returns when a command would
+    /// read or rewrite it.
+    #[must_use]
+    pub fn refusal(&self) -> cw_base::Error {
+        Error::BadRecord(self.clone()).into()
+    }
+}
+
 /// Everything a [`crate::Store`] operation can fail with. Failures of an
 /// app's own rules (an unknown id, an exhausted id space) are the app's
 /// errors in `tmpl-cli-core`, not variants here.
 ///
-/// `#[non_exhaustive]`: this is the library's public boundary (STD-02 R11), so
-/// adding a variant is not a breaking change. Callers map it through
-/// [`Error::code`] instead of matching variants.
+/// It never leaves the crate as itself: every public operation returns
+/// `cw_base::Error`, translated by the `From` impl below, and a caller that
+/// needs a variant gets it back with `downcast_ref::<Error>()`.
+/// `#[non_exhaustive]`, so adding a variant is not a breaking change.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
     /// A file operation on the data directory failed, was refused, or timed
-    /// out on the lock.
+    /// out on the lock. The kit's error carries a kind and no code: the
+    /// store names the code ([`Error::code`]).
     #[error(transparent)]
-    Fs(#[from] fs::Error),
+    Fs(#[from] cw_fs::Error),
     /// Serializing a store document or audit event failed before any file was touched.
     #[error("cannot encode {what}")]
     Encode {
@@ -110,6 +122,20 @@ pub enum Error {
         /// The repeated id.
         id: NoteId,
     },
+    /// A write would make the store file larger than reads accept, so it was
+    /// refused and the file left as it was.
+    #[error(
+        "{} would grow to {size} bytes, past the store's limit of {cap} bytes; it was left unchanged",
+        path.display()
+    )]
+    WouldExceedCap {
+        /// The store file.
+        path: PathBuf,
+        /// The encoded size the write would have produced.
+        size: u64,
+        /// The limit, in bytes.
+        cap: u64,
+    },
     /// The store was written by a newer build (STD-03 R10: refuse, never
     /// rewrite or reinterpret newer state).
     #[error(
@@ -132,12 +158,17 @@ impl Error {
     #[must_use]
     pub fn code(&self) -> &'static str {
         match self {
-            // The file mechanism's failures get the store's codes here.
-            Self::Fs(fs::Error::Io { .. }) => "io_error",
-            Self::Fs(fs::Error::Locked { .. }) => "store_locked",
-            Self::Fs(fs::Error::Symlink { .. }) => "store_symlink",
-            Self::Fs(fs::Error::ForeignOwner { .. }) => "store_foreign_owner",
-            Self::Fs(fs::Error::Permissions { .. }) => "store_permissions",
+            // The kit's file failures get the store's codes here.
+            Self::Fs(cw_fs::Error::Io { .. }) => "io_error",
+            Self::Fs(cw_fs::Error::Locked { .. }) => "store_locked",
+            Self::Fs(cw_fs::Error::Symlink { .. }) => "store_symlink",
+            Self::Fs(cw_fs::Error::ForeignOwner { .. }) => "store_foreign_owner",
+            Self::Fs(cw_fs::Error::Permissions { .. }) => "store_permissions",
+            Self::Fs(cw_fs::Error::NotRegular { .. }) => "store_not_regular",
+            Self::Fs(cw_fs::Error::TooLarge { .. }) | Self::WouldExceedCap { .. } => {
+                "store_too_large"
+            }
+            Self::Fs(cw_fs::Error::Reentrant { .. }) => "store_lock_reentrant",
             Self::Encode { .. } => "encode_error",
             Self::Corrupt { .. } => "store_corrupt",
             Self::BadRecord(_) => "store_bad_record",
@@ -154,13 +185,15 @@ impl Error {
             Self::Fs(e) => e.kind(),
             Self::Encode { .. } => Kind::Internal,
             Self::Corrupt { .. } | Self::BadRecord(_) | Self::DuplicateId { .. } => Kind::Corrupt,
+            Self::WouldExceedCap { .. } => Kind::Refused,
             Self::NewerFormat { .. } => Kind::Incompatible,
         }
     }
 }
 
-/// The store's one translator into the workspace's error type (STD-02 R12).
-impl From<Error> for tmpl_cli_common::Error {
+/// The store's one translator into the workspace's error type, the kit's
+/// `cw_base::Error` (STD-02 R12).
+impl From<Error> for cw_base::Error {
     fn from(err: Error) -> Self {
         Self::new(err.kind(), err.code(), err)
     }

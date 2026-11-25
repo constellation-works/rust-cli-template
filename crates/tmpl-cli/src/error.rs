@@ -22,10 +22,13 @@ pub(crate) fn output_error(source: io::Error) -> Error {
 }
 
 /// The process exit code. Every kind of command failure exits 1; only usage
-/// errors (clap's) exit 2 (STD-01 R20). Exhaustive, so a new kind decides
-/// here, and a further code would need documenting in the command's help.
+/// errors exit 2 (STD-01 R20). clap reports today's usage errors before a
+/// command runs, so no command fails with `Kind::Usage` yet; one that does
+/// exits 2 like clap. Exhaustive, so a new kind decides here, and a further
+/// code would need documenting in the command's help.
 pub(crate) fn exit_code(err: &Error) -> u8 {
     match err.kind() {
+        Kind::Usage => 2,
         Kind::NotFound
         | Kind::Refused
         | Kind::Busy
