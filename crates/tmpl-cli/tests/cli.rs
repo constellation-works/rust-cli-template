@@ -133,6 +133,37 @@ fn a_usage_error_the_surface_raises_itself_exits_two() {
         err["error"],
         "--json cannot be used with a --format other than json"
     );
+    let out = fx.run(&["status", "--json", "--format", "auto"]);
+    assert_eq!(out.status.code(), Some(2), "auto is not json either");
+    let redundant = fx.ok(&["--json", "status", "--format", "json"]);
+    assert_eq!(json(&redundant.stdout)["format"], serde_json::Value::Null);
+}
+
+#[test]
+fn a_usage_error_is_reported_in_the_format_its_command_line_asked_for() {
+    // STD-01 R19: the command line does not parse, so the format is read
+    // from its raw words: the last --format wins, an unknown name is auto,
+    // and nothing after `--` counts.
+    let fx = Fixture::new();
+    for (args, in_json) in [
+        (&["status", "--bogus", "--json"][..], true),
+        (&["--format=json", "bogus"][..], true),
+        (
+            &["--format", "table", "--format", "json", "bogus"][..],
+            true,
+        ),
+        (
+            &["--format", "json", "--format", "table", "bogus"][..],
+            false,
+        ),
+        (&["--format", "nonsense", "status"][..], false),
+        (&["bogus", "--", "--json"][..], false),
+    ] {
+        let out = fx.run(args);
+        assert_eq!(out.status.code(), Some(2), "{args:?}");
+        let parsed = serde_json::from_slice::<serde_json::Value>(&out.stderr).ok();
+        assert_eq!(parsed.is_some(), in_json, "{args:?}: {}", text(&out.stderr));
+    }
 }
 
 #[test]
@@ -151,6 +182,23 @@ fn the_data_directory_defaults_under_home_and_is_never_guessed() {
     assert_eq!(out.status.code(), Some(1));
     assert!(out.stdout.is_empty());
     assert!(text(&out.stderr).contains("--root"), "says how to fix it");
+}
+
+#[test]
+fn an_empty_variable_counts_as_unset() {
+    let fx = Fixture::new();
+    let mut cmd = fx.cmd(&["status", "--json"]);
+    cmd.env("TMPL_CLI_ROOT", "");
+    let out = cmd.output().unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let default = fx.home().join(".tmpl-cli");
+    assert_eq!(json(&out.stdout)["root"], default.to_str().unwrap());
+
+    let mut cmd = fx.cmd(&["status", "--json"]);
+    cmd.env("TMPL_CLI_ROOT", "").env("HOME", "");
+    let out = cmd.output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(json(&out.stderr)["code"], "no_data_dir");
 }
 
 #[test]
@@ -194,6 +242,70 @@ fn logs_go_to_stderr_and_leave_stdout_as_pure_payload() {
 
 /// Split one documented shell command line into words: whitespace outside
 /// quotes separates, `'…'` and `"…"` group. Enough for documentation.
+#[test]
+fn every_command_and_flag_has_help_text_and_every_flag_its_default() {
+    // STD-01 R22.
+    for (path, cmd) in tmpl_cli::every_command() {
+        if path != "tmpl-cli" {
+            assert!(cmd.get_about().is_some(), "`{path}` has no help text");
+        }
+        for arg in cmd.get_arguments() {
+            let builtin = matches!(arg.get_id().as_str(), "help" | "version");
+            assert!(
+                builtin || arg.get_help().is_some(),
+                "`{path}` argument `{}` has no help text",
+                arg.get_id()
+            );
+            if !builtin && !arg.is_positional() {
+                let help = arg.get_help().unwrap().to_string();
+                assert!(
+                    help.contains("[default:"),
+                    "`{path}` flag `--{}` help states no default: {help:?}",
+                    arg.get_long().unwrap_or(arg.get_id().as_str())
+                );
+            }
+        }
+    }
+}
+
+/// The first word in `text` shaped like a tracker id: `ABC-123` or
+/// `F2026-09-042`.
+fn tracker_id(text: &str) -> Option<String> {
+    text.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '-'))
+        .find(|word| {
+            let Some((prefix, rest)) = word.split_once('-') else {
+                return false;
+            };
+            let prefix_ok = prefix.len() >= 2 && prefix.chars().all(|ch| ch.is_ascii_uppercase());
+            let dated = prefix.len() == 5
+                && prefix.starts_with('F')
+                && prefix[1..].chars().all(|ch| ch.is_ascii_digit());
+            let digits = |text: &str| {
+                !text.is_empty() && text.chars().all(|ch| ch.is_ascii_digit() || ch == '-')
+            };
+            (prefix_ok || dated) && digits(rest)
+        })
+        .map(str::to_owned)
+}
+
+#[test]
+fn help_names_no_tracker_id() {
+    // STD-01 R23: placeholders like <id>, never real task or friction numbers.
+    assert!(tracker_id("see ABC-123").is_some(), "detector must work");
+    assert!(
+        tracker_id("see F2026-09-042").is_some(),
+        "detector must work"
+    );
+    for (path, mut cmd) in tmpl_cli::every_command() {
+        let help = cmd.render_long_help().to_string();
+        assert_eq!(
+            tracker_id(&help),
+            None,
+            "`{path} --help` mentions a tracker id"
+        );
+    }
+}
+
 fn shell_words(line: &str) -> Vec<String> {
     let (mut words, mut word, mut in_word, mut quote) = (Vec::new(), String::new(), false, None);
     for ch in line.chars() {

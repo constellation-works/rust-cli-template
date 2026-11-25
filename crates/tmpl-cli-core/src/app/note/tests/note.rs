@@ -1,6 +1,6 @@
-use crate::app::note::{Command, ListFilter, NewNote};
+use crate::app::note::{Command, NewNote};
 use time::OffsetDateTime;
-use tmpl_cli_store::contract::{NoteId, Priority};
+use tmpl_cli_store::contract::Priority;
 
 fn new_note(title: &str) -> NewNote {
     NewNote {
@@ -9,15 +9,6 @@ fn new_note(title: &str) -> NewNote {
         tags: Vec::new(),
         priority: Priority::Normal,
     }
-}
-
-#[test]
-fn only_note_add_is_audited() {
-    // STD-01 R31: list and show are read-only, so they write no audit line.
-    let add = Command::Add(new_note("t")).audit().unwrap();
-    assert_eq!(add.command(), "note add");
-    assert!(Command::List(ListFilter::default()).audit().is_none());
-    assert!(Command::Show(NoteId::FIRST).audit().is_none());
 }
 
 #[test]

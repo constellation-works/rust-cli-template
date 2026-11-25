@@ -23,11 +23,9 @@
 
 # The note example.
 example crates/tmpl-cli/src/command/note.rs
-example crates/tmpl-cli/src/command/tests/note.rs
 example crates/tmpl-cli/src/output/note.rs
 example crates/tmpl-cli/src/output/tests/note.rs
 example crates/tmpl-cli/src/command/input.rs
-example crates/tmpl-cli/src/command/tests/input.rs
 example crates/tmpl-cli/tests/note.rs
 example crates/tmpl-cli/tests/goldens/help/note.txt
 example crates/tmpl-cli/tests/goldens/help/note-add.txt
@@ -42,7 +40,6 @@ example crates/tmpl-cli/tests/goldens/output/note-show.table.txt
 example crates/tmpl-cli-core/src/app/note
 example crates/tmpl-cli-core/tests/note.rs
 example crates/tmpl-cli-store/src/contract/note.rs
-example crates/tmpl-cli-store/src/contract/tests/note.rs
 example crates/tmpl-cli-store/src/driver/sqlite/schema/note.rs
 example crates/tmpl-cli-store/src/repository/note.rs
 example docs/design/tmpl-cli
@@ -89,7 +86,6 @@ regions docs/usage.md
 regions scripts/check-dependency-direction.sh
 regions crates/tmpl-cli/src/cli.rs
 regions crates/tmpl-cli/src/command/mod.rs
-regions crates/tmpl-cli/src/command/tests/mod.rs
 regions crates/tmpl-cli/src/error.rs
 regions crates/tmpl-cli/src/mcp/mod.rs
 regions crates/tmpl-cli/src/output/mod.rs
@@ -101,7 +97,6 @@ regions crates/tmpl-cli/tests/mcp.rs
 regions crates/tmpl-cli/tests/support/mod.rs
 regions crates/tmpl-cli-core/src/app/mod.rs
 regions crates/tmpl-cli-store/src/contract/mod.rs
-regions crates/tmpl-cli-store/src/contract/tests/mod.rs
 regions crates/tmpl-cli-store/src/driver/sqlite/schema/mod.rs
 regions crates/tmpl-cli-store/src/error.rs
 regions crates/tmpl-cli-store/src/repository/mod.rs

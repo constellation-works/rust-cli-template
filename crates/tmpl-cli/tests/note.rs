@@ -47,13 +47,24 @@ fn an_empty_list_prints_nothing_to_stdout_one_line_to_stderr_and_exits_zero() {
     let fx = Fixture::new();
     let out = fx.ok(&["note", "list"]);
     assert!(out.stdout.is_empty());
-    assert_eq!(text(&out.stderr).lines().count(), 1);
-
-    let out = fx.ok(&["note", "list", "--tag", "nothing"]);
-    assert!(out.stdout.is_empty());
+    let notice = text(&out.stderr);
+    assert_eq!(notice.lines().count(), 1);
     assert!(
-        text(&out.stderr).contains("--tag nothing"),
-        "names what was searched"
+        notice.starts_with("no notes yet"),
+        "says how to add one: {notice:?}"
+    );
+    assert!(
+        fx.ok(&["note", "list", "--format", "table"])
+            .stdout
+            .is_empty()
+    );
+
+    let out = fx.ok(&["note", "list", "--tag", "nothing", "--priority", "high"]);
+    assert!(out.stdout.is_empty());
+    assert_eq!(
+        text(&out.stderr),
+        "no notes match --tag nothing --priority high\n",
+        "names every filter that was applied"
     );
 }
 
@@ -119,6 +130,16 @@ fn an_explicit_table_off_a_terminal_has_a_header_and_no_color_or_truncation() {
     assert!(stdout.starts_with("ID"));
     assert!(!stdout.contains('\x1b'));
     assert!(!stdout.contains('…'), "a pipe is never truncated");
+}
+
+#[test]
+fn a_one_note_list_is_still_a_table() {
+    // STD-01 R16: the shape does not depend on the record count.
+    let fx = Fixture::new();
+    fx.ok(&["note", "add", "only"]);
+    let stdout = text(&fx.ok(&["note", "list", "--format", "table"]).stdout);
+    assert_eq!(stdout.lines().count(), 2, "{stdout:?}");
+    assert!(stdout.starts_with("ID"));
 }
 
 #[test]
@@ -220,6 +241,101 @@ fn usage_errors_exit_two() {
         let out = fx.run(args);
         assert_eq!(out.status.code(), Some(2), "{args:?}");
         assert!(out.stdout.is_empty(), "{args:?} wrote to stdout");
+    }
+}
+
+/// Run `args`, which must be refused as a usage error that writes nothing.
+fn refused(fx: &Fixture, args: &[&str]) -> String {
+    let out = fx.run(args);
+    assert_eq!(out.status.code(), Some(2), "{args:?} must be refused");
+    assert!(out.stdout.is_empty(), "{args:?} wrote to stdout");
+    assert!(
+        !fx.root().join("store.db").exists(),
+        "{args:?} wrote a store"
+    );
+    text(&out.stderr)
+}
+
+#[test]
+fn a_title_is_trimmed_and_must_be_one_short_line_without_control_characters() {
+    let fx = Fixture::new();
+    let too_long = "x".repeat(201);
+    for title in [
+        "   ",
+        "a\tb",
+        "a\nb",
+        "\x1b[31mred\x1b[0m",
+        "bell\x07here",
+        "del\x7fchar",
+        "c1\u{009b}csi",
+        too_long.as_str(),
+    ] {
+        refused(&fx, &["note", "add", title]);
+    }
+    for (given, stored) in [
+        ("  Buy milk ", "Buy milk"),
+        ("Buy milk\n", "Buy milk"),
+        ("Buy milk\t", "Buy milk"),
+    ] {
+        let added = json(&fx.ok(&["note", "add", given, "--json"]).stdout);
+        assert_eq!(added["title"], stored, "{given:?}");
+    }
+}
+
+#[test]
+fn a_tag_is_a_lowercase_kebab_label_stored_sorted_once() {
+    let fx = Fixture::new();
+    let too_long = "x".repeat(33);
+    for tag in ["Home", "a b", "", too_long.as_str()] {
+        refused(&fx, &["note", "add", "x", "--tag", tag]);
+    }
+    let added = json(
+        &fx.ok(&[
+            "note",
+            "add",
+            "x",
+            "--tag",
+            "b",
+            "--tag",
+            "follow-up",
+            "--tag",
+            "b",
+            "--json",
+        ])
+        .stdout,
+    );
+    assert_eq!(added["tags"], serde_json::json!(["b", "follow-up"]));
+}
+
+#[test]
+fn a_note_id_is_a_positive_integer() {
+    let fx = Fixture::new();
+    for id in ["0", "abc", "-1"] {
+        refused(&fx, &["note", "show", "--", id]);
+    }
+}
+
+#[test]
+fn a_refused_value_is_shown_escaped_in_its_error() {
+    // A value can carry control bytes; the message that refuses it shows it
+    // escaped, so no ESC reaches the terminal. (A priority is refused by
+    // clap's list of names; its own message shows in a bad record's reason,
+    // in the core's tests.)
+    let fx = Fixture::new();
+    let value = "a\u{1b}\n\tb";
+    for (args, message) in [
+        (&["note", "show", "--", value][..], "invalid note id"),
+        (&["note", "add", "x", "--tag", value][..], "invalid tag"),
+    ] {
+        let stderr = refused(&fx, args);
+        assert!(
+            !stderr.contains('\x1b'),
+            "{args:?} wrote a raw ESC: {stderr:?}"
+        );
+        assert!(
+            stderr.contains(&format!("{message} \"a\\u{{1b}}\\n\\tb\"")),
+            "{args:?}: {stderr:?}"
+        );
     }
 }
 
@@ -438,6 +554,36 @@ fn title_rejects_control_characters_and_piped_output_strips_body_control_bytes()
             text(&out.stdout)
         );
     }
+    // The detail view shows a control character escaped and a CRLF as one
+    // line break.
+    let detail = text(&fx.ok(&["note", "show", "1", "--format", "table"]).stdout);
+    assert!(
+        detail.contains("line1\\roverwrite\\u{1b}[31mred\\u{1b}[0m\n"),
+        "{detail:?}"
+    );
+}
+
+#[test]
+fn warnings_go_to_stderr_before_the_notice() {
+    // STD-01 R12: stdout carries the payload alone.
+    let fx = Fixture::new();
+    support::execute(
+        &fx.root(),
+        "INSERT INTO note (id, title, body, tags, priority, created_at) VALUES
+            (1, 'One', NULL, '[]', 'normal', '2026-01-02T03:04:05Z'),
+            (2, 'Two', NULL, '[]', 'normal', '2026-01-02T03:04:05Z'),
+            (3, 'Bad', NULL, '[]', 'urgent', '2026-01-02T03:04:05Z');",
+    );
+    let out = fx.ok(&["note", "list", "--limit", "1"]);
+    assert_eq!(text(&out.stdout).lines().count(), 1);
+    let stderr = text(&out.stderr);
+    let lines: Vec<&str> = stderr.lines().collect();
+    assert_eq!(lines.len(), 2, "{stderr:?}");
+    assert!(
+        lines[0].starts_with("warning: ") && lines[0].contains("note 3"),
+        "{stderr:?}"
+    );
+    assert!(lines[1].contains("1 of 2"), "{stderr:?}");
 }
 
 #[cfg(unix)]
@@ -708,6 +854,36 @@ mod unix {
             );
         }
         assert_eq!(fs::read(&target).unwrap(), before);
+    }
+
+    #[test]
+    fn a_symlinked_root_is_refused_before_anything_is_created() {
+        // STD-02 R34, STD-05 R7: the root is checked before the directory or
+        // the database is created.
+        let fx = Fixture::new();
+        let target = fx.elsewhere("target/.keep");
+        let target = target.parent().unwrap();
+        let link = fx.elsewhere("link");
+        symlink(target, &link).unwrap();
+        let out = fx.run(&[
+            "--root",
+            link.to_str().unwrap(),
+            "note",
+            "add",
+            "y",
+            "--json",
+        ]);
+        assert_eq!(out.status.code(), Some(1));
+        // The error object comes first; the audit log, refused the same
+        // root, adds its warning after it.
+        let stderr = text(&out.stderr);
+        let error = stderr.lines().next().unwrap();
+        assert_eq!(
+            super::json(error.as_bytes())["code"],
+            "store_symlink",
+            "{stderr:?}"
+        );
+        assert_eq!(fs::read_dir(target).unwrap().count(), 0);
     }
 
     #[test]

@@ -53,6 +53,3 @@ pub use cw_app::{AuditWarning, Env, EnvVar, Finished, Origin, Surface};
 pub use cw_base::{Error, Kind};
 pub use environment::capture_env;
 pub use tmpl_cli_store::contract;
-
-#[cfg(test)]
-mod tests;

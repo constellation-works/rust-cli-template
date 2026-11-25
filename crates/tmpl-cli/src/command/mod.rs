@@ -53,6 +53,3 @@ pub(crate) fn run<R>(
         // example:end
     }
 }
-
-#[cfg(test)]
-mod tests;
