@@ -27,12 +27,12 @@ repository = "https://github.com/constellation-works/tmpl-cli"
 # SQLite and re-exports rusqlite). No release is published yet, so the
 # workspace pins one commit of the satellites `agent-main` for every kit
 # crate; moving the pin is a change of its own.
-cw-base = { git = "https://github.com/constellation-works/satellites", rev = "5c4c4573ad1d30d0cf55c7b9298c0c6b22dc235b" }
-cw-fs = { git = "https://github.com/constellation-works/satellites", rev = "5c4c4573ad1d30d0cf55c7b9298c0c6b22dc235b" }
-cw-sqlite = { git = "https://github.com/constellation-works/satellites", rev = "5c4c4573ad1d30d0cf55c7b9298c0c6b22dc235b" }
+cw-base = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
+cw-fs = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
+cw-sqlite = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
 # Test isolation (a private temp root, an isolated child, goldens): a
 # dev-dependency only (scripts/check-dependency-direction.sh).
-cw-testkit = { git = "https://github.com/constellation-works/satellites", rev = "5c4c4573ad1d30d0cf55c7b9298c0c6b22dc235b" }
+cw-testkit = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
 tmpl-cli-store = { path = "crates/tmpl-cli-store" }
 tmpl-cli-core = { path = "crates/tmpl-cli-core" }
 # No `color` or `wrap_help`: both make clap query the terminal itself, and the

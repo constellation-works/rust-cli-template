@@ -65,12 +65,12 @@ there.
 | Next-id rule, list selection (filter, count, limit) | [crates/tmpl-cli-core/src/apps/note/rules.rs](../../../crates/tmpl-cli-core/src/apps/note/rules.rs) |
 | Runtime context; audit guard around mutating commands | [crates/tmpl-cli-core/src/runtime/](../../../crates/tmpl-cli-core/src/runtime/) |
 | Note and audit record shapes, validation | [crates/tmpl-cli-store/src/contracts/](../../../crates/tmpl-cli-store/src/contracts/) |
-| The one error type and its classification | `cw-base` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/5c4c4573ad1d30d0cf55c7b9298c0c6b22dc235b/crates/cw-base) |
+| The one error type and its classification | `cw-base` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/9c9cc998720f0a75041be3451c14fbaf80f29dc8/crates/cw-base) |
 | The store's codes for the kit's errors | [crates/tmpl-cli-store/src/error.rs](../../../crates/tmpl-cli-store/src/error.rs) |
 | Store facade: read, write transaction | [crates/tmpl-cli-store/src/store.rs](../../../crates/tmpl-cli-store/src/store.rs) |
 | The notes database: file, lock wait; schema steps per table in `schema/` | [crates/tmpl-cli-store/src/driver/sqlite/](../../../crates/tmpl-cli-store/src/driver/sqlite/) |
 | Repositories: the notes' SQL and row mapping; audit | [crates/tmpl-cli-store/src/repository/](../../../crates/tmpl-cli-store/src/repository/) |
 | Audit line, its upgrades | [crates/tmpl-cli-store/src/db/audit.rs](../../../crates/tmpl-cli-store/src/db/audit.rs) |
-| Private SQLite database: WAL, one write transaction, read-only reader, migrations | `cw-sqlite` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/5c4c4573ad1d30d0cf55c7b9298c0c6b22dc235b/crates/cw-sqlite) |
-| Append, lock, private state | `cw-fs` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/5c4c4573ad1d30d0cf55c7b9298c0c6b22dc235b/crates/cw-fs) |
+| Private SQLite database: WAL, one write transaction, read-only reader, migrations | `cw-sqlite` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/9c9cc998720f0a75041be3451c14fbaf80f29dc8/crates/cw-sqlite) |
+| Append, lock, private state | `cw-fs` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/9c9cc998720f0a75041be3451c14fbaf80f29dc8/crates/cw-fs) |
 | Goldens of help and output | [crates/tmpl-cli/tests/goldens.rs](../../../crates/tmpl-cli/tests/goldens.rs) |
