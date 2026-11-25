@@ -8,6 +8,8 @@
 
 mod color;
 
+mod env;
+
 // example:begin
 mod note;
 
@@ -24,6 +26,7 @@ pub(crate) use payload::{Output, Payload, StatusPayload};
 // example:begin
 pub(crate) use note::NotePayload;
 // example:end
+pub(crate) use env::VARS;
 pub(crate) use sink::{FormatArg, Sink, help_width};
 
 use crate::error::{exit_code, hint, output_error};
@@ -44,7 +47,7 @@ pub(crate) fn init_logging(env: &Env) {
     use tracing_subscriber::EnvFilter;
     let default = || EnvFilter::new("warn");
     let app = env.app(APP);
-    let log_var = app.var_name("LOG");
+    let log_var = tmpl_cli_core::env::LOG.name_for(APP);
     let filter = match app.log().map(|spec| spec.to_str().ok_or(spec)) {
         Some(Ok(spec)) => EnvFilter::try_new(spec).unwrap_or_else(|err| {
             let _ = writeln!(

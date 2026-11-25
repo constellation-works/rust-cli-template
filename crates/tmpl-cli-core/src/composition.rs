@@ -10,6 +10,7 @@
 //! any other read of the process).
 
 use cw_app::Env;
+use cw_app::env::{HOME, ROOT};
 use cw_base::Kind;
 use std::path::{Path, PathBuf};
 use tmpl_cli_store::Store;
@@ -31,7 +32,11 @@ pub(crate) type Ctx<'a> = cw_app::Ctx<'a, Store>;
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub(crate) enum Error {
     /// No data directory could be resolved.
-    #[error("no data directory: pass --root <dir> or set TMPL_CLI_ROOT (HOME is not set either)")]
+    #[error(
+        "no data directory: pass --root <dir> or set {} ({} is not set either)",
+        ROOT.name_for(APP),
+        HOME.name_for(APP)
+    )]
     NoDataDir,
 }
 

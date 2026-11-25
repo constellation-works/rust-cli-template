@@ -1077,13 +1077,14 @@ Each rule below is a recorded deviation until the follow-up that brings the
 template into line closes it. That follow-up is not part of the change that
 re-vendors. Each line names the rule and what is unmet.
 
-- **STD-01@4 §R25**:
-  - the environment variables are not one documented constant list stating
-    each one's meaning, default and the flag it overrides;
-  - `NO_COLOR`, `CLICOLOR_FORCE`, `TERM`, `COLUMNS`, `HOME`, `USER` and
-    `USERNAME` are read as bare literals;
-  - `docs/usage.md`'s table is written by hand rather than generated;
-  - the help text types `$TMPL_CLI_ROOT` and `$TMPL_CLI_FORMAT` by hand.
+- **STD-01@4 §R25**: the help text types `$TMPL_CLI_ROOT` and
+  `$TMPL_CLI_FORMAT` by hand (in doc comments). The rest is met: each
+  variable is declared once (the kit's in `cw_app::env`, the CLI's own in
+  `output/env.rs`), read through its declaration, and `docs/usage.md`'s
+  table is rendered from the declarations and pinned by a golden test. The
+  kit's own declarations carry no default or flag for `FORMAT` and `LOG`
+  (`auto` and `--format`, `warn`), so the usage document states those in
+  prose under the table.
 - **STD-02@8 §R6**: `scripts/check-dependency-direction.sh` has no module
   import-cycle check. (The `clippy.toml` baseline and the removal of the
   grep bans it covers are met: see "Clippy holds the file, environment and

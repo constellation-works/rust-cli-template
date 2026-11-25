@@ -36,6 +36,14 @@ use std::ffi::OsString;
 use std::process::ExitCode;
 use tmpl_cli_core::{Env, Origin, Surface};
 
+/// The Markdown table of every environment variable the CLI reads: the
+/// kit's first, then the CLI's own (`output::VARS`). `docs/usage.md` holds
+/// it, and a golden test keeps the two equal.
+#[must_use]
+pub fn env_table() -> String {
+    tmpl_cli_core::env::table(tmpl_cli_core::APP, output::VARS)
+}
+
 /// Run the CLI against `args`, the process arguments, and `env`, the
 /// environment `main` captured once.
 #[must_use]

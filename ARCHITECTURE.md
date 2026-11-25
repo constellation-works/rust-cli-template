@@ -60,7 +60,7 @@ main.rs              Env::capture() and the arguments, once; run
 lib.rs               parse, resolve the output sink, start the runtime, dispatch, print an audit warning
 cli.rs               the root command and the global flags
 command/<noun>.rs    arguments -> app::<app>::Command; exec; Outcome -> payload; render, then settle
-output/              payloads, rendering, the sink, logging
+output/              payloads, rendering, the sink, logging; env.rs declares the CLI's own variables
 error.rs             the exit code and the remedy for an error; the output failure
 help.rs              grouped root help
 ```

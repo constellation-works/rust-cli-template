@@ -34,14 +34,27 @@ and outcome.
 
 ## Configuration
 
-| Setting | Flag | Environment | Default |
-|---------|------|-------------|---------|
-| Data directory | `--root <DIR>` | `TMPL_CLI_ROOT` | `~/.tmpl-cli` |
-| Output format | `--format auto\|table\|json`, `--json` | `TMPL_CLI_FORMAT` | `auto` |
-| Color | — | `NO_COLOR`, `CLICOLOR_FORCE`, `TERM` | on for a terminal |
-| Log level (stderr) | — | `TMPL_CLI_LOG` (e.g. `debug`) | `warn` |
-| Width (terminal) | — | `COLUMNS` | the terminal's |
-| Actor (audit log) | — | `USER`, else `USERNAME` | none |
+Every variable the CLI reads, generated from their declarations (the
+kit's, then the CLI's own); `make goldens UPDATE=1` rewrites it:
+
+<!-- generated: environment table -->
+| Variable | Meaning | Default | Flag |
+|---|---|---|---|
+| `TMPL_CLI_ROOT` | The data directory. | `$HOME/.<app>` | `--root` |
+| `TMPL_CLI_FORMAT` | The output format. | — | — |
+| `TMPL_CLI_LOG` | The log filter. | — | — |
+| `NO_COLOR` | Any non-empty value turns color off. | — | — |
+| `TERM` | The terminal type, such as `dumb`. | — | — |
+| `HOME` | The home directory; the default data directory is under it. | — | — |
+| `USER` | The user the environment claims, recorded as the actor; a claim, not an identity. | — | — |
+| `USERNAME` | The claimed user when the one above is unset, empty or not UTF-8, on every platform. | — | — |
+| `CLICOLOR_FORCE` | Any non-empty value turns color on at a terminal, even for `TERM=dumb`. | — | — |
+| `COLUMNS` | The terminal width to fit tables to. | — | — |
+<!-- end generated -->
+
+Unset, the output format is `auto` (`--format auto|table|json`, `--json`),
+logging is at `warn` (try `debug`), color is on for a terminal, tables fit
+the terminal's width, and the audit log records no actor.
 
 The environment is read once at start. An empty variable counts as unset
 (`TMPL_CLI_LOG=` logs at `warn`).

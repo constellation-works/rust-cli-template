@@ -15,6 +15,11 @@
 //! [`AuditWarning`] when the line could not be written. The audit log
 //! (`<root>/audit.jsonl`) is written only by the kit.
 //!
+//! The variables the kit reads are declared once in the kit, and [`env`]
+//! re-exports those declarations with the type a program declares its own
+//! with and the table that documents them, so a surface names no variable
+//! as a string.
+//!
 //! Persistence is the `tmpl-cli-store` crate; the record shapes it defines
 //! are re-exported as [`contract`]. The one error type is the kit's,
 //! `cw-base`, re-exported as [`Error`] and [`Kind`]. A surface so
@@ -39,6 +44,7 @@ pub mod app;
 mod composition;
 
 pub use composition::{APP, Runtime, start};
+pub use cw_app::env;
 pub use cw_app::{AuditWarning, Env, EnvVar, Finished, Origin, Surface};
 pub use cw_base::{Error, Kind};
 pub use tmpl_cli_store::contract;

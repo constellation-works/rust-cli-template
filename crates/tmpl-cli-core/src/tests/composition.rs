@@ -1,9 +1,10 @@
-use crate::composition::{Error, data_dir};
+use crate::composition::{APP, Error, data_dir};
 use cw_app::Env;
+use cw_app::env::{HOME, ROOT};
 use std::path::{Path, PathBuf};
 
 fn env(root: Option<&str>, home: Option<&str>) -> Env {
-    let vars = [("TMPL_CLI_ROOT", root), ("HOME", home)];
+    let vars = [(ROOT.name_for(APP), root), (HOME.name_for(APP), home)];
     Env::from_vars(
         vars.into_iter()
             .filter_map(|(name, value)| value.map(|value| (name, value))),
