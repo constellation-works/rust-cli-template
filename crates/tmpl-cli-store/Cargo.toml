@@ -1,18 +1,18 @@
 [package]
 name = "tmpl-cli-store"
-description = "The tmpl-cli data directory: the notes database, one repository per record, and the record shapes. No rules, no terminal, no argument parsing."
+description = "The tmpl-cli data directory: the database, one repository per record, and the record shapes. No rules, no terminal, no argument parsing."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-repository.workspace = true
+publish.workspace = true
 
 [lib]
 name = "tmpl_cli_store"
 path = "src/lib.rs"
 
 [features]
-# Hand-made store state for other crates' tests: raw SQL run on the notes
+# Hand-made store state for other crates' tests: raw SQL run on the
 # database, so no crate outside this one names rusqlite.
 test-support = []
 

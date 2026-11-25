@@ -7,7 +7,6 @@
 //! never reach it: clap reports them and exits 2 before a command runs.
 
 use std::io;
-use tmpl_cli_core::app::note;
 use tmpl_cli_core::{Error, Kind};
 
 /// Writing the result to stdout failed for a reason other than a closed pipe.
@@ -40,16 +39,24 @@ pub(crate) fn exit_code(err: &Error) -> u8 {
     }
 }
 
+/// Each fix this surface knows, keyed on the error's stable code (STD-02
+/// R10). A remedy is spelled in this surface's commands, so it lives here,
+/// and must be runnable as written (STD-02 R26): each keeps the reader on
+/// the same data directory.
+const HINTS: &[(&str, &str)] = &[
+    // example:begin
+    (
+        "note_not_found",
+        "run 'tmpl-cli note list' with the same --root to see existing ids",
+    ),
+    // example:end
+];
+
 /// The fix, where it is known and not already in the message (STD-01 R21).
-/// It is spelled in this surface's commands, so it lives here, keyed on the
-/// app's typed error. A remedy must be runnable as written (STD-02 R26), so
-/// this one reminds the reader to keep the same data directory.
 pub(crate) fn hint(err: &Error) -> Option<&'static str> {
-    match err.downcast_ref::<note::Error>() {
-        Some(note::Error::NotFound { .. }) => {
-            Some("run 'tmpl-cli note list' with the same --root to see existing ids")
-        }
-        // The app's enum is #[non_exhaustive], so it needs this arm.
-        Some(_) | None => None,
-    }
+    let code = err.code();
+    HINTS
+        .iter()
+        .find(|(known, _)| *known == code)
+        .map(|(_, hint)| *hint)
 }

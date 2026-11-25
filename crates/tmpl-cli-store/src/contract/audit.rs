@@ -4,7 +4,7 @@
 //! read-only commands are never audited, because they must not write
 //! (STD-01 R31). An event holds stable identifiers only: the actor, the
 //! command path, the record it acted on, the outcome and a stable error code.
-//! Never argument values or error text, which can carry note contents or
+//! Never argument values or error text, which can carry record contents or
 //! paths (STD-05 R13). How a line is persisted is `repository/audit/line.rs`.
 
 use serde::{Deserialize, Serialize};
@@ -30,7 +30,8 @@ pub struct AuditEvent {
     /// The OS user name that invoked the command, or `None` when unset.
     #[serde(default)]
     pub actor: Option<String>,
-    /// The command path, such as `note add`.
+    /// The command path, such as `status`; only a mutating
+    /// command is audited.
     pub command: String,
     /// How it ended.
     pub status: AuditStatus,

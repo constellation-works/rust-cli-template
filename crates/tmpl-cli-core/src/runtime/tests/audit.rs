@@ -1,14 +1,12 @@
-use crate::app::note::{self, Command, NewNote};
 use crate::composition::Error;
-use crate::runtime::{AuditGuard, AuditMeta, Ctx};
+use crate::runtime::{AuditGuard, AuditMeta};
 use std::path::PathBuf;
-use time::OffsetDateTime;
 use time::macros::datetime;
 use tmpl_cli_store::Store;
-use tmpl_cli_store::contract::{AuditStatus, Priority};
+use tmpl_cli_store::contract::AuditStatus;
 
 const ADD: AuditMeta = AuditMeta {
-    command: "note add",
+    command: "record add",
 };
 
 /// An owner-only temporary directory, as a store directory must be.
@@ -24,28 +22,6 @@ fn lines(store: &Store) -> Vec<serde_json::Value> {
         .collect()
 }
 
-const AT: OffsetDateTime = datetime!(2026-09-26 12:00:00 UTC);
-
-/// Run one `note` command against `store` at a fixed time, unaudited.
-fn run(store: &Store, command: Command) -> Result<note::Outcome, note::Error> {
-    let clock = || AT;
-    note::run(&Ctx::new(store, None, &clock), command)
-}
-
-/// The audit target of adding a note titled "secret title".
-fn added_note(store: &Store) -> Option<String> {
-    let new = NewNote {
-        title: "secret title".parse().unwrap(),
-        body: None,
-        tags: Vec::new(),
-        priority: Priority::Normal,
-    };
-    let note::Outcome::Added { note, .. } = run(store, Command::Add(new)).unwrap() else {
-        panic!("add returns the added note");
-    };
-    Some(note.id.to_string())
-}
-
 #[test]
 fn an_unmarked_guard_records_a_failure() {
     // A command that returned early or panicked never reads as success.
@@ -57,49 +33,48 @@ fn an_unmarked_guard_records_a_failure() {
     let lines = lines(&store);
     assert_eq!(lines.len(), 1);
     assert_eq!(lines[0]["status"], "failure");
-    assert_eq!(lines[0]["command"], "note add");
+    assert_eq!(lines[0]["command"], "record add");
     assert_eq!(lines[0]["actor"], serde_json::Value::Null);
     assert_eq!(lines[0]["error_code"], serde_json::Value::Null);
 }
 
 #[test]
-fn a_success_records_the_note_it_acted_on_and_nothing_it_contained() {
+fn a_success_records_the_actor_and_the_record_it_acted_on() {
     let dir = private_tempdir();
     let store = Store::open(dir.path());
-    let target = added_note(&store);
     let mut guard = AuditGuard::start(
         &store,
         ADD,
         datetime!(2026-09-26 12:00:00 UTC),
         Some(String::from("alice")),
     );
-    guard.mark_result(Ok(target));
+    guard.mark_result(Ok(Some(String::from("7"))));
     drop(guard);
     let lines = lines(&store);
     assert_eq!(lines[0]["status"], "success");
     assert_eq!(lines[0]["actor"], "alice");
-    assert_eq!(lines[0]["target"], "1");
+    assert_eq!(lines[0]["target"], "7");
     assert_eq!(lines[0]["at"], "2026-09-26T12:00:00Z");
-    // STD-05 R13: no argument values in the log.
-    let text = std::fs::read_to_string(store.audit_path()).unwrap();
-    assert!(!text.contains("secret title"), "got {text}");
 }
 
 #[test]
 fn a_failure_records_the_stable_code_never_the_message() {
     let dir = private_tempdir();
     let store = Store::open(dir.path());
-    let err = run(&store, Command::Show("9".parse().unwrap())).unwrap_err();
+    let err = Error::NoDataDir;
     let message = err.to_string();
     let mut guard = AuditGuard::start(&store, ADD, datetime!(2026-09-26 12:00:00 UTC), None);
     guard.mark_result(Err(err.code()));
     drop(guard);
     let lines = lines(&store);
     assert_eq!(lines[0]["status"], "failure");
-    assert_eq!(lines[0]["error_code"], "note_not_found");
+    assert_eq!(lines[0]["error_code"], "no_data_dir");
     assert_eq!(lines[0]["target"], serde_json::Value::Null);
     let text = std::fs::read_to_string(store.audit_path()).unwrap();
-    assert!(!text.contains(&message), "the message names a path: {text}");
+    assert!(
+        !text.contains(&message),
+        "the line carries the message: {text}"
+    );
 }
 
 #[test]

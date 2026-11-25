@@ -1,0 +1,19 @@
+Show the data directory and the store format
+
+Usage: tmpl-cli status [OPTIONS]
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+
+Global options:
+      --root <DIR>       Data directory [default: $TMPL_CLI_ROOT, else ~/.tmpl-cli]
+      --format <FORMAT>  Output format; auto is a table on a terminal, tab-separated lines otherwise, and json is one JSON document [default: $TMPL_CLI_FORMAT, else auto] [possible values: auto, table, json]
+      --json             Shorthand for --format json [default: false]
+
+Examples:
+  tmpl-cli status
+  tmpl-cli status --json
+  tmpl-cli status | cut -f1
+
+A store with no database yet has no format: '-', or null with --json.

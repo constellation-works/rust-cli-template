@@ -1,7 +1,7 @@
 ---
 codebase: rust-cli-template
 owner: daniel
-summary: This repository is the starting point for a new constellation Rust CLI, with four crates laid out by app, an output contract, a local store, and gates and CI that meet the constellation standards. Create a copy with GitHub's Use this template or the umbrella's operations/scripts/new-rust-cli.sh.
+summary: This repository is the starting point for a new constellation Rust CLI, with three crates laid out by app, an output contract, a local store, and gates and CI that meet the constellation standards. Create a copy with GitHub's Use this template, then run scripts/init.sh with a kind (cli, cli-bare or workspace).
 status: active
 stack: Rust
 gate: pr
@@ -14,5 +14,6 @@ agents: "—"
 Machine-readable layout entry for **rust-cli-template**, read by the constellation front-door index
 ([`../../operations/scripts/index.sh`](../../operations/scripts/index.sh)) to render the
 Codebases table. The human front door is [`README.md`](README.md) and the agent guide is
-[`AGENTS.md`](AGENTS.md); keep `summary` here in sync with them. A copy renamed with
-`scripts/rename-template.sh` gets its own placeholder card instead of this one.
+[`AGENTS.md`](AGENTS.md); keep `summary` here in sync with them. A copy made with
+`scripts/init.sh` gets its own placeholder card instead of this one, listing the standards its
+kind adopts.

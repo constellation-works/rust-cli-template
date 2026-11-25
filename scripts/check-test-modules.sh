@@ -6,6 +6,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# A workspace with no crate yet has nothing to check.
+if [[ ! -d crates ]]; then
+  echo "test-modules: no crates yet; nothing to check"
+  exit 0
+fi
+
 fail=0
 
 # 1. Every `src/**/tests/` directory must be declared by its parent module.

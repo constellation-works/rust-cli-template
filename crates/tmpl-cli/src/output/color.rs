@@ -5,8 +5,6 @@
 //! Only the roles this CLI uses exist. Add `Ok`, `Error` or `Active` when a
 //! value needs one, not before.
 
-use tmpl_cli_core::contract::Priority;
-
 /// Whether to render semantic roles with ANSI escapes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Color {
@@ -17,27 +15,34 @@ pub(super) enum Color {
 /// What a cell's color means.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Role {
+    // example:begin
     /// Needs attention.
     Warn,
+    // example:end
     /// De-emphasized.
     Muted,
     /// No emphasis; also the fallback for unmapped values.
     Neutral,
 }
 
+// example:begin
 /// The one mapping from domain values to roles.
-pub(crate) fn role_for_priority(priority: Priority) -> Role {
+pub(crate) fn role_for_priority(priority: tmpl_cli_core::contract::Priority) -> Role {
+    use tmpl_cli_core::contract::Priority;
     match priority {
         Priority::High => Role::Warn,
         Priority::Low => Role::Muted,
         Priority::Normal => Role::Neutral,
     }
 }
+// example:end
 
 /// Wrap `text` in the role's escape codes when color is allowed.
 pub(super) fn paint(text: &str, role: Role, color: Color) -> String {
     let code = match role {
-        Role::Warn => "33",  // yellow
+        // example:begin
+        Role::Warn => "33", // yellow
+        // example:end
         Role::Muted => "90", // bright black
         Role::Neutral => return text.to_owned(),
     };

@@ -1,11 +1,11 @@
 [package]
 name = "tmpl-cli"
-description = "Keep short notes in a local store."
+description = "A command-line tool with a private local store."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-repository.workspace = true
+publish.workspace = true
 
 [lib]
 name = "tmpl_cli"

@@ -10,7 +10,7 @@ fn failed_add() -> AuditEvent {
     AuditEvent {
         at: datetime!(2026-09-26 12:00:00 UTC),
         actor: Some(String::from("alice")),
-        command: String::from("note add"),
+        command: String::from("record add"),
         status: AuditStatus::Failure,
         target: None,
         error_code: Some(String::from("store_locked")),
@@ -56,11 +56,11 @@ fn an_unset_actor_serializes_as_null() {
 #[test]
 fn a_format_one_audit_line_without_actor_upgrades_to_null_actor() {
     let v1 =
-        br#"{"format":1,"at":"2026-09-26T12:00:00Z","command":"note add","status":"success","target":"1","error_code":null,"duration_ms":5}"#;
+        br#"{"format":1,"at":"2026-09-26T12:00:00Z","command":"record add","status":"success","target":"1","error_code":null,"duration_ms":5}"#;
     let upgraded = decode_line(Path::new(PATH), v1).unwrap();
     assert_eq!(upgraded.format, AUDIT_FORMAT);
     assert_eq!(upgraded.event.actor, None);
-    assert_eq!(upgraded.event.command, "note add");
+    assert_eq!(upgraded.event.command, "record add");
     assert_eq!(upgraded.event.status, AuditStatus::Success);
     assert_eq!(upgraded.event.target.as_deref(), Some("1"));
 }
@@ -81,7 +81,7 @@ fn a_newer_audit_line_format_is_refused() {
 
 #[test]
 fn an_event_has_no_field_for_arguments_or_error_text() {
-    // STD-05 R13: the shape itself keeps note contents and paths out.
+    // STD-05 R13: the shape itself keeps record contents and paths out.
     let line = encode_line(&failed_add()).unwrap();
     let value: serde_json::Value = serde_json::from_slice(&line).unwrap();
     let mut keys: Vec<&str> = value

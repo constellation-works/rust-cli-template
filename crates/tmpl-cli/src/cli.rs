@@ -14,16 +14,20 @@ use std::path::PathBuf;
 /// Help heading for the flags every command accepts.
 const GLOBAL: &str = "Global options";
 
-const ROOT_EXAMPLES: &str = "\
-Examples:
-  tmpl-cli note add \"Call the plumber\" --tag home --priority high
-  tmpl-cli note list --tag home
-  tmpl-cli note show <id> --json
-  tmpl-cli note list | cut -f1,3
+const ROOT_EXAMPLES: &str = concat!(
+    "Examples:\n",
+    "  tmpl-cli status\n",
+    // example:begin
+    "  tmpl-cli note add \"Call the plumber\" --tag home --priority high\n",
+    "  tmpl-cli note list --tag home\n",
+    "  tmpl-cli note show <id> --json\n",
+    "  tmpl-cli note list | cut -f1,3\n",
+    // example:end
+    "\n",
+    "Exit status: 0 on success, 1 when a command fails, 2 on a usage error.",
+);
 
-Exit status: 0 on success, 1 when a command fails, 2 on a usage error.";
-
-/// Keep short notes in a local store.
+/// A command-line tool with a private local store.
 #[derive(Debug, Parser)]
 #[command(
     name = "tmpl-cli",
@@ -61,7 +65,7 @@ impl Cli {
     /// Parse a command line, including the checks clap cannot express.
     ///
     /// `conflicts_with` does not see a global flag given at a different
-    /// subcommand level (`--json note list --format table`), so the
+    /// subcommand level (`--json status --format table`), so the
     /// `--json`/`--format` conflict is checked here and reported as the same
     /// usage error (exit 2) clap would have produced.
     pub(crate) fn parse_args(args: &[OsString]) -> Result<Self, clap::Error> {

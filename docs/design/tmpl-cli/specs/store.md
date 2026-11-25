@@ -20,9 +20,9 @@ leave unreadable state.
 ## Layout
 
 - `<root>/` — mode `0700`, created by the first `add`.
-- `<root>/notes.db` — the notes, a SQLite database in WAL mode, mode `0600`,
-  created by the first `add`. SQLite keeps `<root>/notes.db-wal` and
-  `<root>/notes.db-shm` beside it, also `0600`; both stay after the last
+- `<root>/store.db` — the notes, a SQLite database in WAL mode, mode `0600`,
+  created by the first `add`. SQLite keeps `<root>/store.db-wal` and
+  `<root>/store.db-shm` beside it, also `0600`; both stay after the last
   connection closes, so a read-only reader finds them.
 - `<root>/.audit.lock` — the audit-log lock file, mode `0600`; created once,
   never deleted. While held it holds one JSON line naming the holder,

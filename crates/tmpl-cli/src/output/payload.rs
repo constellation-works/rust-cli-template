@@ -7,81 +7,62 @@
 //! shape is deliberately separate from the store's persisted document.
 
 use serde::Serialize;
-use time::OffsetDateTime;
-use tmpl_cli_core::contract::{Note, Priority};
+// example:begin
 
-/// One note as every output mode sees it.
+use super::note::NotePayload;
+// example:end
+
+/// The store's status as every output mode sees it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub(crate) struct NotePayload {
-    /// The note's id.
-    pub(crate) id: u64,
-    /// One line of text.
-    pub(crate) title: String,
-    /// Longer text; `null` when absent, never omitted (R11).
-    pub(crate) body: Option<String>,
-    /// Labels, sorted; `[]` when none.
-    pub(crate) tags: Vec<String>,
-    /// Canonical lowercase token: `low`, `normal` or `high` (R11).
-    pub(crate) priority: Priority,
-    /// RFC 3339 with an explicit offset (R11).
-    #[serde(with = "time::serde::rfc3339")]
-    pub(crate) created_at: OffsetDateTime,
+pub(crate) struct StatusPayload {
+    /// The data directory.
+    pub(crate) root: String,
+    /// The database's store format; `null` when there is no database yet,
+    /// never omitted (R11).
+    pub(crate) format: Option<u32>,
 }
 
-impl From<&Note> for NotePayload {
-    fn from(note: &Note) -> Self {
+/// What a command produced, before rendering: the payload for stdout and
+/// the lines for stderr.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Output {
+    /// What goes to stdout.
+    pub(crate) payload: Payload,
+    /// One stderr line, printed in every mode when present (STD-01 R12):
+    /// for a write, the record and the file it went to (R30); for a list,
+    /// what was searched when nothing matched (R16) or that it was cut
+    /// (R34).
+    pub(crate) notice: Option<String>,
+    /// One stderr warning per bad record isolated while reading the store.
+    pub(crate) warnings: Vec<String>,
+}
+
+impl Output {
+    /// `body` with no notice and no warning.
+    pub(crate) fn new(payload: Payload) -> Self {
         Self {
-            id: note.id.get(),
-            title: note.title.as_str().to_owned(),
-            body: note.body.clone(),
-            tags: note
-                .tags
-                .iter()
-                .map(|tag| tag.as_str().to_owned())
-                .collect(),
-            priority: note.priority,
-            created_at: note.created_at,
+            payload,
+            notice: None,
+            warnings: Vec::new(),
         }
     }
 }
 
-/// The `--json` form of a list: always this envelope, whether or not a limit
-/// cut it, so its shape never depends on the flags (STD-01 R34, R10).
-#[derive(Debug, Serialize)]
-pub(crate) struct ListPayload<'a> {
-    /// The notes returned, in order.
-    pub(crate) notes: &'a [NotePayload],
-    /// How many notes matched before `--limit` was applied.
-    pub(crate) total: usize,
-    /// Whether `--limit` left matching notes out.
-    pub(crate) truncated: bool,
-}
-
-/// What a command produced, before rendering.
+/// The payload a command produced.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum Output {
-    /// A list result.
+pub(crate) enum Payload {
+    /// The store's status.
+    Status(StatusPayload),
+    // example:begin
+    /// A list of notes.
     Notes {
         /// The notes returned, in order.
         notes: Vec<NotePayload>,
         /// How many matched before the limit; more than `notes.len()` when
         /// the list was cut.
         total: usize,
-        /// One stderr line, printed in every mode when present (STD-01 R12):
-        /// what was searched when nothing matched (R16), or that the list
-        /// was cut (R34).
-        notice: Option<String>,
-        /// One stderr warning per bad record isolated while reading the store.
-        warnings: Vec<String>,
     },
-    /// A single record (`show`, `add`).
-    Note {
-        /// The record.
-        note: NotePayload,
-        /// One stderr line when present: for a write, the record and the
-        /// file it went to (STD-01 R30).
-        notice: Option<String>,
-        /// One stderr warning per bad record isolated while reading the store.
-        warnings: Vec<String>,
-    },
+    /// A single note (`show`, `add`).
+    Note(NotePayload),
+    // example:end
 }

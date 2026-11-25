@@ -92,7 +92,7 @@ impl Env {
 /// What an app runs against, resolved from an [`Env`].
 #[derive(Debug)]
 pub(crate) struct Composition {
-    /// The note store at the resolved data directory.
+    /// The store at the resolved data directory.
     pub(crate) store: Store,
     /// The OS user name, for the audit log.
     pub(crate) actor: Option<String>,

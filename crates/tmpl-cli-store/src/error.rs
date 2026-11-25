@@ -7,31 +7,35 @@
 //! workspace's error type is the `From` impl at the end of this file
 //! (STD-02 R12).
 
-use crate::contract::{NoteError, NoteId};
 use cw_base::Kind;
 use std::fmt;
 use std::path::PathBuf;
 
-/// Where a bad record sits in the notes database: its note id when it is a
+/// Where a bad record sits in the database: its record's id when it is a
 /// valid one, otherwise the row's raw id.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecordLocator {
+    // example:begin
     /// The record had a valid note id.
-    Id(NoteId),
-    /// The row's id is not a valid note id; identified by the raw value.
+    Id(crate::contract::NoteId),
+    // example:end
+    /// The row's id is not a valid id of its record; identified by the raw
+    /// value.
     Row(i64),
 }
 
 impl fmt::Display for RecordLocator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            // example:begin
             Self::Id(id) => write!(f, "note {id}"),
+            // example:end
             Self::Row(row) => write!(f, "row {row}"),
         }
     }
 }
 
-/// Why a stored note record failed validation.
+/// Why a stored record failed validation.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum BadRecordReason {
@@ -44,18 +48,20 @@ pub enum BadRecordReason {
         /// What was wrong with its value.
         detail: String,
     },
+    // example:begin
     /// A domain validation rule rejected a field value.
     #[error(transparent)]
-    Validation(#[from] NoteError),
+    Validation(#[from] crate::contract::NoteError),
+    // example:end
 }
 
-/// One invalid note record isolated while loading a store (STD-02 R32).
+/// One invalid record isolated while loading a store (STD-02 R32).
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[error("bad record at {locator} in {}: {reason}", path.display())]
 pub struct BadRecord {
-    /// The notes database holding the record.
+    /// The database holding the record.
     pub path: PathBuf,
-    /// The record's note id, or the row's raw id when that is not one.
+    /// The record's id, or the row's raw id when that is not one.
     pub locator: RecordLocator,
     /// Why the record was rejected.
     pub reason: BadRecordReason,
@@ -87,12 +93,13 @@ pub enum Error {
     /// kind and no code: the store names the code ([`Error::code`]).
     #[error(transparent)]
     Fs(#[from] cw_fs::Error),
-    /// Opening, migrating, reading or writing the notes database failed or
+    /// Opening, migrating, reading or writing the database failed or
     /// was refused. The kit's error carries a kind and no code: the store
     /// names the code ([`Error::code`]).
     #[error(transparent)]
     Sqlite(#[from] cw_sqlite::Error),
-    /// Serializing a note's tags or an audit event failed before anything was written.
+    /// Serializing a record's field or an audit event failed before anything
+    /// was written.
     #[error("cannot encode {what}")]
     Encode {
         /// What was being serialized.
@@ -110,12 +117,12 @@ pub enum Error {
         #[source]
         source: serde_json::Error,
     },
-    /// One or more note records in the store failed validation.
+    /// One or more records in the store failed validation.
     #[error(transparent)]
     BadRecord(#[from] BadRecord),
-    /// A note's timestamp could not be formatted as RFC 3339 before anything
-    /// was written.
-    #[error("cannot format a note's timestamp as RFC 3339")]
+    /// A record's timestamp could not be formatted as RFC 3339 before
+    /// anything was written.
+    #[error("cannot format a record's timestamp as RFC 3339")]
     Timestamp {
         /// What the formatter rejected.
         #[source]
@@ -123,7 +130,7 @@ pub enum Error {
     },
     /// A persisted file (the audit log) was written by a newer build
     /// (STD-03 R10: refuse, never rewrite or reinterpret newer state). A
-    /// newer notes database is the kit's `Incompatible`.
+    /// newer database is the kit's `Incompatible`.
     #[error(
         "{} uses store format {found}, but this build reads format {supported} or older; upgrade this tool",
         path.display()

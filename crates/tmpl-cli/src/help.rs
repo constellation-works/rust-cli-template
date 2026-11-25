@@ -4,7 +4,13 @@ use clap::Command;
 use clap::builder::StyledStr;
 use std::fmt::Write;
 
-const GROUPS: &[(&str, &[&str])] = &[("Notes", &["note"]), ("Help", &["help"])];
+const GROUPS: &[(&str, &[&str])] = &[
+    // example:begin
+    ("Notes", &["note"]),
+    // example:end
+    ("Store", &["status"]),
+    ("Help", &["help"]),
+];
 
 const COMMANDS_HEADING: &str = "__ROOT_SUBCOMMANDS__";
 

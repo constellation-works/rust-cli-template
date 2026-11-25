@@ -1,5 +1,5 @@
 use crate::Store;
-use crate::contract::{AuditEvent, AuditStatus, Note, NoteId, Priority};
+use crate::contract::{AuditEvent, AuditStatus};
 use crate::error::Error;
 use cw_fs::{Error as FsError, Lock};
 use std::path::Path;
@@ -60,20 +60,13 @@ fn held(hold: impl FnOnce(mpsc::Sender<()>, mpsc::Receiver<()>) + Send + 'static
     }
 }
 
-fn new_note(title: &str) -> Note {
-    Note {
-        id: NoteId::FIRST,
-        title: title.parse().unwrap(),
-        body: None,
-        tags: Vec::new(),
-        priority: Priority::Normal,
-        created_at: OffsetDateTime::UNIX_EPOCH,
-    }
-}
-
-/// Store one note in one write, as the note app's add does.
-fn add(store: &Store, note: Note) -> Result<(), cw_base::Error> {
-    store.write(|tx| tx.notes().put(note))
+/// One write that changes nothing, as an app's write would begin; `ran`
+/// records whether its closure was reached.
+fn write(store: &Store, ran: &mut bool) -> Result<(), cw_base::Error> {
+    store.write(|_tx| {
+        *ran = true;
+        Ok(())
+    })
 }
 
 fn event(command: &str) -> AuditEvent {
@@ -89,18 +82,19 @@ fn event(command: &str) -> AuditEvent {
 }
 
 #[test]
-fn add_refuses_when_another_writer_holds_the_lock_and_writes_nothing() {
+fn a_write_refuses_when_another_writer_holds_the_lock_and_runs_nothing() {
     let dir = crate::tests::private_tempdir();
     let store = Store::open(dir.path()).with_lock_wait(Duration::from_millis(60));
     let held = hold_write_elsewhere(dir.path());
-    let err = add(&store, new_note("blocked")).unwrap_err();
+    let mut ran = false;
+    let err = write(&store, &mut ran).unwrap_err();
     assert_eq!(err.code(), "store_locked", "got {err:?}");
     assert!(matches!(
         err.downcast_ref::<Error>(),
         Some(Error::Sqlite(cw_sqlite::Error::Locked { .. }))
     ));
     drop(held);
-    assert!(store.read().unwrap().notes().all().unwrap().is_empty());
+    assert!(!ran, "a refused write runs nothing");
 }
 
 #[test]
@@ -108,14 +102,14 @@ fn record_audit_appends_one_line_per_event_and_creates_the_directory() {
     let dir = crate::tests::private_tempdir();
     let root = dir.path().join("data");
     let store = Store::open(&root);
-    store.audit().append(&event("note add")).unwrap();
-    store.audit().append(&event("note add")).unwrap();
+    store.audit().append(&event("record add")).unwrap();
+    store.audit().append(&event("record add")).unwrap();
     let text = std::fs::read_to_string(store.audit_path()).unwrap();
     assert_eq!(text.lines().count(), 2, "got {text:?}");
     assert!(text.ends_with('\n'));
     assert!(
         !root.join(crate::STORE_FILE).exists(),
-        "auditing writes no notes"
+        "auditing opens no database"
     );
 }
 
@@ -128,13 +122,13 @@ fn record_audit_succeeds_while_the_store_lock_is_held() {
     let store = Store::open(dir.path()).with_lock_wait(deadline);
     let _held = hold_write_elsewhere(dir.path());
     let started = std::time::Instant::now();
-    let err = add(&store, new_note("blocked")).unwrap_err();
+    let err = write(&store, &mut false).unwrap_err();
     assert_eq!(err.code(), "store_locked");
-    store.audit().append(&event("note add")).unwrap();
+    store.audit().append(&event("record add")).unwrap();
     let elapsed = started.elapsed();
     assert!(
         elapsed < deadline * 2,
-        "add + record_audit waited more than one deadline: {elapsed:?}"
+        "write + record_audit waited more than one deadline: {elapsed:?}"
     );
     let text = std::fs::read_to_string(store.audit_path()).unwrap();
     assert_eq!(text.lines().count(), 1, "got {text:?}");
@@ -145,7 +139,7 @@ fn record_audit_waits_for_the_audit_lock() {
     let dir = crate::tests::private_tempdir();
     let store = Store::open(dir.path()).with_lock_wait(Duration::from_millis(60));
     let _held = hold_lock_elsewhere(&dir.path().join(".audit.lock"));
-    let err = store.audit().append(&event("note add")).unwrap_err();
+    let err = store.audit().append(&event("record add")).unwrap_err();
     assert!(
         matches!(
             err.downcast_ref::<Error>(),
@@ -161,7 +155,7 @@ fn record_audit_encode_failure_is_not_io_and_names_no_path() {
     let dir = crate::tests::private_tempdir();
     let store = Store::open(dir.path());
     let bad_date = time::Date::from_calendar_date(-1, time::Month::January, 1).unwrap();
-    let mut bad_event = event("note add");
+    let mut bad_event = event("record add");
     bad_event.at = OffsetDateTime::new_utc(bad_date, time::Time::MIDNIGHT);
     let err = store.audit().append(&bad_event).unwrap_err();
     assert!(
@@ -190,7 +184,7 @@ fn a_write_through_a_symlinked_root_is_refused_before_any_side_effect() {
     }
     let link = dir.path().join("link");
     std::os::unix::fs::symlink(&target, &link).unwrap();
-    let err = add(&Store::open(&link), new_note("refused")).unwrap_err();
+    let err = write(&Store::open(&link), &mut false).unwrap_err();
     assert_eq!(err.code(), "store_symlink", "got {err:?}");
     assert_eq!(std::fs::read_dir(&target).unwrap().count(), 0);
 }

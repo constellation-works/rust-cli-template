@@ -1,4 +1,4 @@
-//! `tmpl-cli`: keep short notes in a local store.
+//! `tmpl-cli`: the command-line surface over `tmpl-cli-core`.
 //!
 //! `run` is wiring only: parse, resolve the output sink once, hand the
 //! command to its app in `tmpl-cli-core` (which resolves the data directory

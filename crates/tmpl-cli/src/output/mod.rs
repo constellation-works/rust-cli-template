@@ -8,6 +8,10 @@
 
 mod color;
 
+// example:begin
+mod note;
+
+// example:end
 mod payload;
 
 mod render;
@@ -16,7 +20,10 @@ mod sink;
 
 mod table;
 
-pub(crate) use payload::{NotePayload, Output};
+pub(crate) use payload::{Output, Payload, StatusPayload};
+// example:begin
+pub(crate) use note::NotePayload;
+// example:end
 pub(crate) use sink::{FORMAT_ENV, FormatArg, Sink, help_width};
 
 use crate::error::{exit_code, hint, output_error};
@@ -105,12 +112,11 @@ pub(crate) fn finish_parse_error(err: &clap::Error, args: &[OsString]) -> ExitCo
 }
 
 fn emit(sink: &Sink, output: &Output) -> io::Result<()> {
-    let (Output::Notes {
-        notice, warnings, ..
-    }
-    | Output::Note {
-        notice, warnings, ..
-    }) = output;
+    let Output {
+        payload,
+        notice,
+        warnings,
+    } = output;
     if !warnings.is_empty() || notice.is_some() {
         // Fail open (STD-02 R31): warnings and notices that cannot reach stderr
         // never fail a command whose payload is fine.
@@ -123,9 +129,12 @@ fn emit(sink: &Sink, output: &Output) -> io::Result<()> {
         }
     }
     let mut out = io::stdout().lock();
-    match output {
-        Output::Notes { notes, total, .. } => render::note_list(&mut out, sink, notes, *total)?,
-        Output::Note { note, .. } => render::note_detail(&mut out, sink, note)?,
+    match payload {
+        Payload::Status(status) => render::status(&mut out, sink, status)?,
+        // example:begin
+        Payload::Notes { notes, total } => note::list(&mut out, sink, notes, *total)?,
+        Payload::Note(note) => note::detail(&mut out, sink, note)?,
+        // example:end
     }
     out.flush()
 }

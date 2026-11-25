@@ -1,14 +1,13 @@
 [workspace]
 resolver = "3"
-# Three crates laid out by app over the cw-kit, and why:
-# docs/design/tmpl-cli/4_decisions.md ("The template is laid out by app in
-# three crates", "The foundation is the cw-kit"). A new member needs a
-# policy entry in scripts/check-dependency-direction.sh and a row in
-# ARCHITECTURE.md.
+# A new member needs a policy entry in scripts/check-dependency-direction.sh
+# and a row in ARCHITECTURE.md.
 members = [
+    # crates:begin
     "crates/tmpl-cli-store",
     "crates/tmpl-cli-core",
     "crates/tmpl-cli",
+    # crates:end
 ]
 
 [workspace.package]
@@ -18,7 +17,12 @@ edition = "2024"
 # kit states the same floor.
 rust-version = "1.89"
 license = "MIT"
-repository = "https://github.com/constellation-works/tmpl-cli"
+# template:begin
+# Nothing here is published to a registry. `scripts/init.sh --repository <url>`
+# adds the repository URL; without it the field is left out.
+# copy: # Nothing here is published to a registry.
+# template:end
+publish = false
 
 [workspace.dependencies]
 # The cw-kit (https://github.com/constellation-works/satellites): the one
@@ -33,8 +37,10 @@ cw-sqlite = { git = "https://github.com/constellation-works/satellites", rev = "
 # Test isolation (a private temp root, an isolated child, goldens): a
 # dev-dependency only (scripts/check-dependency-direction.sh).
 cw-testkit = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
+# crates:begin
 tmpl-cli-store = { path = "crates/tmpl-cli-store" }
 tmpl-cli-core = { path = "crates/tmpl-cli-core" }
+# crates:end
 # No `color` or `wrap_help`: both make clap query the terminal itself, and the
 # output sink is the only place allowed to do that (STD-01 R17). Help is plain
 # text everywhere, which also keeps the help goldens byte-stable.

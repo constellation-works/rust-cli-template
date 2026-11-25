@@ -40,6 +40,9 @@ fn deny_uses_a_writable_cache_when_the_cargo_home_is_unusable() {
     for name in ["Makefile", "deny.toml"] {
         fs::copy(repo_root().join(name), root.join(name)).unwrap();
     }
+    // The Makefile runs its Cargo targets only once a crate exists.
+    fs::create_dir_all(root.join("crates/app")).unwrap();
+    fs::write(root.join("crates/app/Cargo.toml"), "").unwrap();
     let cargo = root.join("cargo");
     fs::write(
         &cargo,
@@ -120,7 +123,7 @@ fn check_dependency_direction_catches_grouped_std_fs_import() {
     )
     .unwrap();
     fs::write(
-        root.join("crates/tmpl-cli-core/src/note.rs"),
+        root.join("crates/tmpl-cli-core/src/flow.rs"),
         "use std::{fmt, fs};\n",
     )
     .unwrap();

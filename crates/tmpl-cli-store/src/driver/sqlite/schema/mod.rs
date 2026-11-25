@@ -1,4 +1,4 @@
-//! The notes database's schema: one module per table, each exporting that
+//! The database's schema: one module per table, each exporting that
 //! table's steps as named items, and here the one ordered list of every step
 //! handed to `cw_sqlite`. A statement that changes the schema appears only
 //! under this directory (`scripts/check-dependency-direction.sh`).
@@ -9,7 +9,9 @@
 
 use cw_sqlite::Step;
 
+// example:begin
 mod note;
+// example:end
 
 /// Every schema step, append-only (STD-03 R23): step `n` takes the database
 /// from version `n - 1` to `n` (`PRAGMA user_version`). A shipped step is
@@ -20,6 +22,8 @@ mod note;
 /// added later to an earlier table goes at the end, after every shipped
 /// step, and no shipped step is renumbered.
 pub(crate) const MIGRATIONS: &[Step] = &[
+    // example:begin
     // 1
     note::CREATE_NOTE,
+    // example:end
 ];

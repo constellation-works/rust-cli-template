@@ -11,7 +11,7 @@
 //! `Command::audit`; read-only commands are not, because they must not write
 //! (STD-01 R31). The line holds the actor, the command path, the
 //! record acted on, the outcome and the stable error code: never argument
-//! values or error text, which can carry note contents or paths (STD-05 R13).
+//! values or error text, which can carry record contents or paths (STD-05 R13).
 //!
 //! The audit log is a side channel, so it fails open (STD-02 R31): a line that
 //! cannot be written never fails the command that already ran, and is reported
@@ -27,7 +27,7 @@ use tmpl_cli_store::contract::{AuditEvent, AuditStatus};
 /// How a command appears in the audit log.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct AuditMeta {
-    /// The command path, such as `note add`.
+    /// The command path, such as `record add`.
     pub(crate) command: &'static str,
 }
 

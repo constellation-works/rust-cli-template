@@ -24,7 +24,7 @@ pin is a change of its own). Every kit crate is pinned to that one rev.
 |-------|------|------|-------------------------------|--------|
 | `tmpl-cli` | binary `tmpl-cli` | Argument declarations, the mapping from arguments to an app's `Command`, rendering, exit codes. The only stdout, stderr and terminal access. | `tmpl-cli-core`; `cw-testkit` and `tmpl-cli-store` (its `test-support`) as dev-dependencies only | `tmpl-cli-store` as a normal dependency, every kit crate, `rusqlite` |
 | `tmpl-cli-core` | library | The apps, the runtime they share, and composition. | `tmpl-cli-store`, `cw-base`; `cw-testkit` and the store's `test-support` as dev-dependencies only | `cw-fs`, `cw-sqlite`, `rusqlite`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
-| `tmpl-cli-store` | library | The data directory: the notes database's driver, one repository per record, the record shapes (`contract`), the audit line, and the store's stable code for each of the kit's errors. It names no file primitive and no SQLite crate of its own: it reaches the directory and the audit log through `cw-fs` and the notes database through `cw-sqlite`, and names `rusqlite` only through its re-export. | `cw-base`, `cw-fs`, `cw-sqlite`; `cw-testkit` as a dev-dependency only | `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix`, `rusqlite` as a dependency of its own |
+| `tmpl-cli-store` | library | The data directory: the database's driver, one repository per record, the record shapes (`contract`), the audit line, and the store's stable code for each of the kit's errors. It names no file primitive and no SQLite crate of its own: it reaches the directory and the audit log through `cw-fs` and the database through `cw-sqlite`, and names `rusqlite` only through its re-export. | `cw-base`, `cw-fs`, `cw-sqlite`; `cw-testkit` as a dev-dependency only | `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix`, `rusqlite` as a dependency of its own |
 
 `scripts/check-dependency-direction.sh` reads these edges from Cargo's own
 package graph (`cargo metadata --no-deps --locked`), so a quoted or renamed
@@ -35,15 +35,18 @@ dev-only kit edges are `cw-testkit` from every crate (the private temp
 root, the isolated child and the goldens of their tests; no non-test source
 names `cw_testkit`). The binary's and the core's tests also take
 `tmpl-cli-store` with its `test-support` feature, which runs raw SQL on the
-notes database, so a test can set up a store the public API never writes
+database, so a test can set up a store the public API never writes
 while no crate outside the store names `rusqlite`. The binary names only
 `tmpl-cli-core`. The core re-exports the store's record shapes as
 `tmpl_cli_core::contract` and the kit's error type as
 `tmpl_cli_core::Error` and `tmpl_cli_core::Kind`, so a surface needs no
-second dependency. Why the crates are laid out by app, and why the
-foundation is the kit:
+second dependency.
+<!-- example:begin -->
+
+Why the crates are laid out by app, and why the foundation is the kit:
 [docs/design/tmpl-cli/4_decisions.md](docs/design/tmpl-cli/4_decisions.md#the-template-is-laid-out-by-app-in-three-crates),
 [the kit decision](docs/design/tmpl-cli/4_decisions.md#the-foundation-is-the-cw-kit).
+<!-- example:end -->
 
 ## `tmpl-cli` (binary)
 
@@ -70,10 +73,15 @@ environment into `Env` once; `output/` alone reads the presentation variables
 ```
 lib.rs               pub mod app; Env; contract (re-exported from the store); Error, Kind (from cw-base)
 app/
-  note/
+  status/
     mod.rs           Command, Outcome, Error, exec (forwards to runtime::exec), run: dispatch only
+    show.rs          one flow per command: the data directory and the store format, read-only
+<!-- example:begin -->
+  note/              the example domain
+    mod.rs           Command, Outcome, Error, exec, run, as for status
     add.rs list.rs show.rs   one flow per command
     rule.rs          the note rules: the next id, a stored note from a new one, list selection
+<!-- example:end -->
 runtime/
   mod.rs             Runtime (started from composition), Ctx (what a flow receives)
   exec.rs            the one chokepoint: the App trait and exec, which every app's exec forwards to
@@ -119,21 +127,27 @@ lib.rs               re-exports: Store, Snapshot, Tx, Error, contract, repositor
 store.rs             Store::open, read() -> Snapshot, write(|tx| …), audit()
 driver/
   mod.rs             one module per storage mechanism
-  sqlite/mod.rs      the notes database: STORE_FILE, open() -> cw_sqlite::Db; no query, no schema statement
+  sqlite/mod.rs      the database: STORE_FILE (store.db), open() -> cw_sqlite::Db; no query, no schema statement
   sqlite/schema/
     mod.rs           MIGRATIONS: the one append-only ordered list of every table's steps, each named
+<!-- example:begin -->
     note.rs          the note table's steps as named items (CREATE_NOTE)
+<!-- example:end -->
 repository/
-  mod.rs             Snapshot (one reader), Tx (one write transaction)
+  mod.rs             Snapshot (one reader; its path and format), Tx (one write transaction)
+<!-- example:begin -->
   note.rs            notes: the SQL and row mapping; all, get, bad records; put
+<!-- example:end -->
   audit/
     mod.rs           audit: append; the audit log's lock file name (AUDIT_LOCK_FILE)
     line.rs          the persisted audit line and its upgrades; bytes only, no I/O
 contract/
+<!-- example:begin -->
   note.rs            Note, NoteId (1 to NoteId::MAX), Title, Body, Tag, Priority, NoteError
+<!-- example:end -->
   audit.rs           AuditEvent, AuditStatus
 error.rs             Error (a code for every cw_fs::Error and cw_sqlite::Error variant), its translator into cw_base::Error; BadRecord and its locator and reason
-test_support.rs      behind the `test-support` feature: raw SQL on the notes database, for other crates' tests
+test_support.rs      behind the `test-support` feature: raw SQL on the database, for other crates' tests
 ```
 
 - **A driver sets one storage mechanism up once and returns a handle; a
@@ -148,22 +162,21 @@ test_support.rs      behind the `test-support` feature: raw SQL on the notes dat
   R23). A step that changes two tables lives in the file of the table it
   creates or alters, and `schema/mod.rs` still sets its place in the order.
   A statement that changes the schema appears only under `schema/`.
-  `repository/note.rs` holds the notes' SQL and the mapping between a row
-  and the contract types, run on the reader `Store::read` opened or the
+  A record's repository (`repository/<record>.rs`) holds its SQL and the
+  mapping between a row and the contract types, run on the reader `Store::read` opened or the
   transaction `Store::write` began. There is no `driver/fs/`: the audit
   repository reaches its file through `cw_fs` directly.
 - **The record-access seam.** A caller reaches a record only through
-  `snapshot.<record>()` in a read and `tx.<record>()` in a write; today
-  that is `notes()`. The store's public surface names no `rusqlite` or
+  `snapshot.<record>()` in a read and `tx.<record>()` in a write. The store's public surface names no `rusqlite` or
   `cw_sqlite` type, carries no borrow from a connection or a document, and
-  names no path but `Store::path()` (the note app names the database in its
-  outcome and refusals) and `Store::audit_path()` (the core's audit guard
+  names no path but `Store::root()` (the status app reports it),
+  `Store::path()` (an app names the database in its outcome and refusals) and `Store::audit_path()` (the core's audit guard
   names the log in its warning). Repository calls return owned values.
 - **A second driver.** There is no trait per repository and no driver chosen
   at run time. When a second storage mechanism is added, `driver/<other>/`
-  sets it up, and `repository/note.rs` becomes `repository/note/mod.rs`
-  (the record's public surface, unchanged for the core), `note/sqlite.rs`
-  and `note/<other>.rs`.
+  sets it up, and `repository/<record>.rs` becomes
+  `repository/<record>/mod.rs` (the record's public surface, unchanged for
+  the core), `<record>/sqlite.rs` and `<record>/<other>.rs`.
 - One repository per record, never per command. The store holds no rule of
   any app: no next-id rule, no list selection, no validation beyond what a
   contract type enforces on itself.
@@ -172,7 +185,7 @@ test_support.rs      behind the `test-support` feature: raw SQL on the notes dat
   function that decides across records, no `check_*`, no clock, no file and
   no SQLite.
 - A write refuses a store holding bad records, so a bad record is repaired
-  before notes are added beside it; checks a flow wants before the data
+  before records are added beside it; checks a flow wants before the data
   directory or the database exists run on its own read first.
 - `Store` is one concrete type.
 

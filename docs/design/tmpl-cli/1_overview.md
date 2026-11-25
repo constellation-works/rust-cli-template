@@ -42,7 +42,7 @@ there.
 
 - **Data directory** — where the store lives; resolved once by composition
   (`--root` > `TMPL_CLI_ROOT` > `~/.tmpl-cli`) and handed to the domain.
-- **Store** — the SQLite database `notes.db` (with its `-wal` and `-shm`)
+- **Store** — the SQLite database `store.db` (with its `-wal` and `-shm`)
   in an owner-only data directory; read through one read-only connection,
   written in one transaction, its schema an append-only list of steps.
 - **Payload** — the typed record every output mode renders from; its JSON

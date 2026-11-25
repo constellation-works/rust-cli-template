@@ -27,16 +27,23 @@ KIT_PREFIX="cw"
 fail=0
 err() { echo "dependency-direction: $*" >&2; fail=1; }
 
+# A workspace with no crate yet has no edge to check.
+if ! compgen -G 'crates/*/Cargo.toml' >/dev/null; then
+  echo "dependency-direction: no crates/*/Cargo.toml yet; nothing to check"
+  exit 0
+fi
+
 # --- 1. crate policies -------------------------------------------------------
 # policy <crate>  -> sets ALLOWED (internal deps), KIT (cw-kit deps),
 # KIT_DEV (cw-kit crates allowed as dev-dependencies only) and BANNED
 # (external deps)
 policy() {
   case "$1" in
+    # crates:begin
     tmpl-cli-store)
       ALLOWED=""
       # The one error type (cw-base), file access for the data directory and
-      # the audit log (cw-fs), and the notes database (cw-sqlite). The store
+      # the audit log (cw-fs), and the database (cw-sqlite). The store
       # is the only crate that names cw-fs or cw-sqlite.
       KIT="cw-base cw-fs cw-sqlite"
       # Test isolation, for its unit tests' private temp roots.
@@ -67,6 +74,7 @@ policy() {
       # SQLite belongs to the store alone.
       BANNED="rusqlite libsqlite3-sys"
       ;;
+    # crates:end
     *) return 1 ;;
   esac
 }
@@ -213,12 +221,13 @@ ban_import() {
   fi
 }
 
+# crates:begin
 STORE=crates/tmpl-cli-store/src
 CORE=crates/tmpl-cli-core/src
 CLI=crates/tmpl-cli/src
 
 # Store: no code here names a file, process or network primitive; it reaches
-# the data directory and the audit log through the kit's cw-fs and the notes
+# the data directory and the audit log through the kit's cw-fs and the
 # database through the kit's cw-sqlite. driver/ sets each mechanism up and
 # returns its handle; repository/ holds each record's use of it (its SQL and
 # row mapping; the audit repository's line.rs converts the audit line's bytes);
@@ -238,7 +247,9 @@ ban "$STORE/contract" 'fn check_|now_utc|SystemTime'                      "contr
 [[ -e "$CLI/commands" ]] && err "cli/commands: the command handlers live in command/"
 compgen -G "$CORE/app/*/rules.rs" >/dev/null && err "core/app/<app>/rules.rs: an app's rules live in rule.rs"
 compgen -G "$CORE/app/*/rules" >/dev/null && err "core/app/<app>/rules/: an app's rules live in rule.rs or rule/"
+# example:begin
 [[ -e "$STORE/repository/notes.rs" || -e "$STORE/repository/notes" ]] && err "store/repository/notes: the note repository is repository/note.rs"
+# example:end
 # rusqlite is named only through the kit's re-export (cw_sqlite::rusqlite),
 # never as a crate of its own.
 ban "$STORE"         '(^|[^:[:alnum:]_])rusqlite::|extern crate rusqlite'  "the store names rusqlite only through cw_sqlite's re-export"
@@ -329,30 +340,35 @@ ban crates 'cw_testkit'                                                  "cw-tes
 ban crates 'serde\(default *= *"[A-Za-z_:]*(now|now_utc)"'    "a persisted timestamp must not default to the current time"
 
 # Retired paths stay retired (R17). List a path here when you delete a module.
-for retired in \
-  crates/tmpl-cli/src/app.rs \
-  crates/tmpl-cli/src/audit_middleware.rs \
-  crates/tmpl-cli/src/tests/app.rs \
-  crates/tmpl-cli/src/tests/audit_middleware.rs \
-  crates/tmpl-cli-core/src/error.rs \
-  crates/tmpl-cli-core/src/note.rs \
-  crates/tmpl-cli-core/src/query.rs \
-  crates/tmpl-cli-core/src/store \
-  crates/tmpl-cli-core/src/tests/note.rs \
-  crates/tmpl-cli-core/src/tests/query.rs \
-  crates/tmpl-cli-core/tests/store.rs \
-  crates/tmpl-cli/src/command.rs \
-  crates/tmpl-cli/src/tests/command.rs \
-  crates/tmpl-cli-core/src/fsio.rs \
-  crates/tmpl-cli-core/src/store.rs \
-  crates/tmpl-cli-core/src/tests/fsio.rs \
-  crates/tmpl-cli-core/src/tests/store.rs \
-  crates/tmpl-cli-core/src/runtime/errors.rs \
-  crates/tmpl-cli-store/src/db/tests/fsio.rs \
-  crates/tmpl-cli-store/src/db/format.rs \
-  crates/tmpl-cli-store/src/db/tests/format.rs; do
+retired_paths=(
+  crates/tmpl-cli/src/app.rs
+  crates/tmpl-cli/src/audit_middleware.rs
+  crates/tmpl-cli/src/tests/app.rs
+  crates/tmpl-cli/src/tests/audit_middleware.rs
+  crates/tmpl-cli-core/src/error.rs
+  crates/tmpl-cli-core/src/query.rs
+  crates/tmpl-cli-core/src/store
+  crates/tmpl-cli-core/src/tests/query.rs
+  crates/tmpl-cli-core/tests/store.rs
+  crates/tmpl-cli/src/command.rs
+  crates/tmpl-cli/src/tests/command.rs
+  crates/tmpl-cli-core/src/fsio.rs
+  crates/tmpl-cli-core/src/store.rs
+  crates/tmpl-cli-core/src/tests/fsio.rs
+  crates/tmpl-cli-core/src/tests/store.rs
+  crates/tmpl-cli-core/src/runtime/errors.rs
+  crates/tmpl-cli-store/src/db/tests/fsio.rs
+  crates/tmpl-cli-store/src/db/format.rs
+  crates/tmpl-cli-store/src/db/tests/format.rs
+  # example:begin
+  crates/tmpl-cli-core/src/note.rs
+  crates/tmpl-cli-core/src/tests/note.rs
+  # example:end
+)
+for retired in "${retired_paths[@]}"; do
   [[ -e "$retired" ]] && err "retired path exists again: $retired"
 done
+# crates:end
 
 # Crate edges last: the module bans above run even where Cargo cannot.
 check_crate_edges

@@ -1,160 +1,55 @@
-//! Payload → bytes, one function per shape and mode. Every rendering reads
-//! the same [`NotePayload`], so no mode can show a value the others lack.
+//! Payload → bytes for the payloads every kind of this CLI has, and what
+//! every rendering shares.
 
-use super::color::role_for_priority;
-use super::payload::{ListPayload, NotePayload};
+use super::color::Role;
+use super::payload::StatusPayload;
 use super::sink::{OutputMode, Sink};
 use super::table::{self, Align, Cell, Column};
 use std::io::{self, Write};
-use time::format_description::well_known::Rfc3339;
 
-const LIST_COLUMNS: [Column; 5] = [
+const STATUS_COLUMNS: [Column; 2] = [
     Column {
-        header: "ID",
+        header: "ROOT",
+        align: Align::Left,
+        truncate: false,
+    },
+    Column {
+        header: "FORMAT",
         align: Align::Right,
-        truncate: false,
-    },
-    Column {
-        header: "PRIORITY",
-        align: Align::Left,
-        truncate: false,
-    },
-    Column {
-        header: "TITLE",
-        align: Align::Left,
-        truncate: true,
-    },
-    Column {
-        header: "TAGS",
-        align: Align::Left,
-        truncate: false,
-    },
-    Column {
-        header: "CREATED",
-        align: Align::Left,
         truncate: false,
     },
 ];
 
-/// A list: table, tab-separated lines, or the JSON envelope carrying the
-/// notes, `total` and `truncated` (STD-01 R34). `total` is how many matched.
-pub(crate) fn note_list(
+/// The store's status: a one-row table, one tab-separated line
+/// (`root  format`), or a JSON object. A store with no database yet has no
+/// format: `-` in the human modes, `null` in JSON (STD-01 R11, R14).
+pub(crate) fn status(out: &mut dyn Write, sink: &Sink, status: &StatusPayload) -> io::Result<()> {
+    let format = status
+        .format
+        .map_or_else(|| String::from("-"), |format| format.to_string());
+    match sink.mode {
+        OutputMode::Json => write_json(out, status),
+        OutputMode::Plain => writeln!(out, "{}\t{format}", status.root),
+        OutputMode::Table => {
+            let role = if status.format.is_some() {
+                Role::Neutral
+            } else {
+                Role::Muted
+            };
+            let row = vec![
+                Cell::plain(status.root.clone()),
+                Cell { text: format, role },
+            ];
+            out.write_all(table::render(&STATUS_COLUMNS, &[row], sink.width, sink.color).as_bytes())
+        }
+    }
+}
+
+/// One JSON document, pretty-printed, ending in a newline.
+pub(super) fn write_json<T: serde::Serialize + ?Sized>(
     out: &mut dyn Write,
-    sink: &Sink,
-    notes: &[NotePayload],
-    total: usize,
+    value: &T,
 ) -> io::Result<()> {
-    match sink.mode {
-        OutputMode::Json => write_json(
-            out,
-            &ListPayload {
-                notes,
-                total,
-                truncated: notes.len() < total,
-            },
-        ),
-        // An empty list prints nothing, not a lone header (STD-01 R16).
-        OutputMode::Table if notes.is_empty() => Ok(()),
-        OutputMode::Table => {
-            let rows: Vec<Vec<Cell>> = notes.iter().map(list_row).collect();
-            out.write_all(table::render(&LIST_COLUMNS, &rows, sink.width, sink.color).as_bytes())
-        }
-        OutputMode::Plain => notes
-            .iter()
-            .try_for_each(|note| writeln!(out, "{}", plain_line(note))),
-    }
-}
-
-/// One record: a field-per-line detail view, one tab-separated line, or a
-/// JSON object. The detail view never truncates: it is where a truncated
-/// table cell is read in full (STD-01 R15).
-pub(crate) fn note_detail(out: &mut dyn Write, sink: &Sink, note: &NotePayload) -> io::Result<()> {
-    match sink.mode {
-        OutputMode::Json => write_json(out, note),
-        OutputMode::Plain => writeln!(out, "{}", plain_line(note)),
-        OutputMode::Table => {
-            let priority = super::color::paint(
-                note.priority.as_str(),
-                role_for_priority(note.priority),
-                sink.color,
-            );
-            let body = note
-                .body
-                .as_deref()
-                .map(sanitize_for_display)
-                .unwrap_or_else(|| String::from("-"))
-                .replace('\n', "\n          ");
-            writeln!(out, "id        {}", note.id)?;
-            writeln!(out, "title     {}", note.title)?;
-            writeln!(out, "priority  {priority}")?;
-            writeln!(out, "tags      {}", tags_cell(&note.tags))?;
-            writeln!(out, "created   {}", timestamp(note))?;
-            writeln!(out, "body      {body}")
-        }
-    }
-}
-
-/// Neutralize control characters other than newline and tab so terminal
-/// escape sequences and carriage returns cannot reach stdout raw.
-fn sanitize_for_display(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '\r' && chars.peek() == Some(&'\n') {
-            continue;
-        }
-        if ch == '\n' || ch == '\t' || !ch.is_control() {
-            out.push(ch);
-        } else {
-            for escaped in ch.escape_default() {
-                out.push(escaped);
-            }
-        }
-    }
-    out
-}
-
-fn list_row(note: &NotePayload) -> Vec<Cell> {
-    vec![
-        Cell::plain(note.id.to_string()),
-        Cell {
-            text: note.priority.as_str().to_owned(),
-            role: role_for_priority(note.priority),
-        },
-        Cell::plain(note.title.clone()),
-        Cell::plain(tags_cell(&note.tags)),
-        Cell::plain(timestamp(note)),
-    ]
-}
-
-/// `id  priority  title  tags  created_at`, tab-separated. The body is left
-/// out because it may span lines; `--json` and `note show` carry it.
-pub(crate) fn plain_line(note: &NotePayload) -> String {
-    format!(
-        "{}\t{}\t{}\t{}\t{}",
-        note.id,
-        note.priority.as_str(),
-        note.title,
-        tags_cell(&note.tags),
-        timestamp(note)
-    )
-}
-
-fn tags_cell(tags: &[String]) -> String {
-    if tags.is_empty() {
-        String::from("-")
-    } else {
-        tags.join(",")
-    }
-}
-
-fn timestamp(note: &NotePayload) -> String {
-    note.created_at
-        .format(&Rfc3339)
-        .unwrap_or_else(|_| String::from("-"))
-}
-
-fn write_json<T: serde::Serialize + ?Sized>(out: &mut dyn Write, value: &T) -> io::Result<()> {
     serde_json::to_writer_pretty(&mut *out, value).map_err(io::Error::from)?;
     writeln!(out)
 }

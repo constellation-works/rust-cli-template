@@ -24,3 +24,13 @@ when a new feature needs a design.
 
 Locally, the Makefile warns about missing cargo-deny and cargo-nextest and
 uses plain Cargo tests when nextest is unavailable. CI requires both tools.
+<!-- template:begin -->
+
+The template's own gates: `scripts/check-template.py` (part of
+`make structure`) keeps the `note` example removable, as
+[`scripts/template-manifest.txt`](../scripts/template-manifest.txt) lists
+it, and `scripts/check-template-version.sh <base>` fails a change to a
+shipped file that does not raise `version` in `template.toml`. The
+template workflow runs `scripts/init.sh` for each kind on a scratch copy,
+then `make ci` there.
+<!-- template:end -->

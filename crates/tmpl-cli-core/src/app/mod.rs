@@ -7,4 +7,8 @@
 //! `app/util`: code two apps need goes to the lower app, or to the runtime
 //! when it is about the context, the audit guard or errors.
 
+// example:begin
 pub mod note;
+// example:end
+
+pub mod status;

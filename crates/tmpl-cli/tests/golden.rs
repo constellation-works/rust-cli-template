@@ -1,6 +1,6 @@
 //! Golden tests of the public surface, captured from the built binary as it
 //! ships (STD-01 R24): every command's `--help`, and the plain, table and
-//! JSON forms of `note list` and `note show`.
+//! JSON forms of each command's output.
 //!
 //! A mismatch fails. After an intentional surface change, regenerate with
 //! `make goldens UPDATE=1` (which sets `UPDATE_GOLDENS=1`) and review the
@@ -16,9 +16,25 @@
 
 mod support;
 
-use cw_testkit::{Goldens, redact_timestamps};
+use cw_testkit::Goldens;
+// example:begin
+use cw_testkit::redact_timestamps;
+// example:end
 use support::{Fixture, text};
 
+/// Output on a fresh data directory named relative to the fixture, so the
+/// path in the output is the same on every machine.
+const STATUS_OUTPUT: &[(&str, &[&str])] = &[
+    ("status.plain.txt", &["--root", "data", "status"]),
+    (
+        "status.table.txt",
+        &["--root", "data", "status", "--format", "table"],
+    ),
+    ("status.json", &["--root", "data", "status", "--json"]),
+];
+
+// example:begin
+/// Output on the seeded store.
 const OUTPUT: &[(&str, &[&str])] = &[
     ("note-list.plain.txt", &["note", "list"]),
     (
@@ -33,6 +49,7 @@ const OUTPUT: &[(&str, &[&str])] = &[
     ),
     ("note-show.json", &["note", "show", "3", "--json"]),
 ];
+// example:end
 
 /// The goldens folder. `Goldens` rewrites a file instead of comparing it
 /// when `UPDATE_GOLDENS=1`, which `make goldens UPDATE=1` sets.
@@ -122,6 +139,21 @@ fn assert_summary(path: &str, command: &clap::Command, limit: usize) -> String {
 }
 
 #[test]
+fn status_output_matches_goldens() {
+    let fx = Fixture::new();
+    let goldens = goldens();
+    let failures: Vec<String> = STATUS_OUTPUT
+        .iter()
+        .filter_map(|(name, args)| {
+            let out = fx.ok(args);
+            check(&goldens, &format!("output/{name}"), &text(&out.stdout))
+        })
+        .collect();
+    report(&failures);
+}
+// example:begin
+
+#[test]
 fn output_matches_goldens() {
     let fx = Fixture::new();
     fx.seed();
@@ -139,3 +171,4 @@ fn output_matches_goldens() {
         .collect();
     report(&failures);
 }
+// example:end

@@ -1,12 +1,15 @@
-Keep short notes in a local store
+A command-line tool with a private local store
 
 Usage: tmpl-cli [OPTIONS] <COMMAND>
 
 Notes:
-  note  Add, list and show notes
+  note    Add, list and show notes
+
+Store:
+  status  Show the data directory and the store format
 
 Help:
-  help  Print this message or the help of the given subcommand(s)
+  help    Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help     Print help
@@ -18,6 +21,7 @@ Global options:
       --json             Shorthand for --format json [default: false]
 
 Examples:
+  tmpl-cli status
   tmpl-cli note add "Call the plumber" --tag home --priority high
   tmpl-cli note list --tag home
   tmpl-cli note show <id> --json

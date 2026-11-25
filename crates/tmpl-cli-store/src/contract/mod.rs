@@ -7,10 +7,13 @@
 
 mod audit;
 
+pub use audit::{AuditEvent, AuditStatus};
+
+// example:begin
 mod note;
 
-pub use audit::{AuditEvent, AuditStatus};
 pub use note::{Body, Note, NoteError, NoteId, Priority, Tag, Title};
+// example:end
 
 #[cfg(test)]
 mod tests;

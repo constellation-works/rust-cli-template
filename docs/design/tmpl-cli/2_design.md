@@ -1,7 +1,7 @@
 ---
 title: tmpl-cli — Design
 owner: claude
-last_updated: 2026-11-24
+last_updated: 2026-11-25
 last_validated: 2026-09-26
 status: Draft
 feature: tmpl-cli
@@ -108,8 +108,8 @@ in every mode.
 
 ## 4. The store
 
-The notes live in one SQLite database, `notes.db`, with SQLite's
-`notes.db-wal` and `notes.db-shm` beside it, opened through the kit's
+The notes live in one SQLite database, `store.db`, with SQLite's
+`store.db-wal` and `store.db-shm` beside it, opened through the kit's
 `cw_sqlite` (WAL, `synchronous = FULL`, owner-only files, no link followed).
 Its schema is the driver's append-only `MIGRATIONS` list in
 `driver/sqlite/schema/mod.rs`, naming each table's steps from
@@ -187,7 +187,15 @@ exit code.
 | `cargo deny check` | `ci-lint` | advisories, licenses, sources |
 | nextest `--no-tests=fail` (timeouts in `.config/nextest.toml`, no retries), then `cargo test --doc` | `test` | behaviour, and runnable doc examples |
 | help and output goldens from the built binary | `goldens` | the public surface (STD-01 R24) |
+| `check-template.py` (the template's own; removed by `scripts/init.sh`) | `ci-fast` (`structure`) | the example is removable: note-named paths and note references only in the `example` entries and regions of `scripts/template-manifest.txt`, balanced region markers, every file with markers listed |
 
+Every Cargo target says it skips while no `crates/*/Cargo.toml` exists, so
+a `workspace` copy passes `make ci` from its first commit. The template's
+own workflow (`.github/workflows/template.yml`) fails a pull request that
+changes a shipped file without raising `version` in `template.toml`
+(`scripts/check-template-version.sh`) and runs `scripts/init.sh` for each
+kind on a scratch copy, checks that none of the template's name or summary
+is left, then runs `make ci` there; the workflow goes with `init.sh`.
 Cargo builds and tests pass `--locked`. When Cargo's advisory cache is
 read-only, the supply-chain check uses `target/cargo-deny/advisory-dbs`.
 Missing gate tools warn locally and fail under `CI=true`. CI runs
@@ -220,7 +228,7 @@ the toolchain and tools. Dependabot proposes crate and action updates.
 - A store holding any bad record remains readable (valid notes plus stderr
   warnings), but writes refuse until the bad record is fixed by hand with
   SQL ([4_decisions.md](./4_decisions.md#bad-note-records-are-isolated-on-read-and-block-writes)).
-- In a writable data directory a read may rebuild `notes.db-shm` (SQLite's
-  index) and creates a missing `notes.db-wal` (empty) or `notes.db-shm`,
+- In a writable data directory a read may rebuild `store.db-shm` (SQLite's
+  index) and creates a missing `store.db-wal` (empty) or `store.db-shm`,
   owner-only, as SQLite needs them to read a WAL database. In a read-only
   directory a read writes nothing.
