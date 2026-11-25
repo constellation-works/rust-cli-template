@@ -24,9 +24,13 @@ and errors are a single object with `error` and `code` on stderr.
 | Color | — | `NO_COLOR`, `CLICOLOR_FORCE`, `TERM` | on for a terminal |
 | Log level (stderr) | — | `TMPL_CLI_LOG` (e.g. `debug`) | `warn` |
 
-Notes live in `notes.json` under the data directory. Each `note add` appends
-one event to `audit.jsonl` with the note ID and outcome. Reading commands
-leave those files untouched.
+Notes live in a SQLite database, `notes.db`, under the data directory, with
+SQLite's `notes.db-wal` and `notes.db-shm` beside it. Each `note add` appends
+one event to `audit.jsonl` with the note ID and outcome; `.audit.lock` is its
+lock file. Every file is `0600` and the directory `0700` on Unix. Reading
+commands change no note and write no audit line; in a writable directory a
+read creates a missing `notes.db-wal` or `notes.db-shm`, owner-only, as
+SQLite needs them to read.
 
 ## Troubleshooting
 

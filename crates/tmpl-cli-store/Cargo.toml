@@ -1,6 +1,6 @@
 [package]
 name = "tmpl-cli-store"
-description = "The tmpl-cli data directory: the persisted document, one repository per record, and the record shapes. No rules, no terminal, no argument parsing."
+description = "The tmpl-cli data directory: the notes database, one repository per record, and the record shapes. No rules, no terminal, no argument parsing."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,11 +11,17 @@ repository.workspace = true
 name = "tmpl_cli_store"
 path = "src/lib.rs"
 
+[features]
+# Hand-made store state for other crates' tests: raw SQL run on the notes
+# database, so no crate outside this one names rusqlite.
+test-support = []
+
 # Persistence dependencies only. scripts/check-dependency-direction.sh rejects
 # clap, tracing-subscriber and any other surface crate here.
 [dependencies]
 cw-base = { workspace = true }
 cw-fs = { workspace = true }
+cw-sqlite = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

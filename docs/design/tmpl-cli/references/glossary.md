@@ -17,4 +17,4 @@ stdout, exit code) is excluded.
 | **Sink** | The per-invocation resolution of output mode, color and width. See [2_design.md §2](../2_design.md). |
 | **List envelope** | The `--json` shape of every list: `{"notes", "total", "truncated"}`. See [specs/output-contract.md](../specs/output-contract.md). |
 | **Audit log** | `<root>/audit.jsonl`: one line per mutating command (what ran, on which note, how it ended), written by the audit middleware. See [2_design.md §5](../2_design.md). |
-| **Store format** | The integer `format` in `notes.json`; a newer one is refused, an older one is upgraded through `UPGRADES`. See [specs/store.md](../specs/store.md). |
+| **Schema version** | The notes database's `PRAGMA user_version`: the number of schema steps applied from `MIGRATIONS`. A newer one is refused; an older one is migrated by the next write. See [specs/store.md](../specs/store.md). |

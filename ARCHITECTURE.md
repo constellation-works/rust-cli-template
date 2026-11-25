@@ -8,11 +8,12 @@ an edge changes this file and that script in the same commit.
 
 ```
 tmpl-cli  ->  tmpl-cli-core  ->  tmpl-cli-store
-                    |              |        |
-                    +--> cw-base <-+        +--> cw-fs -> cw-base
+                    |              |   |    |
+                    +--> cw-base <-+   |    +--> cw-fs -> cw-base
+                                       +--> cw-sqlite -> cw-fs, cw-base
 ```
 
-`cw-base` and `cw-fs` are the cw-kit, with `cw-testkit` (test isolation, a
+`cw-base`, `cw-fs` and `cw-sqlite` are the cw-kit, with `cw-testkit` (test isolation, a
 dev-dependency only), all from
 [constellation-works/satellites](https://github.com/constellation-works/satellites),
 a git dependency pinned in the root `Cargo.toml` to commit
@@ -21,9 +22,9 @@ pin is a change of its own). Every kit crate is pinned to that one rev.
 
 | Crate | Kind | Owns | Internal and kit dependencies | Banned |
 |-------|------|------|-------------------------------|--------|
-| `tmpl-cli` | binary `tmpl-cli` | Argument declarations, the mapping from arguments to an app's `Command`, rendering, exit codes. The only stdout, stderr and terminal access. | `tmpl-cli-core`; `cw-testkit` as a dev-dependency only | `tmpl-cli-store`, every kit crate |
-| `tmpl-cli-core` | library | The apps, the runtime they share, and composition. | `tmpl-cli-store`, `cw-base`; `cw-fs` and `cw-testkit` as dev-dependencies only | `cw-fs`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
-| `tmpl-cli-store` | library | The data directory: the persisted document, one repository per record, the record shapes (`contracts`), and the store's stable code for each of the kit's file errors. It names no file primitive; it reaches the directory through `cw-fs`. | `cw-base`, `cw-fs`; `cw-testkit` as a dev-dependency only | `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
+| `tmpl-cli` | binary `tmpl-cli` | Argument declarations, the mapping from arguments to an app's `Command`, rendering, exit codes. The only stdout, stderr and terminal access. | `tmpl-cli-core`; `cw-testkit` and `tmpl-cli-store` (its `test-support`) as dev-dependencies only | `tmpl-cli-store` as a normal dependency, every kit crate, `rusqlite` |
+| `tmpl-cli-core` | library | The apps, the runtime they share, and composition. | `tmpl-cli-store`, `cw-base`; `cw-testkit` and the store's `test-support` as dev-dependencies only | `cw-fs`, `cw-sqlite`, `rusqlite`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
+| `tmpl-cli-store` | library | The data directory: the notes database's driver, one repository per record, the record shapes (`contracts`), the audit line, and the store's stable code for each of the kit's errors. It names no file primitive and no SQLite crate of its own: it reaches the directory and the audit log through `cw-fs` and the notes database through `cw-sqlite`, and names `rusqlite` only through its re-export. | `cw-base`, `cw-fs`, `cw-sqlite`; `cw-testkit` as a dev-dependency only | `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix`, `rusqlite` as a dependency of its own |
 
 `scripts/check-dependency-direction.sh` reads these edges from Cargo's own
 package graph (`cargo metadata --no-deps --locked`), so a quoted or renamed
@@ -32,10 +33,11 @@ or build dependency on a `cw-*` crate outside it fails the check, and so
 does a dev-dependency outside the kit list and the dev-only kit list. The
 dev-only kit edges are `cw-testkit` from every crate (the private temp
 root, the isolated child and the goldens of their tests; no non-test source
-names `cw_testkit`), and `tmpl-cli-core` to `cw-fs` (its integration tests
-match the kit's file error behind a store failure, while its sources never
-name `cw_fs`). The binary names
-only `tmpl-cli-core`. The core re-exports the store's record shapes as
+names `cw_testkit`). The binary's and the core's tests also take
+`tmpl-cli-store` with its `test-support` feature, which runs raw SQL on the
+notes database, so a test can set up a store the public API never writes
+while no crate outside the store names `rusqlite`. The binary names only
+`tmpl-cli-core`. The core re-exports the store's record shapes as
 `tmpl_cli_core::contracts` and the kit's error type as
 `tmpl_cli_core::Error` and `tmpl_cli_core::Kind`, so a surface needs no
 second dependency. Why the crates are laid out by app, and why the
@@ -113,33 +115,59 @@ test_support.rs      behind the `test-support` feature: Ctx and each app's run
 ## `tmpl-cli-store`
 
 ```
-lib.rs               re-exports: Store, Snapshot, Tx, Error, contracts, repository
-store.rs             Store::open, read() -> Snapshot, write(label, |tx| …), audit()
-db/
-  format.rs          the persisted notes document, its format versions and upgrades
-  audit.rs           the persisted audit line and its upgrades
+lib.rs               re-exports: Store, Snapshot, Tx, Error, contracts, repository, STORE_FILE
+store.rs             Store::open, read() -> Snapshot, write(|tx| …), audit()
+driver/
+  mod.rs             one module per storage mechanism
+  sqlite/mod.rs      the notes database: STORE_FILE, MIGRATIONS (the schema steps), open() -> cw_sqlite::Db; no query
 repository/
-  mod.rs             Snapshot (one read), Tx (one write under the lock)
-  notes.rs           notes: all, get, bad records; put
+  mod.rs             Snapshot (one reader), Tx (one write transaction)
+  notes.rs           notes: the SQL and row mapping; all, get, bad records; put
   audit.rs           audit: append
+db/
+  mod.rs             the audit log's lock file name
+  audit.rs           the persisted audit line and its upgrades
 contracts/
-  note.rs            Note, NoteId, Title, Body, Tag, Priority, NoteError
+  note.rs            Note, NoteId (1 to NoteId::MAX), Title, Body, Tag, Priority, NoteError
   audit.rs           AuditEvent, AuditStatus
-error.rs             Error (a code for every cw_fs::Error variant), its translator into cw_base::Error; BadRecord and its locator and reason
+error.rs             Error (a code for every cw_fs::Error and cw_sqlite::Error variant), its translator into cw_base::Error; BadRecord and its locator and reason
+test_support.rs      behind the `test-support` feature: raw SQL on the notes database, for other crates' tests
 ```
 
+- **A driver sets one storage mechanism up once and returns a handle; a
+  repository is one record's use of it.** `driver/sqlite/` holds only this
+  project's part of SQLite (the file, the lock wait, the schema steps) and
+  returns the kit's `cw_sqlite::Db`; the kit is the mechanism. It runs no
+  query. A statement that changes the schema appears only there.
+  `repository/notes.rs` holds the notes' SQL and the mapping between a row
+  and the contract types, run on the reader `Store::read` opened or the
+  transaction `Store::write` began. There is no `driver/fs/`: the audit
+  repository reaches its file through `cw_fs` directly.
+- **The record-access seam.** A caller reaches a record only through
+  `snapshot.<record>()` in a read and `tx.<record>()` in a write; today
+  that is `notes()`. The store's public surface names no `rusqlite` or
+  `cw_sqlite` type, carries no borrow from a connection or a document, and
+  names no path but `Store::path()` (the note app names the database in its
+  outcome and refusals) and `Store::audit_path()` (the core's audit guard
+  names the log in its warning). Repository calls return owned values.
+- **A second driver.** There is no trait per repository and no driver chosen
+  at run time. When a second storage mechanism is added, `driver/<other>/`
+  sets it up, and `repository/notes.rs` becomes `repository/notes/mod.rs`
+  (the record's public surface, unchanged for the core), `notes/sqlite.rs`
+  and `notes/<other>.rs`.
 - One repository per record, never per command. The store holds no rule of
   any app: no next-id rule, no list selection, no validation beyond what a
   contract type enforces on itself.
 - `contracts/` holds shapes only: type definitions, the constructor or
   parser that enforces the type's own invariant, serde and `Display`. No
-  function that decides across records, no `check_*`, no clock, no file.
-- A write refuses a store holding bad records, since rewriting it would drop
-  them; checks a flow wants before the data directory or lock file exists
-  run on its own read first.
-- `Store` is one concrete type; a trait is added when a second backend exists.
+  function that decides across records, no `check_*`, no clock, no file and
+  no SQLite.
+- A write refuses a store holding bad records, so a bad record is repaired
+  before notes are added beside it; checks a flow wants before the data
+  directory or the database exists run on its own read first.
+- `Store` is one concrete type.
 
-## The cw-kit (`cw-base`, `cw-fs`)
+## The cw-kit (`cw-base`, `cw-fs`, `cw-sqlite`)
 
 Not part of this workspace: crates from
 [constellation-works/satellites](https://github.com/constellation-works/satellites)
@@ -156,23 +184,36 @@ at the pinned commit. Each crate's README there is its contract.
   mechanism only, knowing no record and no file name. Its `Error` has a
   `Kind` and no code: the store wraps it as `Error::Fs` and names a code for
   every variant.
+- `cw-sqlite`: one private SQLite database: WAL, owner-only files, a
+  read-only reader per read, one `IMMEDIATE` write transaction per write, and
+  an append-only list of migrations keyed on `PRAGMA user_version`;
+  mechanism only, knowing no table. It bundles SQLite and re-exports
+  `rusqlite`. Its `Error` has a `Kind` and no code: the store wraps it as
+  `Error::Sqlite` and names a code for every variant.
 
 ## Module rules
 
-Checked by grep over non-test sources:
+Checked by grep over non-test sources, except that `rusqlite` and
+`cw_sqlite` are refused outside `tmpl-cli-store` in tests too:
 
 - `tmpl-cli-store`: nothing names `std::fs`, `std::net`, `std::process`,
-  `tempfile` or `rustix`. `db/format.rs` and `db/audit.rs` do not name
-  `cw_fs`. `contracts/` imports no `db`, `repository`, `Store` or
-  file access, and defines no `check_*` function and reads no clock. There
-  is no `db/fsio.rs`. The crate reads no environment variable and discovers
-  no path.
+  `tempfile` or `rustix`, and `rusqlite` only as `cw_sqlite::rusqlite`.
+  A statement that changes the schema (`CREATE`, `ALTER` or `DROP` of a
+  table, index, view or trigger, `PRAGMA user_version`, a `Step`) appears
+  only under `driver/sqlite/`. No public item names a `rusqlite` or
+  `cw_sqlite` type. `db/audit.rs` names neither `cw_fs` nor `cw_sqlite`.
+  `contracts/` imports no `db`, `driver`, `repository`, `Store`, file access
+  or SQLite, and defines no `check_*` function and reads no clock. There is
+  no `db/fsio.rs` and no `driver/fs/`. The crate reads no environment
+  variable and discovers no path.
 - `tmpl-cli-core`: no `std::fs`, `std::net`, `std::process`, `tempfile`,
-  `rustix` or `cw_fs` anywhere. Only `composition.rs` names `std::env`, `home_dir` or
+  `rustix`, `cw_fs`, `cw_sqlite` or `rusqlite` anywhere, and no
+  `tmpl_cli_store::repository` path: a record is reached through
+  `snapshot.<record>()` or `tx.<record>()`. Only `composition.rs` names `std::env`, `home_dir` or
   `current_dir`. `runtime/` imports no `crate::apps`. No `apps/common`,
   `apps/shared` or `apps/util`. An app's `rules` names no `runtime`,
   `composition`, `Store`, `Snapshot` or `Tx`.
-- `tmpl-cli`: nothing names `tmpl_cli_store`, `cw_base` or `cw_fs`. `commands/` names no `std::env`,
+- `tmpl-cli`: nothing names `tmpl_cli_store`, `cw_base`, `cw_fs`, `cw_sqlite` or `rusqlite`. `commands/` names no `std::env`,
   `std::fs`, `Store`, `Runtime` or `Ctx`. `output/` imports no `cli` or
   `commands`.
 - Only `tmpl-cli/src/output/` touches stdout, stderr, `IsTerminal` or the

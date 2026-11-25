@@ -54,7 +54,7 @@ pub enum Outcome {
     Added {
         /// The stored note, with its assigned id.
         note: Note,
-        /// The store file, so a surface can name where the note went
+        /// The notes database, so a surface can name where the note went
         /// (STD-01 R30).
         path: PathBuf,
     },
@@ -102,17 +102,18 @@ pub enum Error {
     NotFound {
         /// The id that was looked up.
         id: NoteId,
-        /// The store file that was searched.
+        /// The notes database that was searched.
         path: PathBuf,
     },
-    /// The store already holds the largest possible note id (`u64::MAX`).
+    /// The store already holds the largest possible note id
+    /// ([`NoteId::MAX`]).
     #[error(
         "{} cannot allocate another note id: the maximum id ({}) is already in use",
         path.display(),
-        u64::MAX
+        NoteId::MAX
     )]
     IdExhausted {
-        /// The store file.
+        /// The notes database.
         path: PathBuf,
     },
     /// The store refused or failed: the store's typed error, already in the

@@ -26,6 +26,9 @@ tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 cw-testkit = { workspace = true }
+# Hand-made store state (a bad record, the last id, a newer schema) for
+# the tests, through the store's raw-SQL test support.
+tmpl-cli-store = { workspace = true, features = ["test-support"] }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 time = { workspace = true, features = ["macros"] }

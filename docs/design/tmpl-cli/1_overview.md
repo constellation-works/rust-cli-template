@@ -42,8 +42,9 @@ there.
 
 - **Data directory** — where the store lives; resolved once by composition
   (`--root` > `TMPL_CLI_ROOT` > `~/.tmpl-cli`) and handed to the domain.
-- **Store** — `notes.json` plus `.lock` in an owner-only data directory;
-  replaced atomically, written under an advisory lock, format-versioned.
+- **Store** — the SQLite database `notes.db` (with its `-wal` and `-shm`)
+  in an owner-only data directory; read through one read-only connection,
+  written in one transaction, its schema an append-only list of steps.
 - **Payload** — the typed record every output mode renders from; its JSON
   form is the machine contract.
 - **Sink** — the per-invocation answer to "who reads stdout": output mode,
@@ -67,7 +68,9 @@ there.
 | The one error type and its classification | `cw-base` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b/crates/cw-base) |
 | The store's codes for the kit's errors | [crates/tmpl-cli-store/src/error.rs](../../../crates/tmpl-cli-store/src/error.rs) |
 | Store facade: read, write transaction | [crates/tmpl-cli-store/src/store.rs](../../../crates/tmpl-cli-store/src/store.rs) |
-| Repositories: notes, audit | [crates/tmpl-cli-store/src/repository/](../../../crates/tmpl-cli-store/src/repository/) |
-| Persisted format, upgrades; audit line | [crates/tmpl-cli-store/src/db/format.rs](../../../crates/tmpl-cli-store/src/db/format.rs), [audit.rs](../../../crates/tmpl-cli-store/src/db/audit.rs) |
-| Atomic write, append, lock, bounded reads, private state | `cw-fs` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b/crates/cw-fs) |
+| The notes database: file, lock wait, schema steps | [crates/tmpl-cli-store/src/driver/sqlite/](../../../crates/tmpl-cli-store/src/driver/sqlite/) |
+| Repositories: the notes' SQL and row mapping; audit | [crates/tmpl-cli-store/src/repository/](../../../crates/tmpl-cli-store/src/repository/) |
+| Audit line, its upgrades | [crates/tmpl-cli-store/src/db/audit.rs](../../../crates/tmpl-cli-store/src/db/audit.rs) |
+| Private SQLite database: WAL, one write transaction, read-only reader, migrations | `cw-sqlite` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b/crates/cw-sqlite) |
+| Append, lock, private state | `cw-fs` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b/crates/cw-fs) |
 | Goldens of help and output | [crates/tmpl-cli/tests/goldens.rs](../../../crates/tmpl-cli/tests/goldens.rs) |

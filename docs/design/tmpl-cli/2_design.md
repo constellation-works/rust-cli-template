@@ -35,15 +35,20 @@ selection), the `runtime` they share (the context, the one chokepoint every
 app's `exec` forwards to, the audit guard) and `composition` (the only code
 that reads the environment or picks the data directory, the store and the
 clock). `tmpl-cli-store` owns
-the data directory: the `Store` facade (one read, one locked write) over
-`db/` (`format`: the persisted document and its upgrades; `audit`: the
-persisted audit line), one repository per record (`notes`, `audit`) and
-the record shapes in `contracts/`. The foundation is the cw-kit from
+the data directory: the `Store` facade (one read, one write transaction)
+over `driver/sqlite/` (the notes database's file, lock wait and schema
+steps, handed out as a `cw_sqlite::Db`; no query), one repository per record
+(`notes`: the notes' SQL and row mapping; `audit`), `db/audit.rs` (the
+persisted audit line) and the record shapes in `contracts/`. A driver sets
+one storage mechanism up once and returns a handle; a repository is one
+record's use of it. The core reaches a record only through
+`snapshot.<record>()` and `tx.<record>()`. The foundation is the cw-kit from
 [constellation-works/satellites](https://github.com/constellation-works/satellites),
 pinned to commit `5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b`: `cw-base` (the
 one error type every unit translates its typed error into, with its `Kind`
-and stable code), which the store and the core name, and `cw-fs` (durable
-writes, appends, locking and private-state checks, mechanism only), which
+and stable code), which the store and the core name; `cw-fs` (appends,
+locking and private-state checks, mechanism only) and `cw-sqlite` (one
+private SQLite database, mechanism only, re-exporting `rusqlite`), which
 only the store names. No library has clap or terminal access. The crate and module rules are in
 [ARCHITECTURE.md](../../../ARCHITECTURE.md), and
 `scripts/check-dependency-direction.sh` enforces them from source text
@@ -102,33 +107,39 @@ in every mode.
 
 ## 4. The store
 
-`notes.json` holds `{"format": 1, "notes": [...]}`. Reads take no lock and
-write nothing: the file is only ever replaced by rename, so readers see a
-whole version, and `list`/`show` work on a read-only data directory. Every
-load first checks that the data directory and the store file belong to this
-user and are open to no group or other permission bit, and that neither is
-a link; otherwise it refuses with the `chmod` that fixes it. Each note record is
-decoded individually at the construction boundary with no silent field
-defaults: a record whose title or tag fails validation or which lacks a
-required field is isolated as a `BadRecord` (`store_bad_record`) naming its id
-(or 1-based line number when the id is unreadable) and reason; reads return
-the valid notes plus per-record warnings, `show <bad id>` fails with that
-record's error, and `add` refuses while any bad record exists so nothing is
-ever dropped or defaulted. Duplicate note ids are refused on load
-(`store_duplicate_id`). The `add` flow reads the store once before touching
-anything, so a refused store leaves nothing behind; it then calls
-`Store::write`, which creates the data directory (`0700`), takes `.lock` (`0600`, never through a link; an OS advisory lock
-with a 10-second deadline, and a timeout names the holder's pid, label and
-start time only while that process is still alive), re-reads under the lock and
-refuses a store with bad records; inside the write the flow assigns the next
-id (`rules::next_id`: checked max id + 1, refusing with `note_id_exhausted`
-at `u64::MAX`) and puts the note, and the store writes through
-`cw_fs::write_atomic` (a
-`0600` temp file in the same directory, `fsync`, rename, `fsync` of the
-directory). The temp file removes itself on every failure path. A file
-declaring a newer format is refused for reads and writes; an older one is
-upgraded in memory through the append-only `UPGRADES` registry (empty so far)
-and persisted by the next write.
+The notes live in one SQLite database, `notes.db`, with SQLite's
+`notes.db-wal` and `notes.db-shm` beside it, opened through the kit's
+`cw_sqlite` (WAL, `synchronous = FULL`, owner-only files, no link followed).
+Its schema is the driver's append-only `MIGRATIONS` list (version 1: one
+`STRICT` `note` table, timestamps as RFC 3339 UTC text, tags as a JSON
+array in a text column checked by `json_valid`), keyed on
+`PRAGMA user_version`. Every read and write first checks that the data
+directory belongs to this user, is open to no group or other permission bit
+and is not a link; the kit checks the database and its sidecars the same
+way. A refusal names the `chmod` that fixes it.
+
+A read opens one read-only connection that holds one read transaction, so
+every query in one command sees one committed version; it takes no lock,
+changes no note, and works on a read-only data directory. A missing data
+directory or database reads as an empty store and creates nothing. Each row
+is mapped to the contract types at the construction boundary with no
+default: a row whose title, tag, priority or timestamp fails validation is
+isolated as a `BadRecord` (`store_bad_record`) naming its id and reason;
+reads return the valid notes plus per-record warnings, `show <bad id>` fails
+with that record's error, and `add` refuses while any bad record exists, so
+a bad record is repaired before anything is added beside it.
+
+The `add` flow reads the store once before touching anything, so a refused
+store leaves nothing behind, and closes that read. It then calls
+`Store::write`, which creates the data directory (`0700`), opens the
+database (creating it `0600` and running any schema step it lacks), begins
+one `IMMEDIATE` transaction (waiting up to 10 seconds for another writer,
+then `store_locked`), refuses a store with bad records, and runs the flow:
+it assigns the next id (`rules::next_id`: checked max id + 1, refusing with
+`note_id_exhausted` at `NoteId::MAX`, SQLite's largest integer) and puts the
+note. The transaction commits when the flow succeeds and rolls back when it
+fails. A database at a newer schema version is refused for reads and writes
+(`store_too_new`) and left as it is.
 
 ## 5. The audit log
 
@@ -143,8 +154,9 @@ recorded as a failure, never as success. `mark_result` sets the outcome, the
 note id on success and the stable error code on failure; `Drop` runs after
 `output::finish` and appends one line to `<root>/audit.jsonl` through
 the audit repository (`Store::audit().append`), which checks the data directory like any write, holds
-`.audit.lock` (separate from `.lock` so a lock timeout on a note write still
-records its failure line within one deadline) and creates the file `0600`.
+`.audit.lock` (apart from the database, so a lock timeout on a note write
+still records its failure line within one deadline) and creates the file
+`0600`.
 Each line is `{"format": 2, "at", "actor", "command", "status", "target",
 "error_code", "duration_ms"}`: identifiers only, never argument values or
 error text (STD-05 R13). `actor` is the OS user name read once in `Env`
@@ -160,7 +172,7 @@ exit code.
 | Gate | Make target | Holds |
 |------|-------------|-------|
 | `cargo fmt --check` | `ci-fast` | formatting |
-| `check-dependency-direction.sh` | `ci-fast` | crate and module layering (STD-02 R1–R6), file access only in the store's `db/`, environment reads only in the core's `composition.rs`, no clock-defaulted timestamps (R16), retired paths stay gone (R17) |
+| `check-dependency-direction.sh` | `ci-fast` | crate and module layering (STD-02 R1–R6), file access only in the store, `rusqlite` only in the store and only through `cw_sqlite`, schema statements only in `driver/sqlite/`, no repository path named in the core, environment reads only in the core's `composition.rs`, no clock-defaulted timestamps (R16), retired paths stay gone (R17) |
 | `check-test-modules.sh` | `ci-fast` | every sibling unit-test file is declared (STD-02 R19) |
 | `check-terminal-guard.sh` | `ci-fast` | one owner for streams, TTY and color env (STD-01 R12, R17) |
 | `check-private-task-ids.sh` | `ci-fast` | public tree excludes private task IDs outside the vendored canon |
@@ -185,17 +197,14 @@ the toolchain and tools. Dependabot proposes crate and action updates.
   dependency (`terminal_size`) the template does not take.
 - Usage errors keep clap's multi-line rendering in human mode
   ([4_decisions.md](./4_decisions.md#usage-errors-keep-claps-rendering)).
-- The whole store is one file rewritten on every `add`: fine for thousands of
-  notes, wrong for millions. That is the domain's problem to outgrow, not the
-  template's.
 - Under plain `cargo test` (nextest absent) there is no per-test timeout;
   only the CI job timeout bounds a hang.
-- Holder information in `.lock` is best effort: the kit writes it just after
-  the lock is taken and clears it on release, so a waiter can briefly find no
-  record, and a record whose process has exited or that exceeds 4096 bytes
-  names no holder. A failure to write it does not fail the lock: the kit
-  returns it from `Lock::holder_error`, and the store logs it as a warning
-  and carries on with the write.
+- A note-write lock timeout (`store_locked`) names no holder: SQLite's locks
+  record no owner. The audit lock's holder record is best effort: the kit
+  writes it just after the lock is taken and clears it on release, and a
+  failure to write it is logged as a warning.
+- `note list` and `note add` read every row: fine for thousands of notes. A
+  domain that outgrows that adds a query to the notes repository.
 - The ownership and mode checks are unix-only; on Windows they are no-ops.
 - The audit log grows without bound and has no reader command; rotating or
   querying it is left to the domain. A crash mid-append can leave a torn last
@@ -204,5 +213,7 @@ the toolchain and tools. Dependabot proposes crate and action updates.
   reader: a `note add` whose stdout write then fails is still `success`,
   because the note was written.
 - A store holding any bad record remains readable (valid notes plus stderr
-  warnings), but writes refuse until the bad record is fixed by hand
-  ([4_decisions.md](./4_decisions.md#bad-note-records-are-isolated-on-read-and-block-writes)).
+  warnings), but writes refuse until the bad record is fixed by hand with
+  SQL ([4_decisions.md](./4_decisions.md#bad-note-records-are-isolated-on-read-and-block-writes)).
+- In a writable data directory a read creates a missing `notes.db-wal` or
+  `notes.db-shm` (owner-only), as SQLite needs them to read a WAL database.

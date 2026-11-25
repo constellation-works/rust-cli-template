@@ -255,7 +255,7 @@ fn the_data_directory_defaults_under_home_and_is_never_guessed() {
     let mut cmd = fx.cmd(&["note", "add", "x"]);
     cmd.env_remove("TMPL_CLI_ROOT");
     assert_eq!(cmd.output().unwrap().status.code(), Some(0));
-    assert!(fx.home().join(".tmpl-cli").join("notes.json").exists());
+    assert!(fx.home().join(".tmpl-cli").join("notes.db").exists());
 
     let mut cmd = fx.cmd(&["note", "list"]);
     cmd.env_remove("TMPL_CLI_ROOT").env_remove("HOME");
@@ -272,7 +272,7 @@ fn the_root_flag_beats_the_environment_and_nothing_else_is_touched() {
     let other_arg = other.to_str().unwrap();
     fx.ok(&["--root", other_arg, "note", "add", "x"]);
     fx.ok(&["--root", other_arg, "note", "list"]);
-    assert!(other.join("notes.json").exists());
+    assert!(other.join("notes.db").exists());
     assert!(!fx.root().exists(), "TMPL_CLI_ROOT was not used");
     let home: Vec<_> = std::fs::read_dir(fx.home()).unwrap().collect();
     assert!(home.is_empty(), "HOME was touched: {home:?}");
@@ -285,7 +285,7 @@ fn add_names_the_record_and_the_file_it_wrote() {
     let out = fx.ok(&["note", "add", "x", "--json"]);
     assert_eq!(json(&out.stdout)["id"], 1);
     let stderr = text(&out.stderr);
-    let store = fx.root().join("notes.json");
+    let store = fx.root().join("notes.db");
     assert!(
         stderr.contains("note 1") && stderr.contains(store.to_str().unwrap()),
         "stderr: {stderr}"
@@ -326,7 +326,7 @@ fn each_add_writes_one_audit_line_and_reads_write_none() {
 fn a_refused_add_is_audited_as_a_failure_with_its_code() {
     let fx = Fixture::new();
     fx.ok(&["note", "add", "x"]);
-    std::fs::write(fx.root().join("notes.json"), b"not json").unwrap();
+    support::corrupt_store(&fx.root());
     let out = fx.run(&["note", "add", "y"]);
     assert_eq!(out.status.code(), Some(1));
     let lines = audit_lines(&fx);
@@ -422,7 +422,7 @@ fn json_error_object_precedes_audit_failure_warning_on_stderr() {
     use std::os::unix::fs::symlink;
     let fx = Fixture::new();
     fx.ok(&["note", "add", "seed"]);
-    std::fs::write(fx.root().join("notes.json"), b"not json").unwrap();
+    support::corrupt_store(&fx.root());
     let audit = fx.root().join("audit.jsonl");
     let target = fx.elsewhere("audit-target");
     std::fs::write(&target, b"").unwrap();
@@ -471,20 +471,17 @@ fn audit_line_records_actor_from_user_or_username_else_null() {
 #[test]
 fn bad_records_warn_on_reads_fail_on_show_and_refuse_writes_without_touching_store() {
     let fx = Fixture::new();
-    std::fs::create_dir_all(fx.root()).unwrap();
-    support::make_private(&fx.root());
-    let store_path = fx.root().join("notes.json");
-    let raw = r#"{
-  "format": 1,
-  "notes": [
-    {"id": 1, "title": "Good note", "body": null, "tags": ["home"], "priority": "normal", "created_at": "2026-01-02T03:04:05Z"},
-    {"id": 2, "title": "Bad\u001btitle", "body": null, "tags": [], "priority": "normal", "created_at": "2026-01-02T03:04:05Z"},
-    {"id": 3, "title": "Missing priority", "body": null, "tags": [], "created_at": "2026-01-02T03:04:05Z"}
-  ]
-}"#;
-    std::fs::write(&store_path, raw).unwrap();
-    support::make_private(&store_path);
-    let before = std::fs::read(&store_path).unwrap();
+    let store_path = fx.root().join("notes.db");
+    support::execute(
+        &fx.root(),
+        "INSERT INTO note (id, title, body, tags, priority, created_at) VALUES
+            (1, 'Good note', NULL, '[\"home\"]', 'normal', '2026-01-02T03:04:05Z'),
+            (2, 'Bad' || char(27) || 'title', NULL, '[]', 'normal', '2026-01-02T03:04:05Z'),
+            (3, 'Unknown priority', NULL, '[]', 'urgent', '2026-01-02T03:04:05Z');",
+    );
+    let files =
+        || ["notes.db", "notes.db-wal"].map(|name| std::fs::read(fx.root().join(name)).unwrap());
+    let before = files();
 
     // `note list` (plain): exits 0, lists only good note, 1 warning per bad record on stderr.
     let list_plain = fx.ok(&["note", "list"]);
@@ -501,7 +498,7 @@ fn bad_records_warn_on_reads_fail_on_show_and_refuse_writes_without_touching_sto
     );
     assert!(
         warn_lines[1].contains("note 3") && warn_lines[1].contains("priority"),
-        "missing field warning: {}",
+        "unknown priority warning: {}",
         warn_lines[1]
     );
 
@@ -527,7 +524,7 @@ fn bad_records_warn_on_reads_fail_on_show_and_refuse_writes_without_touching_sto
     assert_eq!(err["code"], "store_bad_record");
     assert!(err["error"].as_str().unwrap().contains("note 2"));
 
-    // `note add`: refuses exit 1 with typed error naming a bad record, file byte-identical.
+    // `note add`: refuses exit 1 with typed error naming a bad record, files byte-identical.
     let add_out = fx.run(&["note", "add", "Should not write", "--json"]);
     assert_eq!(add_out.status.code(), Some(1));
     assert!(add_out.stdout.is_empty());
@@ -535,9 +532,10 @@ fn bad_records_warn_on_reads_fail_on_show_and_refuse_writes_without_touching_sto
     assert_eq!(err["code"], "store_bad_record");
     assert!(err["error"].as_str().unwrap().contains("note 2"));
     assert_eq!(
-        std::fs::read(&store_path).unwrap(),
+        files(),
         before,
-        "store file must remain byte-identical after read and refused write"
+        "{} and its -wal must remain byte-identical after reads and a refused write",
+        store_path.display()
     );
 }
 
@@ -603,8 +601,9 @@ mod unix {
             .unwrap();
         assert_eq!(out.status.code(), Some(0), "stderr: {}", text(&out.stderr));
         assert_eq!(mode(&fx.root()), 0o700);
-        assert_eq!(mode(&fx.root().join("notes.json")), 0o600);
-        assert_eq!(mode(&fx.root().join(".lock")), 0o600);
+        assert_eq!(mode(&fx.root().join("notes.db")), 0o600);
+        assert_eq!(mode(&fx.root().join("notes.db-wal")), 0o600);
+        assert_eq!(mode(&fx.root().join("notes.db-shm")), 0o600);
         assert_eq!(mode(&fx.root().join("audit.jsonl")), 0o600);
         assert_eq!(mode(&fx.root().join(".audit.lock")), 0o600);
     }
@@ -614,7 +613,7 @@ mod unix {
         // STD-05 R9, and STD-02 R26: the message carries a runnable remedy.
         let fx = Fixture::new();
         fx.seed();
-        let store = fx.root().join("notes.json");
+        let store = fx.root().join("notes.db");
         fs::set_permissions(&store, Permissions::from_mode(0o666)).unwrap();
         let before = fs::read(&store).unwrap();
         let out = fx.run(&["note", "list"]);
@@ -638,7 +637,7 @@ mod unix {
         // STD-05 R7, R9.
         let fx = Fixture::new();
         fx.seed();
-        let store = fx.root().join("notes.json");
+        let store = fx.root().join("notes.db");
         let target = fx.elsewhere("target.json");
         fs::rename(&store, &target).unwrap();
         symlink(&target, &store).unwrap();
@@ -665,7 +664,7 @@ mod unix {
         fx.seed();
         let root = fx.root();
         let before = snapshot(&root);
-        fs::set_permissions(root.join("notes.json"), Permissions::from_mode(0o400)).unwrap();
+        fs::set_permissions(root.join("notes.db"), Permissions::from_mode(0o400)).unwrap();
         fs::set_permissions(&root, Permissions::from_mode(0o500)).unwrap();
         let outs: Vec<_> = [
             &["note", "list"][..],
@@ -677,7 +676,7 @@ mod unix {
         .collect();
         // Restore before asserting, so the fixture can always clean up.
         make_private(&root);
-        make_private(&root.join("notes.json"));
+        make_private(&root.join("notes.db"));
         for (args, out) in outs {
             assert_eq!(
                 out.status.code(),
