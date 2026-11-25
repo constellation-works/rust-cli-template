@@ -1,6 +1,8 @@
 ---
 type: design
 summary: "Glossary: <Feature>"
+created_date: YYYY-MM-DD
+updated_date: YYYY-MM-DD
 last_validated: YYYY-MM-DD
 ---
 

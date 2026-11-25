@@ -1,6 +1,8 @@
 ---
 type: design
 summary: "Spec: <Mechanism>"
+created_date: YYYY-MM-DD
+updated_date: YYYY-MM-DD
 last_validated: YYYY-MM-DD
 ---
 

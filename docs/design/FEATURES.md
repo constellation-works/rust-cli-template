@@ -1,6 +1,8 @@
 ---
 type: design
 summary: Every feature under docs/design/ by delivery stage, with its owner and next step.
+created_date: 2026-11-22
+updated_date: 2026-11-25
 ---
 
 # Feature board

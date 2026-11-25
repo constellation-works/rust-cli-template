@@ -4,6 +4,8 @@ owner: claude
 status: Accepted
 type: design
 summary: How a feature's design docs under docs/design/ are laid out, what their frontmatter carries, and what earns a decision entry.
+created_date: 2026-09-26
+updated_date: 2026-11-25
 ---
 
 # Design Doc Conventions

@@ -6,12 +6,15 @@ STD-09 R15: every Markdown document at the repository root and under
 `summary`. The root `README.md` and the root agent instruction files are
 exempt, and so is the vendored `docs/standards/` (its own check verifies it).
 
+STD-09 R29: every document R15 covers carries `created_date` and
+`updated_date` as `YYYY-MM-DD` (the literal placeholder in
+`docs/design/_templates/`), `updated_date` not before `created_date`, and no
+legacy `created`, `updated` or `last_updated` key.
+
 STD-06 R4: every numbered design doc (`docs/design/<feature>/<n>_*.md`, the
 templates included) carries `title`, `owner`, `created_date`,
-`updated_date`, `status`, `feature`, `doc_role` and `summary`; the dates are
-`YYYY-MM-DD` (the literal placeholder in `_templates/`), `updated_date` is
-not before `created_date`, and `status` is `Draft`, `Accepted` or
-`Deprecated`.
+`updated_date`, `status`, `feature`, `doc_role` and `summary` (the dates as
+R29 above), and `status` is `Draft`, `Accepted` or `Deprecated`.
 
 Prints one line per breach and exits 1 when there is one.
 """
@@ -68,6 +71,25 @@ def frontmatter(path):
     return fields
 
 
+def check_dates(rel, fields, template, fail):
+    for key in ("created", "updated", "last_updated"):
+        if key in fields:
+            fail(rel, f"`{key}` is a legacy key: use `created_date` and `updated_date` (STD-09 R29)")
+    dates = {}
+    for key in ("created_date", "updated_date"):
+        value = fields.get(key)
+        if not value:
+            fail(rel, f"no `{key}` in the frontmatter (STD-09 R29)")
+        elif template and value == "YYYY-MM-DD":
+            continue
+        elif not DATE.fullmatch(value):
+            fail(rel, f"`{key}` is not YYYY-MM-DD: {value!r} (STD-09 R29)")
+        else:
+            dates[key] = value
+    if len(dates) == 2 and dates["updated_date"] < dates["created_date"]:
+        fail(rel, "`updated_date` is before `created_date` (STD-09 R29)")
+
+
 def check_document(rel, fields, fail):
     if fields is None:
         fail(rel, "no YAML frontmatter at the top (STD-09 R15)")
@@ -80,25 +102,12 @@ def check_document(rel, fields, fail):
         fail(rel, "`summary` is more than one sentence (STD-09 R15)")
 
 
-def check_numbered(rel, fields, template, fail):
+def check_numbered(rel, fields, fail):
     for key in NUMBERED_FIELDS:
+        if key in ("created_date", "updated_date"):
+            continue  # R29's own lines name these
         if not fields.get(key):
             fail(rel, f"no `{key}` in the frontmatter (STD-06 R4)")
-    if "last_updated" in fields:
-        fail(rel, "`last_updated` is not a field: use `created_date` and `updated_date` (STD-06 R4)")
-    dates = {}
-    for key in ("created_date", "updated_date"):
-        value = fields.get(key)
-        if not value:
-            continue
-        if template and value == "YYYY-MM-DD":
-            continue
-        if not DATE.fullmatch(value):
-            fail(rel, f"`{key}` is not YYYY-MM-DD: {value!r} (STD-06 R4)")
-        else:
-            dates[key] = value
-    if len(dates) == 2 and dates["updated_date"] < dates["created_date"]:
-        fail(rel, "`updated_date` is before `created_date` (STD-06 R4)")
     status = fields.get("status")
     if status and status not in STATUSES:
         fail(rel, f"`status` is {status!r}, not Draft, Accepted or Deprecated (STD-06 R4)")
@@ -115,13 +124,16 @@ def main():
         fields = frontmatter(path)
         check_document(rel, fields, fail)
         parts = path.relative_to(ROOT).parts
+        template = parts[:3] == ("docs", "design", "_templates")
+        if fields is not None:
+            check_dates(rel, fields, template, fail)
         numbered = (
             len(parts) == 4
             and parts[:2] == ("docs", "design")
             and re.match(r"\d_", parts[3]) is not None
         )
         if numbered and fields is not None:
-            check_numbered(rel, fields, parts[2] == "_templates", fail)
+            check_numbered(rel, fields, fail)
 
     for line in breaches:
         print(f"doc-frontmatter: {line}", file=sys.stderr)

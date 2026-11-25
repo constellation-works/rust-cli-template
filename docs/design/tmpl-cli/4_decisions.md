@@ -1114,7 +1114,11 @@ Closed since:
 - **STD-09@3 §R15**: every root and `docs/` Markdown document but the
   exempt ones carries `type` and a one-sentence `summary` (the feature board
   is generated with them, and `scripts/init.sh` writes `type` into a copy's
-  `about.md`); the same check holds it.
+  `about.md`); the same check holds it. Each of them also carries
+  `created_date` and `updated_date`, which STD-09@4 §R29 (vendored since
+  the record was written) asks of every document with frontmatter, and the
+  check holds that too. The vendored `docs/standards/` is the one gap: see
+  "The vendored standards carry no project frontmatter".
 
 ### Consequences
 
@@ -1122,6 +1126,34 @@ Closed since:
   gap above already recorded rather than introduced by the change.
 - Cost: until the follow-up lands, a project made from the template inherits
   these gaps along with the record of them.
+
+## The vendored standards carry no project frontmatter
+
+**Recorded:** 2026-11-25
+**Code anchors:** `scripts/check-doc-frontmatter.py::documents`
+
+### Context
+
+STD-09@4 §R15 asks every Markdown document under `docs/` to open with
+`type` and `summary`, and §R29 asks each such document for `created_date`
+and `updated_date`. The vendored standards under `docs/standards/` are
+Markdown under `docs/`, and most of them carry no such frontmatter (the
+`STD-nn.md` files carry the canon's own). STD-09 also says an adopting repo
+never edits its vendored copy, and `docs/standards/check.sh` fails on any
+byte changed there.
+
+### Decision
+
+Deviation from STD-09@4 §R15 and §R29 for `docs/standards/` only:
+`scripts/check-doc-frontmatter.py` skips the directory, and the template
+adds no frontmatter to it. The alternative, adding frontmatter to the
+vendored files, breaks the vendoring check and the rule never to edit them.
+
+### Consequences
+
+- Every other document under `docs/` is held to both rules.
+- Cost: the vendored files stay outside the frontmatter check until the
+  canon either carries the frontmatter itself or exempts vendored copies.
 
 ## One init command makes three kinds from one marked tree
 
