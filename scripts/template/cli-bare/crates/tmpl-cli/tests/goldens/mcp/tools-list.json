@@ -1,0 +1,14 @@
+[
+  {
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "description": "Show the data directory and the store format",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "name": "status"
+  }
+]

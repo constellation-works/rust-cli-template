@@ -5,8 +5,9 @@
 //! `<id>`, never real ids or tracker numbers (STD-01 R23).
 
 use crate::command::Command;
+use crate::mcp::{MCP_EXAMPLES, McpArgs};
 use clap::error::ErrorKind;
-use clap::{Args, CommandFactory, FromArgMatches, Parser};
+use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 use cw_cli::Format;
 use cw_cli::help::{Group, grouped};
 use std::ffi::OsString;
@@ -42,6 +43,10 @@ const GROUPS: &[Group<'_>] = &[
         commands: &["status"],
     },
     Group {
+        heading: "Agents",
+        commands: &["mcp"],
+    },
+    Group {
         heading: "Help",
         commands: &["help"],
     },
@@ -61,7 +66,19 @@ pub(crate) struct Cli {
     pub(crate) global: GlobalArgs,
 
     #[command(subcommand)]
-    pub(crate) command: Command,
+    pub(crate) command: Invocation,
+}
+
+/// What an invocation does: run one command, or serve every command as a
+/// tool.
+#[derive(Debug, Subcommand)]
+pub(crate) enum Invocation {
+    /// One command.
+    #[command(flatten)]
+    Run(Command),
+    /// Serve every command as an MCP tool on stdin and stdout
+    #[command(after_help = MCP_EXAMPLES)]
+    Mcp(McpArgs),
 }
 
 /// Flags accepted before or after any subcommand (STD-01 R4).

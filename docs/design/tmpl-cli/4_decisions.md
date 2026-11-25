@@ -7,7 +7,7 @@ status: Draft
 feature: tmpl-cli
 doc_role: decisions
 type: design
-summary: Why three crates laid out by app over the cw-kit (binary, core with apps and composition, store with a driver, repositories and a contract module; the one error type, file access, the SQLite notes database, the command path and the command line's mechanism from the kit's cw-base, cw-fs, cw-sqlite, cw-app and cw-cli), why commands are one module per noun, why mutating commands are audited through one chokepoint and why that chokepoint, the captured environment and the audit log are the kit's, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, why the notes live in SQLite and how its schema evolves, how the store stays private, and every recorded standard deviation or rule the template does not exercise.
+summary: Why three crates laid out by app over the cw-kit (binary, core with apps and composition, store with a driver, repositories and a contract module; the one error type, file access, the SQLite notes database, the command path, the command line's mechanism and the MCP surface from the kit's cw-base, cw-fs, cw-sqlite, cw-app, cw-cli and cw-mcp), why the MCP surface is a second mapping onto the same commands, why commands are one module per noun, why mutating commands are audited through one chokepoint and why that chokepoint, the captured environment and the audit log are the kit's, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, why the notes live in SQLite and how its schema evolves, how the store stays private, and every recorded standard deviation or rule the template does not exercise.
 tags: [tmpl-cli, decisions]
 paths: ["Cargo.toml", "crates/**", "Makefile"]
 related_features: [tmpl-cli]
@@ -1277,3 +1277,48 @@ crate names it.
   its priority, since `emit_text` escapes the whole text; and the two
   variables above are undeclared in the kit.
 - Cost: the surface's bytes change only by moving the satellites pin.
+
+## The MCP surface is a second mapping onto the same commands
+
+**Recorded:** 2026-11-25
+**Code anchors:** `crates/tmpl-cli/src/mcp/mod.rs::tools`, `call`; `crates/tmpl-cli/src/mcp/input.rs`; `crates/tmpl-cli/src/command/note.rs::AddArgs`; `crates/tmpl-cli/src/output/payload.rs::Payload::json`; `crates/tmpl-cli/tests/mcp.rs`
+
+### Context
+
+The cw-kit design gives every constellation CLI a second surface, an MCP
+server, from `cw-mcp` (satellites): a stdio server over typed, synchronous
+tools whose input schema is derived from the input type. STD-01 R25 asks
+that every surface derive from one declaration, and R36 that a test prove
+each advertised operation and parameter reaches its implementation, which
+with two surfaces stops being review-only.
+
+### Decision
+
+- `tmpl-cli mcp` serves one tool per command over the runtime `run`
+  starts; only the CLI crate names `cw-mcp`, and the core knows neither
+  surface.
+- A tool's input is its command's clap `Args` struct, which also derives
+  `Deserialize` and `JsonSchema`. A text value is read through its type's
+  `FromStr`, the parse clap uses, and the schema states only what that
+  parse enforces (the kit's rule): no `schemars` limit attribute.
+- The tool's function wraps the input in the CLI's `Command` and calls the
+  command's handler, so both surfaces reach the core through the same
+  `app::<app>::exec` and `cw_app::exec` call. Its result is
+  `Payload::json`, the value `--json` prints; the list is already an
+  object (the envelope), so the kit does not wrap it.
+- The tool name is the command path joined with `_`; the description is
+  the command's summary. A panicking tool is answered with `tool_panicked`.
+
+### Consequences
+
+- Tests hold the derivation: every command has exactly one tool and back,
+  each tool's parameters are its command's argument ids, each tool returns
+  what `--json` prints, a failing call carries the CLI's code, `tools/list`
+  is a golden with the update switch, and a mutating call's audit line
+  names the `mcp` surface and the client.
+- A copy adds a tool for a new command with the derives on its `Args` and
+  one line in `tools()`.
+- Cost: argument help is written once for both readers, so a tool's
+  parameter descriptions keep the command line's phrasing (`--json`,
+  `[default: …]`); the global flags are not tool parameters, since the
+  server's data directory is fixed when it starts.

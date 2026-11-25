@@ -26,9 +26,11 @@ and the gates. The output and store contracts are specified in
 Three crates laid out by app over the cw-kit (why:
 [4_decisions.md](./4_decisions.md#the-template-is-laid-out-by-app-in-three-crates),
 [the kit](./4_decisions.md#the-foundation-is-the-cw-kit)).
-`tmpl-cli` is the surface: `cli` (the root flags), `command` (one module
-per noun, holding its subcommands, flags and help, and mapping its arguments
-to an app's `Command` and the `Outcome` to a payload) and `output`.
+`tmpl-cli` holds both surfaces: `cli` (the root flags), `command` (one
+module per noun, holding its subcommands, flags and help, and mapping its
+arguments to an app's `Command` and the `Outcome` to a payload), `output`,
+and `mcp`, which serves every command as a tool of the kit's `cw-mcp` over
+the same handlers.
 `tmpl-cli-core` holds the apps (`app/note/`: `Command`, `Outcome`, `Error`,
 `exec`, one flow per command and the pure `rule`: the next id and list
 selection), each implementing the kit's `cw_app::App`, and `composition`
@@ -180,9 +182,11 @@ file `0600`. A read-only command creates no file and takes no lock.
 
 Each line is `{"format": 3, "at", "surface", "actor", "command", "status",
 "target", "error_code", "duration_ms"}`: identifiers only, never argument
-values or error text (STD-05 R13). `surface` is `cli`; `actor` is the user
-the captured environment claims (`USER`, else `USERNAME`), `null` when
-neither is set and `<invalid>` when the claim is not an identifier. The kit
+values or error text (STD-05 R13). `surface` is `cli` or `mcp`; on the
+command line `actor` is the user the captured environment claims (`USER`,
+else `USERNAME`), and through a tool it is the client's name from its
+handshake; `null` when there is none and `<invalid>` when the claim is not
+an identifier. The kit
 reads format 1 (no `actor`) and 2 (no `surface`) lines, which earlier
 builds of the template wrote, through its upgrade steps, and refuses to
 append to a log whose newest line is in a newer format than it writes. The
@@ -190,6 +194,29 @@ log is a side channel, so it fails open (STD-02 R31): a line that cannot be
 written comes back to the surface as an `AuditWarning`, printed as
 `warning: …` on stderr after the command's own output or JSON error object,
 and never changes the command's result or exit code.
+
+## 5a. The MCP surface
+
+`tmpl-cli mcp` serves every command as a tool of the kit's `cw-mcp` on
+stdin and stdout, until the client closes its input. It starts the same
+runtime as any command (`--root`, `TMPL_CLI_ROOT`, then `$HOME/.tmpl-cli`)
+and reads no environment of its own.
+
+- A tool is named by its command's path (`status`, `note_add`), described
+  by the command's summary, and takes the command's clap `Args` as its
+  input: the struct also derives `Deserialize` (unknown fields refused; a
+  text value parsed by its type's `FromStr`, as clap does) and
+  `JsonSchema`, so the schema advertises the same parameters, help and
+  allowed values as `--help` (STD-01 R25, R36).
+- The tool's function wraps the input in the CLI's `Command` and calls the
+  command's handler, which runs `app::<app>::exec` and the kit's
+  `cw_app::exec` and settles the audit record. Its result is the value
+  `--json` prints; a failure is the command's own error, answered as a
+  tool error with the template's code and `isError: true`. Bad-record and
+  audit warnings go to the log on stderr; nothing in the surface writes to
+  stdout, which carries the protocol.
+- Each call's `Origin` is the `mcp` surface and the client's name, so the
+  audit log tells the surfaces apart.
 
 ## 6. Gates
 
@@ -208,7 +235,7 @@ and never changes the command's result or exit code.
 | `clippy --all-targets -D warnings` with the STD-02 lint table and its adoptable additions, plus STD-12's lints and `clippy.toml` | `ci-lint` | no unwrap/expect/print/dbg, no lock across await, no wildcard enum arms, no narrowing `as`; no one-letter binding (`min_ident_chars`, no allowed idents; STD-12 R14), no glob import (`wildcard_imports`, `enum_glob_use`; R15), every public item documented (`missing_docs`; R18); and, through `clippy.toml`'s `disallowed_methods` and `disallowed_types` (denied), no `std::fs` call or file type, no `std::env` read, no `Env::capture` outside `main.rs`, and no spawned or ended process, aliases and tests included, each exemption a module-level `#![expect]` |
 | `cargo deny check` | `ci-lint` | advisories, licenses, sources |
 | nextest `--no-tests=fail` (timeouts in `.config/nextest.toml`, no retries), then `cargo test --doc` | `test` | behaviour, and runnable doc examples |
-| help and output goldens from the built binary | `goldens` | the public surface (STD-01 R24) |
+| help and output goldens from the built binary, and the MCP `tools/list` golden | `goldens` | the public surfaces (STD-01 R24) |
 | `check-template.py` (the template's own; removed by `scripts/init.sh`) | `ci-fast` (`structure`) | the example is removable: note-named paths and note references only in the `example` entries and regions of `scripts/template-manifest.txt`, balanced region markers, every file with markers listed |
 
 Every Cargo target says it skips while no `crates/*/Cargo.toml` exists, so

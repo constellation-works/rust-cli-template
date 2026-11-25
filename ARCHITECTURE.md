@@ -15,9 +15,10 @@ tmpl-cli  ->  tmpl-cli-core  ->  tmpl-cli-store
    |            |                      +--> cw-sqlite -> cw-fs, cw-base
    |            +--> cw-app -> cw-fs, cw-base
    +--> cw-cli -> cw-app, cw-base
+   +--> cw-mcp -> cw-app, cw-base
 ```
 
-`cw-base`, `cw-fs`, `cw-sqlite`, `cw-app` and `cw-cli` are the cw-kit, with `cw-testkit` (test isolation, a
+`cw-base`, `cw-fs`, `cw-sqlite`, `cw-app`, `cw-cli` and `cw-mcp` are the cw-kit, with `cw-testkit` (test isolation, a
 dev-dependency only), all from
 [constellation-works/satellites](https://github.com/constellation-works/satellites),
 a git dependency pinned in the root `Cargo.toml` to commit
@@ -26,9 +27,9 @@ pin is a change of its own). Every kit crate is pinned to that one rev.
 
 | Crate | Kind | Owns | Internal and kit dependencies | Banned |
 |-------|------|------|-------------------------------|--------|
-| `tmpl-cli` | binary `tmpl-cli` | `main` (the one read of the process: `Env::capture()` and the arguments), argument declarations, the mapping from arguments to an app's `Command`, each command's human view, settling the audit record and printing its warning, the remedy for each error. The only stdout, stderr and terminal access, all of it through `cw-cli`: the terminal decision, the sink, error rendering with the exit code, logging and grouped root help are the kit's. | `tmpl-cli-core`, `cw-cli`; `cw-testkit` and `tmpl-cli-store` (its `test-support`) as dev-dependencies only | `tmpl-cli-store` as a normal dependency, every other kit crate, `rusqlite`, `tracing-subscriber`, any terminal crate, `rustix` |
-| `tmpl-cli-core` | library | The apps, each a `cw_app::App`, and composition (the runtime every command runs against). | `tmpl-cli-store`, `cw-base`, `cw-app`; `cw-testkit` and the store's `test-support` as dev-dependencies only | `cw-fs`, `cw-sqlite`, `cw-cli`, `rusqlite`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
-| `tmpl-cli-store` | library | The data directory: the database's driver, one repository per record, the record shapes (`contract`), and the store's stable code for each of the kit's errors. No audit code or file: the audit log is `cw-app`'s. It names no file primitive and no SQLite crate of its own: it reaches the directory through `cw-fs` and the database through `cw-sqlite`, and names `rusqlite` only through its re-export. | `cw-base`, `cw-fs`, `cw-sqlite`; `cw-testkit` as a dev-dependency only | `cw-cli`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix`, `rusqlite` as a dependency of its own |
+| `tmpl-cli` | binary `tmpl-cli` | `main` (the one read of the process: `Env::capture()` and the arguments), argument declarations, the mapping from arguments to an app's `Command`, each command's human view, settling the audit record and printing its warning, the remedy for each error. The only stdout, stderr and terminal access, all of it through `cw-cli`: the terminal decision, the sink, error rendering with the exit code, logging and grouped root help are the kit's. The second surface, an MCP server (`tmpl-cli mcp`) with one tool per command, is `cw-mcp`'s. | `tmpl-cli-core`, `cw-cli`, `cw-mcp`; `cw-testkit`, `cw-mcp` (its `test-support`) and `tmpl-cli-store` (its `test-support`) as dev-dependencies only | `tmpl-cli-store` as a normal dependency, every other kit crate, `rusqlite`, `tracing-subscriber`, any terminal crate, `rustix` |
+| `tmpl-cli-core` | library | The apps, each a `cw_app::App`, and composition (the runtime every command runs against). | `tmpl-cli-store`, `cw-base`, `cw-app`; `cw-testkit` and the store's `test-support` as dev-dependencies only | `cw-fs`, `cw-sqlite`, `cw-cli`, `cw-mcp`, `rusqlite`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
+| `tmpl-cli-store` | library | The data directory: the database's driver, one repository per record, the record shapes (`contract`), and the store's stable code for each of the kit's errors. No audit code or file: the audit log is `cw-app`'s. It names no file primitive and no SQLite crate of its own: it reaches the directory through `cw-fs` and the database through `cw-sqlite`, and names `rusqlite` only through its re-export. | `cw-base`, `cw-fs`, `cw-sqlite`; `cw-testkit` as a dev-dependency only | `cw-cli`, `cw-mcp`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix`, `rusqlite` as a dependency of its own |
 
 `scripts/check-dependency-direction.sh` reads these edges from Cargo's own
 package graph (`cargo metadata --no-deps --locked`), so a quoted or renamed
@@ -41,8 +42,8 @@ names `cw_testkit`). The binary's and the core's tests also take
 `tmpl-cli-store` with its `test-support` feature, which runs raw SQL on the
 database, so a test can set up a store the public API never writes
 while no crate outside the store names `rusqlite`. The binary names
-`tmpl-cli-core` and, for its command line, `cw-cli`, which no other crate
-names. The core re-exports the store's record shapes as
+`tmpl-cli-core` and, for its two surfaces, `cw-cli` and `cw-mcp`, which no
+other crate names. The core re-exports the store's record shapes as
 `tmpl_cli_core::contract` and the kit's error type as
 `tmpl_cli_core::Error` and `tmpl_cli_core::Kind`, and what a surface needs
 of `cw-app` (`Env`, `EnvVar`, `Origin`, `Surface`, `Finished`,
@@ -60,8 +61,13 @@ Why the crates are laid out by app, and why the foundation is the kit:
 ```
 main.rs              Env::capture() and the arguments, once; run
 lib.rs               probe the streams, parse, open the kit's sink, start logging and the runtime, dispatch, print an audit warning
-cli.rs               the root command, the global flags, the root help's groups (rendered by cw_cli::help::grouped)
+cli.rs               the root command, the global flags, the root help's groups (rendered by cw_cli::help::grouped); Invocation: a command, or mcp
 command/<noun>.rs    arguments -> app::<app>::Command; exec; Outcome -> payload; render, then settle
+mcp/                 the MCP surface: one cw_mcp::Tool per command, served by `tmpl-cli mcp`
+  mod.rs             tools(): each command's Args as the input, its summary as the description, its handler as the call; server, serve
+<!-- example:begin -->
+  input.rs           how a text argument is read from a tool's JSON: through the type's own FromStr
+<!-- example:end -->
 output/              payloads and each command's human view, written through the kit's sink
   mod.rs             finish: emit or report through cw_cli::Sink; usage errors, help and version
   payload.rs         the payloads every mode renders
@@ -70,7 +76,7 @@ output/              payloads and each command's human view, written through the
   note.rs            the note payloads, the list table, the detail text, the priority's colour role
 <!-- example:end -->
   env.rs             the variables the kit reads but does not declare yet, for the usage table
-error.rs             the remedy for an error; the surface's own failures (output, usage)
+error.rs             the remedy for an error; the surfaces' own failures (output, usage, the MCP server)
 ```
 
 A command handler maps the parsed arguments to the app's `Command`, calls
@@ -88,6 +94,23 @@ terminal detection, colour decision, sink, table layout or logging setup of
 its own. Errors reach stderr and the exit code only through the kit's
 `Sink::report`, which returns the `Exit` the error's kind calls for; the
 template supplies only the remedy (`error.rs`).
+
+The MCP surface is a second mapping onto the same commands, not a second
+set. A tool's input is its command's clap `Args` struct, which also derives
+`Deserialize` and `JsonSchema`, so the parser, `--help` and the tool's
+schema come from one declaration (STD-01 R25); its description is the
+command's summary. The tool's function wraps the input in the CLI's
+`Command` and calls the same handler as the command line, so both reach the
+core through `app::<app>::exec` and the kit's `cw_app::exec`; a tool holds
+no rule, store call or file access. Its result is the value `--json` prints
+(`Payload::json`), and a failure is the command's own error and code, which
+`cw-mcp` answers as a tool error. The server runs against the runtime `run`
+started from the captured `Env`, reads no environment of its own, and never
+writes to stdout outside the protocol. Each call's `Origin` is the `mcp`
+surface and the client's name, so the audit log tells the surfaces apart.
+To add a tool for a new command, give its `Args` the same derives and add
+one line to `tools()` in `mcp/mod.rs`; a test fails while a command has no
+tool or a tool's parameters differ from its command's arguments.
 
 ## `tmpl-cli-core`
 
@@ -302,7 +325,8 @@ By grep:
   `command`.
 - Only `tmpl-cli/src/output/` touches stdout, stderr, `IsTerminal` or the
   color/format variables (`scripts/check-terminal-guard.sh`), and it does
-  so only through `cw-cli`.
+  so only through `cw-cli`. The MCP server's stdio is `cw-mcp`'s, and
+  nothing in `mcp/` writes to a stream.
 - Every crate: module, source directory and source file names are singular
   (`scripts/check-singular-names.sh`, STD-12 R1), and the source style that
   stable rustfmt cannot check holds (`scripts/check-source-style.sh`, STD-12

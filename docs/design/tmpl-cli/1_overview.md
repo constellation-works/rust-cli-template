@@ -64,6 +64,7 @@ there.
 | Noun dispatch | [crates/tmpl-cli/src/command/mod.rs](../../../crates/tmpl-cli/src/command/mod.rs) |
 | `note` subcommands, flags, help, mapping to the app, empty-result notice | [crates/tmpl-cli/src/command/note.rs](../../../crates/tmpl-cli/src/command/note.rs) |
 | One terminal decision, logging, dispatch | [crates/tmpl-cli/src/lib.rs](../../../crates/tmpl-cli/src/lib.rs) |
+| The MCP surface: one tool per command over the same handlers | [crates/tmpl-cli/src/mcp/](../../../crates/tmpl-cli/src/mcp/) |
 | Payloads, each command's view, error and usage reporting through the kit | [crates/tmpl-cli/src/output/](../../../crates/tmpl-cli/src/output/) |
 | The `note` app: `exec`, its `cw_app::App` impl, audited-command table, flows | [crates/tmpl-cli-core/src/app/note/](../../../crates/tmpl-cli-core/src/app/note/) |
 | Next-id rule, list selection (filter, count, limit) | [crates/tmpl-cli-core/src/app/note/rule.rs](../../../crates/tmpl-cli-core/src/app/note/rule.rs) |

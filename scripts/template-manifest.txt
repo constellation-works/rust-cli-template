@@ -26,6 +26,8 @@ example crates/tmpl-cli/src/command/note.rs
 example crates/tmpl-cli/src/command/tests/note.rs
 example crates/tmpl-cli/src/output/note.rs
 example crates/tmpl-cli/src/output/tests/note.rs
+example crates/tmpl-cli/src/mcp/input.rs
+example crates/tmpl-cli/src/mcp/tests/input.rs
 example crates/tmpl-cli/tests/note.rs
 example crates/tmpl-cli/tests/goldens/help/note.txt
 example crates/tmpl-cli/tests/goldens/help/note-add.txt
@@ -65,6 +67,7 @@ generated template.toml
 
 # Replaced per kind.
 overlay cli-bare crates/tmpl-cli/tests/goldens/help/root.txt scripts/template/cli-bare/crates/tmpl-cli/tests/goldens/help/root.txt
+overlay cli-bare crates/tmpl-cli/tests/goldens/mcp/tools-list.json scripts/template/cli-bare/crates/tmpl-cli/tests/goldens/mcp/tools-list.json
 overlay workspace ARCHITECTURE.md scripts/template/workspace/ARCHITECTURE.md
 
 # Files with regions.
@@ -81,11 +84,14 @@ regions crates/tmpl-cli/src/cli.rs
 regions crates/tmpl-cli/src/command/mod.rs
 regions crates/tmpl-cli/src/command/tests/mod.rs
 regions crates/tmpl-cli/src/error.rs
+regions crates/tmpl-cli/src/mcp/mod.rs
+regions crates/tmpl-cli/src/mcp/tests/mod.rs
 regions crates/tmpl-cli/src/output/mod.rs
 regions crates/tmpl-cli/src/output/payload.rs
 regions crates/tmpl-cli/src/output/tests/mod.rs
 regions crates/tmpl-cli/tests/cli.rs
 regions crates/tmpl-cli/tests/golden.rs
+regions crates/tmpl-cli/tests/mcp.rs
 regions crates/tmpl-cli/tests/support/mod.rs
 regions crates/tmpl-cli-core/src/app/mod.rs
 regions crates/tmpl-cli-store/src/contract/mod.rs

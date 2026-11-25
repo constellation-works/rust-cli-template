@@ -41,6 +41,25 @@ object. Each `note add` appends one event to `audit.jsonl` with the note ID
 and outcome.
 <!-- example:end -->
 
+## MCP server
+
+`tmpl-cli mcp` serves every command as a Model Context Protocol tool on
+stdin and stdout, for an agent's MCP client, until the client closes its
+input:
+
+```sh
+tmpl-cli --root <DIR> mcp
+```
+
+Each tool is named after its command, with `_` between the words
+(`status`), takes the command's arguments as JSON fields, and returns what
+the command prints with `--json`. A failure is a tool error carrying the
+same `code` the command line reports. A change made through a tool is
+audited with the surface `mcp` and the client's name as the actor.
+<!-- example:begin -->
+The note tools are `note_add`, `note_list` and `note_show`.
+<!-- example:end -->
+
 ## Configuration
 
 Every variable the CLI reads, generated from their declarations (the
@@ -83,8 +102,9 @@ cannot write, a read writes nothing.
 ## Audit log
 
 `audit.jsonl` holds one JSON line per command that changes a record: when it
-started (`at`), the surface (`cli`), the actor (`USER`, else `USERNAME`,
-written as `<invalid>` when it is not a plain identifier), the command, its
+started (`at`), the surface (`cli` or `mcp`), the actor (`USER`, else
+`USERNAME`, on the command line; the client's name through a tool; written
+as `<invalid>` when it is not a plain identifier), the command, its
 `status`, the record it acted on (`target`), the error `code` on failure and
 `duration_ms`. It never holds an argument value or an error message. Lines are
 written in `format` 3, the cw-kit's audit format. A data directory from an

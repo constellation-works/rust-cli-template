@@ -9,7 +9,7 @@
 use serde::Serialize;
 // example:begin
 
-use super::note::NotePayload;
+use super::note::{ListPayload, NotePayload};
 // example:end
 
 /// The store's status as every output mode sees it.
@@ -64,5 +64,37 @@ pub(crate) enum Payload {
     },
     /// A single note (`show`, `add`).
     Note(NotePayload),
+    // example:end
+}
+
+impl Payload {
+    /// What `--json` prints for this payload, and what an MCP tool returns:
+    /// one value, so the two surfaces cannot disagree (STD-01 R6, R10).
+    pub(crate) fn json(&self) -> Json<'_> {
+        match self {
+            Self::Status(status) => Json::Status(status),
+            // example:begin
+            Self::Notes { notes, total } => Json::Notes(ListPayload {
+                notes,
+                total: *total,
+                truncated: notes.len() < *total,
+            }),
+            Self::Note(note) => Json::Note(note),
+            // example:end
+        }
+    }
+}
+
+/// A payload's machine form: each variant serializes as its own shape.
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub(crate) enum Json<'a> {
+    /// The status object.
+    Status(&'a StatusPayload),
+    // example:begin
+    /// The list envelope (STD-01 R34).
+    Notes(ListPayload<'a>),
+    /// One note.
+    Note(&'a NotePayload),
     // example:end
 }

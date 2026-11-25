@@ -1,4 +1,4 @@
-use crate::cli::Cli;
+use crate::cli::{Cli, Invocation};
 use crate::command::note::list_notice;
 use crate::command::{Command, NoteCommand};
 use clap::Parser;
@@ -55,7 +55,10 @@ fn a_cut_list_says_how_many_matched_and_a_whole_one_says_nothing() {
 }
 
 fn command(args: &[&str]) -> Command {
-    Cli::try_parse_from(args).unwrap().command
+    match Cli::try_parse_from(args).unwrap().command {
+        Invocation::Run(command) => command,
+        Invocation::Mcp(_) => panic!("{args:?} parsed as mcp"),
+    }
 }
 
 #[test]

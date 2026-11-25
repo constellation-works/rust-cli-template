@@ -26,9 +26,11 @@ not build yet.
 2. Does the project need NDJSON (STD-01 R7 SHOULD) once a command streams?
 3. When a destructive verb appears (`note remove`), it must refuse without
    `--confirm` (STD-01 R5); is there also a bulk form that dry-runs by default?
-4. If a second surface (MCP server, desktop app) appears, does the core crate
-   grow an operations layer so both surfaces derive from one declaration
-   (STD-01 R25)?
+4. Settled: the second surface, an MCP server, derives from the same
+   declaration without an operations layer in the core: each tool's input
+   is its command's clap `Args` and its call is the command's handler (see
+   [4_decisions.md](./4_decisions.md#the-mcp-surface-is-a-second-mapping-onto-the-same-commands)).
+   A third surface (a desktop app) would reopen the question.
 
 ## 2. Prior Work
 

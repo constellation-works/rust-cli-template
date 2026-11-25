@@ -6,6 +6,10 @@
 yanked = "deny"
 ignore = [
     # { id = "RUSTSEC-YYYY-NNNN", reason = "<why it does not apply>. Re-review YYYY-MM-DD." },
+    # chrono comes in only through cw-mcp's MCP SDK (rmcp, which uses it in
+    # its protocol model, and schemars' chrono feature that rmcp turns on);
+    # nothing here calls it. The kit's own deny.toml ignores it the same way.
+    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained, not vulnerable; it reaches the tree only through rmcp (via cw-mcp), which has no build without it. Re-review 2027-02-24." },
 ]
 
 [licenses]

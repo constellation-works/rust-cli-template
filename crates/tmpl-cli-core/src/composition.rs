@@ -25,6 +25,10 @@ pub const APP: &str = "tmpl-cli";
 /// `Runtime::with_clock(Clock::fixed(..))`.
 pub type Runtime = cw_app::Runtime<Store>;
 
+/// What the runtime holds: the store. A surface names it only as the
+/// runtime's state, where a kit type asks for it.
+pub type State = Store;
+
 /// What a flow runs against: the store, the clock and the client.
 pub(crate) type Ctx<'a> = cw_app::Ctx<'a, Store>;
 

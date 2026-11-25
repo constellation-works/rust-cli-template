@@ -43,7 +43,7 @@ pub mod app;
 
 mod composition;
 
-pub use composition::{APP, Runtime, start};
+pub use composition::{APP, Runtime, State, start};
 pub use cw_app::env;
 pub use cw_app::{AuditWarning, Env, EnvVar, Finished, Origin, Surface};
 pub use cw_base::{Error, Kind};

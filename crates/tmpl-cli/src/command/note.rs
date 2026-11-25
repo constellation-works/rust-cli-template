@@ -10,9 +10,13 @@
 //! `note/support.rs` for what they share, and `note/tests/` beside them.
 //! STD-02 R18: split along responsibilities, not by length alone.
 
+use crate::mcp::input::{parsed, parsed_list, parsed_option};
 use crate::output::{NotePayload, Output, Payload};
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::{ArgAction, Args, Subcommand};
+use cw_mcp::schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
+use serde::Deserialize;
+use std::borrow::Cow;
 use std::num::NonZeroUsize;
 use tmpl_cli_core::app::note::{self, ListFilter, NewNote, NoteList, Outcome};
 use tmpl_cli_core::contract::{Body, NoteId, Priority, Tag, Title};
@@ -56,48 +60,68 @@ pub(crate) enum NoteCommand {
     Show(ShowArgs),
 }
 
-/// Arguments to `note add`.
-#[derive(Debug, Args)]
+/// Arguments to `note add`, and the `note_add` tool's input.
+#[derive(Debug, Args, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "cw_mcp::schemars")]
 pub(crate) struct AddArgs {
     /// The note's title: one line, at most 200 characters
     #[arg(value_name = "TITLE")]
+    #[serde(deserialize_with = "parsed")]
+    #[schemars(with = "String")]
     pub(crate) title: Title,
 
     /// Longer text, shown by `note show` and in --json output; not blank [default: none]
     #[arg(long, value_name = "TEXT")]
+    #[serde(default, deserialize_with = "parsed_option")]
+    #[schemars(with = "Option<String>")]
     pub(crate) body: Option<Body>,
 
     /// Label the note; repeat for several (lowercase letters, digits, '-') [default: none]
     #[arg(long = "tag", value_name = "TAG", action = ArgAction::Append)]
+    #[serde(default, deserialize_with = "parsed_list")]
+    #[schemars(with = "Vec<String>")]
     pub(crate) tags: Vec<Tag>,
 
     /// How much it matters [default: normal]
     #[arg(long, value_name = "PRIORITY", value_parser = priority_parser())]
+    #[serde(default)]
+    #[schemars(with = "Option<PriorityName>")]
     pub(crate) priority: Option<Priority>,
 }
 
-/// Arguments to `note list`.
-#[derive(Debug, Args)]
+/// Arguments to `note list`, and the `note_list` tool's input.
+#[derive(Debug, Args, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "cw_mcp::schemars")]
 pub(crate) struct ListArgs {
     /// Only notes with this tag [default: any]
     #[arg(long, value_name = "TAG")]
+    #[serde(default, deserialize_with = "parsed_option")]
+    #[schemars(with = "Option<String>")]
     pub(crate) tag: Option<Tag>,
 
     /// Only notes at this priority [default: any]
     #[arg(long, value_name = "PRIORITY", value_parser = priority_parser())]
+    #[serde(default)]
+    #[schemars(with = "Option<PriorityName>")]
     pub(crate) priority: Option<Priority>,
 
     /// Show at most this many of the matching notes, 1 or more; --json reports the
     /// total and whether the list was cut [default: all]
     #[arg(long, value_name = "N")]
+    #[serde(default)]
     pub(crate) limit: Option<NonZeroUsize>,
 }
 
-/// Arguments to `note show`.
-#[derive(Debug, Args)]
+/// Arguments to `note show`, and the `note_show` tool's input.
+#[derive(Debug, Args, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "cw_mcp::schemars")]
 pub(crate) struct ShowArgs {
     /// The note's id, as printed by `note list`
     #[arg(value_name = "ID")]
+    #[schemars(with = "u64")]
     pub(crate) id: NoteId,
 }
 
@@ -105,6 +129,21 @@ pub(crate) struct ShowArgs {
 /// drift from it (STD-01 R25).
 fn priority_parser() -> impl TypedValueParser<Value = Priority> {
     PossibleValuesParser::new(Priority::NAMES).try_map(|value| value.parse::<Priority>())
+}
+
+/// A priority's schema for a tool's input: a string, one of the same names
+/// the parser accepts (STD-01 R25). `Priority` deserializes itself from
+/// those names.
+pub(crate) struct PriorityName;
+
+impl JsonSchema for PriorityName {
+    fn schema_name() -> Cow<'static, str> {
+        Cow::Borrowed("Priority")
+    }
+
+    fn json_schema(_generator: &mut SchemaGenerator) -> Schema {
+        json_schema!({ "type": "string", "enum": Priority::NAMES })
+    }
 }
 
 /// Run one `note` verb through the `note` app, pass the payload to

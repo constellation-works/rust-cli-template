@@ -56,6 +56,12 @@ pub(crate) fn finish<O: Write, E: Write>(
     }
 }
 
+/// Report a failure that is not a command's outcome (the MCP server's own)
+/// and return its exit code.
+pub(crate) fn fail(sink: &mut Sink, err: &Error) -> ExitCode {
+    report(sink, err)
+}
+
 /// Report `err` on stderr, with its fix where this surface knows one: one
 /// `error:` line and a `hint:` line, or one JSON object in JSON mode
 /// (STD-01 R19, R21).
@@ -125,23 +131,17 @@ fn emit<O: Write, E: Write>(sink: &mut Sink<O, E>, output: &Output) -> Result<()
     if let Some(notice) = notice {
         sink.notice(notice);
     }
+    let json = payload.json();
     let emitted = match payload {
-        Payload::Status(status) => sink.emit(status, status::to_table),
+        Payload::Status(status) => sink.emit(&json, |_| status::to_table(status)),
         // example:begin
-        Payload::Notes { notes, total } => {
-            let list = note::ListPayload {
-                notes,
-                total: *total,
-                truncated: notes.len() < *total,
-            };
-            sink.emit(&list, |list| note::list_table(list.notes))
-        }
+        Payload::Notes { notes, .. } => sink.emit(&json, |_| note::list_table(notes)),
         // A piped `show` is the list's one tab-separated line; a terminal
         // or `--format table` gets the detail view.
         Payload::Note(note) if sink.terminal().mode() == Mode::Plain => {
-            sink.emit(note, |note| note::list_table(std::slice::from_ref(note)))
+            sink.emit(&json, |_| note::list_table(std::slice::from_ref(note)))
         }
-        Payload::Note(note) => sink.emit_text(note, note::detail_text),
+        Payload::Note(note) => sink.emit_text(&json, |_| note::detail_text(note)),
         // example:end
     };
     emitted.and_then(|()| sink.finish()).map_err(output_error)
