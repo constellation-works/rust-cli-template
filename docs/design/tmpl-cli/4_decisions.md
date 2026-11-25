@@ -962,6 +962,13 @@ The notes live in `<root>/notes.db`, opened only through `cw_sqlite::Db`.
   a usage error (exit 2) where it was a missing note (exit 1). SQLite keeps
   `-wal` and `-shm` beside the database, and in a writable directory a read
   may rebuild the `-shm` index and creates either when it is missing.
+- Update (2026-11-25): `db/` is gone. It held only the audit line's
+  encoding, its upgrades and `AUDIT_LOCK_FILE`, which are the audit record's
+  mapping, so they live with the audit repository as the note's SQL lives in
+  `repository/note.rs`: `repository/audit/mod.rs` holds the append and
+  `AUDIT_LOCK_FILE`, and `repository/audit/line.rs` the persisted line and
+  `UPGRADES`, still naming neither `cw_fs` nor `cw_sqlite`.
+  `scripts/check-dependency-direction.sh` fails if `db/` comes back.
 
 ## Public design documents use public references
 

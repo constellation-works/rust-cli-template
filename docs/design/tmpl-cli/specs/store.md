@@ -112,7 +112,7 @@ Version 1 is one `STRICT` table:
   no argument values or error text. A line that cannot be written is a warning
   (written after the command's payload or JSON error object) and never changes
   the command's result. Each line carries its own `format`; a reader upgrades
-  older lines through `UPGRADES` in `db/audit.rs` (format-1 lines without
+  older lines through `UPGRADES` in `repository/audit/line.rs` (format-1 lines without
   `actor` upgrade with `"actor": null`) and refuses newer ones.
 
 ## Record access

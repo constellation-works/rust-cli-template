@@ -39,8 +39,6 @@
 
 pub mod contract;
 
-mod db;
-
 mod driver;
 
 mod error;

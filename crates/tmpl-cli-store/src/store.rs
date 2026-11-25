@@ -18,9 +18,9 @@
 //! The store decides nothing about notes: which id comes next, which notes a
 //! listing returns and when a command is refused are the note app's rules.
 
-use crate::db::{AUDIT_LOCK_FILE, audit};
 use crate::driver::sqlite::{self, STORE_FILE};
 use crate::error::{Error, Result};
+use crate::repository::audit::{AUDIT_LOCK_FILE, line};
 use crate::repository::{Audit, Snapshot, Tx, first_bad};
 use cw_fs::Lock;
 use std::path::{Path, PathBuf};
@@ -65,7 +65,7 @@ impl Store {
     /// guard, which names it in the warning for a line it could not write.
     #[must_use]
     pub fn audit_path(&self) -> PathBuf {
-        self.root.join(audit::AUDIT_FILE)
+        self.root.join(line::AUDIT_FILE)
     }
 
     /// The data directory.
