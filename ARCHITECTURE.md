@@ -224,11 +224,48 @@ at the pinned commit. Each crate's README there is its contract.
 
 ## Module rules
 
-Checked by grep over non-test sources, except that `rusqlite` and
-`cw_sqlite` are refused outside `tmpl-cli-store` in tests too:
+Three mechanisms hold these rules, each where it is exact:
 
-- `tmpl-cli-store`: nothing names `std::fs`, `std::net`, `std::process`,
-  `tempfile` or `rustix`, and `rusqlite` only as `cw_sqlite::rusqlite`.
+- **Cargo's package graph** (`scripts/check-dependency-direction.sh`, from
+  `cargo metadata`): the crate edges in the table above, including the
+  external crates a crate may not take.
+- **clippy** (`clippy.toml`, with `clippy::disallowed_methods` and
+  `clippy::disallowed_types` denied in `[workspace.lints.clippy]`): file
+  access, the process environment and spawning or ending a process. Clippy
+  resolves each call to its path, so an alias (`use std::env;` then
+  `env::var(..)`, a renamed import, a re-export) is refused too, in every
+  target, tests included. An exemption is a module-level
+  `#![expect(..., reason = "...")]`, never an allow.
+- **grep** over non-test sources (the same script): module-to-module rules,
+  `crate::` imports (grouped ones too), `std::net`, and names that are not
+  paths clippy can resolve. `rusqlite` and `cw_sqlite` are refused outside
+  `tmpl-cli-store` in tests too.
+
+By clippy, in every crate:
+
+- No `std::fs` function and no `std::fs` file, directory, metadata or
+  permission type: file access is `cw_fs`'s, named only by the store.
+- No `std::env` function (`var`, `var_os`, `vars`, `vars_os`, `set_var`,
+  `remove_var`, `current_dir`, `set_current_dir`, `home_dir`, `temp_dir`,
+  `current_exe`, `args`, `args_os`) and no `Env::capture`: the environment
+  is read once, in the binary's `main.rs`, the one exemption in production
+  code.
+- No `Command::output`, `status` or `spawn`, no `CommandExt::exec`, no
+  `std::process::Child`, `exit` or `abort`: the template spawns no process
+  (a project that must spawn one uses the kit's `cw_supervise`).
+- Tests: an integration test file that sets up fixtures or runs the built
+  binary expects the file and process bans for its whole module. A unit-test
+  module keeps its file set-up in a `fixture` submodule that carries the
+  expectation, so the tests themselves still cannot read the environment.
+
+By the package graph: the store and the core take no path-finding crate
+(`dirs`, `dirs-next`, `directories`, `home`), on top of their banned lists
+above.
+
+By grep:
+
+- `tmpl-cli-store`: nothing names `std::net`, `tempfile` or `rustix`, and
+  `rusqlite` only as `cw_sqlite::rusqlite`.
   A statement that changes the schema (`CREATE`, `ALTER` or `DROP` of a
   table, index, view or trigger, `PRAGMA user_version`, a `Step`) appears
   only under `driver/sqlite/schema/`, and only `schema/mod.rs` declares a
@@ -236,21 +273,17 @@ Checked by grep over non-test sources, except that `rusqlite` and
   `cw_sqlite` type. Nothing names the audit log, its lock or `cw_app`.
   `contract/` imports no `driver`, `repository`, `Store`, file access
   or SQLite, and defines no `check_*` function and reads no clock. There is
-  no db module and no file-system driver. The crate reads no environment
-  variable and discovers no path.
-- `tmpl-cli-core`: no `std::fs`, `std::net`, `std::process`, `tempfile`,
-  `rustix`, `cw_fs`, `cw_sqlite` or `rusqlite` anywhere, and no
-  `tmpl_cli_store::repository` path: a record is reached through
-  `snapshot.<record>()` or `tx.<record>()`. Nothing names `home_dir` or
-  `current_dir`. Every app's `mod.rs` forwards to `cw_app::exec::<`. No
+  no db module and no file-system driver.
+- `tmpl-cli-core`: no `std::net`, `tempfile`, `rustix`, `cw_fs`,
+  `cw_sqlite` or `rusqlite` anywhere, and no `tmpl_cli_store::repository`
+  path: a record is reached through `snapshot.<record>()` or
+  `tx.<record>()`. Every app's `mod.rs` forwards to `cw_app::exec::<`. No
   common, shared or util app. An app's `rule` names no
   `composition`, `cw_app`, `Ctx`, `Store`, `Snapshot` or `Tx`.
-- Every crate's `src/`, tests included: only `tmpl-cli/src/main.rs` names
-  `std::env`, and there only `std::env::args_os()`; only it calls
-  `Env::capture`. No source calls an app's `run` (`…App::run`) or writes the
+- Every crate: no source calls an app's `run` (`…App::run`) or writes the
   audit log (`AuditLog::new`, `.append(`, `cw_app::Pending`).
-- `tmpl-cli`: nothing names `tmpl_cli_store`, `cw_base`, `cw_fs`, `cw_sqlite`, `cw_app` or `rusqlite`. `command/` names no `std::env`,
-  `std::fs`, `Env`, `Store`, `Ctx`, `Runtime::` or `start(`: it receives
+- `tmpl-cli`: nothing names `tmpl_cli_store`, `cw_base`, `cw_fs`, `cw_sqlite`, `cw_app` or `rusqlite`. `command/` names no `Env`, `Store`,
+  `Ctx`, `Runtime::` or `start(`: it receives
   the runtime, never builds it. `output/` imports no `cli` or
   `command`.
 - Only `tmpl-cli/src/output/` touches stdout, stderr, `IsTerminal` or the

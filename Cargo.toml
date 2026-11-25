@@ -65,6 +65,9 @@ strip = true
 [workspace.lints.clippy]
 await_holding_lock = "deny"
 dbg_macro = "deny"
+# File, environment and process boundaries: the paths are in clippy.toml.
+disallowed_methods = "deny"
+disallowed_types = "deny"
 expect_used = "warn"
 print_stderr = "warn"
 print_stdout = "warn"

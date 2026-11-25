@@ -10,6 +10,10 @@
         reason = "integration tests assert fixture setup"
     )
 )]
+#![expect(
+    clippy::disallowed_methods,
+    reason = "a test sets up fixture files and runs the built binary; production code may not"
+)]
 
 use std::fs;
 use std::path::{Path, PathBuf};
