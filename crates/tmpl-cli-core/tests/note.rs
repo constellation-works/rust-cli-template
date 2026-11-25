@@ -369,6 +369,26 @@ fn bad_records_are_isolated_on_read_fail_on_show_and_refuse_writes() {
 }
 
 #[test]
+fn a_hand_edited_value_is_escaped_in_its_bad_record_reason() {
+    // A record edited by hand can hold control bytes. The reason a read
+    // reports, and the warning a surface prints from it, escapes them.
+    let dir = tempdir();
+    let store = Store::open(dir.path());
+    execute(
+        &store,
+        "INSERT INTO note (id, title, body, tags, priority, created_at) VALUES
+            (1, 'bad', NULL, '[]', 'hi' || char(27) || char(10) || char(9), '2025-05-06T07:08:09Z');",
+    );
+
+    let listed = store.list(&ListFilter::default()).unwrap();
+    assert_eq!(listed.bad_records.len(), 1);
+    assert_eq!(
+        listed.bad_records[0].reason.to_string(),
+        "invalid priority \"hi\\u{1b}\\n\\t\": expected one of low, normal, high"
+    );
+}
+
+#[test]
 fn add_refuses_when_max_id_is_already_in_use() {
     let dir = tempdir();
     let store = Store::open(dir.path());

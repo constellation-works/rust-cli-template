@@ -81,3 +81,22 @@ fn a_blank_body_is_refused_not_dropped() {
     let body: Body = "two\nlines".parse().unwrap();
     assert_eq!(body.as_str(), "two\nlines");
 }
+
+#[test]
+fn invalid_values_are_shown_escaped_in_their_messages() {
+    // A value can carry control bytes. Its message shows it in Debug form, so
+    // ESC, line feed and tab are escaped rather than written to a terminal.
+    let value = "a\u{1b}\n\tb";
+    assert_eq!(
+        value.parse::<NoteId>().unwrap_err().to_string(),
+        "invalid note id \"a\\u{1b}\\n\\tb\": expected a positive integer such as 1"
+    );
+    assert_eq!(
+        value.parse::<Tag>().unwrap_err().to_string(),
+        "invalid tag \"a\\u{1b}\\n\\tb\": use 1-32 lowercase letters, digits or '-'"
+    );
+    assert_eq!(
+        value.parse::<Priority>().unwrap_err().to_string(),
+        "invalid priority \"a\\u{1b}\\n\\tb\": expected one of low, normal, high"
+    );
+}
