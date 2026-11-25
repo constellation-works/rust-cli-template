@@ -64,7 +64,7 @@ tmpl-cli note list
 
 ## Contributing
 
-See the [contributing guide](docs/development.md) for the development gates and test workflow.
+See the [contributing guide](CONTRIBUTING.md) for the development gates and test workflow, and [SECURITY.md](SECURITY.md) to report a security problem.
 
 This repository follows the constellation standards vendored in [`docs/standards/`](docs/standards/). Outside the constellation umbrella the standards are plain vendored files that `docs/standards/check.sh` only verifies.
 

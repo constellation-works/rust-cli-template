@@ -38,7 +38,7 @@ related_artifacts: []
 
 | Concern | File | Task |
 |---------|------|------|
-| <concern> | [crates/...](../../../crates/...) | <public reference> |
+| <concern> | <a relative link to its code, such as `../../../crates/<crate>/src/<module>/`> | <public reference> |
 
 ## Task References
 

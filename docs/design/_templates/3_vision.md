@@ -43,7 +43,7 @@ related_artifacts: []
 
 **Project-internal**
 
-- [<doc>](../<feature>/2_design.md)
+- [Design](2_design.md)
 
 **External**
 
