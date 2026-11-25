@@ -40,7 +40,7 @@ the data directory: the `Store` facade (one read, one locked write) over
 persisted audit line), one repository per record (`notes`, `audit`) and
 the record shapes in `contracts/`. The foundation is the cw-kit from
 [constellation-works/satellites](https://github.com/constellation-works/satellites),
-pinned to commit `320e07f8d41c218c57f57a9f50820a2b6c34fb98`: `cw-base` (the
+pinned to commit `5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b`: `cw-base` (the
 one error type every unit translates its typed error into, with its `Kind`
 and stable code), which the store and the core name, and `cw-fs` (durable
 writes, appends, locking and private-state checks, mechanism only), which

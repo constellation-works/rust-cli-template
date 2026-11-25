@@ -38,7 +38,8 @@ policy() {
       # The one error type (cw-base) and file access for the data directory
       # (cw-fs). The store is the only crate that names cw-fs.
       KIT="cw-base cw-fs"
-      KIT_DEV=""
+      # Test isolation, for its unit tests' private temp roots.
+      KIT_DEV="cw-testkit"
       # Persistence never parses arguments, draws on a terminal or installs a
       # log subscriber: those belong to surfaces. It reaches files only
       # through cw-fs, so it needs no file crate.
@@ -51,7 +52,8 @@ policy() {
       # Its integration tests match the kit's file error behind a store
       # failure (`cw_fs::Error::Locked`), so cw-fs is a dev edge only; its
       # sources never name it (module rules below).
-      KIT_DEV="cw-fs"
+      # cw-testkit: test isolation, for its tests' private temp roots.
+      KIT_DEV="cw-fs cw-testkit"
       # The apps reach files only through the store, so they need no file or
       # process crate either.
       BANNED="clap tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored tempfile rustix"
@@ -61,7 +63,8 @@ policy() {
       # it renders and the one error type (cw-base's, as tmpl_cli_core::Error).
       ALLOWED="tmpl-cli-core"
       KIT=""
-      KIT_DEV=""
+      # Test isolation: the temp root, the isolated child and goldens.
+      KIT_DEV="cw-testkit"
       BANNED=""
       ;;
     *) return 1 ;;
@@ -271,6 +274,9 @@ ban_import "$CLI/commands" 'std' 'env|fs'                                  "a co
 # Rendering is derived from payloads only; it never reaches back up (R1).
 ban "$CLI/output"    'crate::(cli|commands)'                                "output must not import cli or commands"
 ban_import "$CLI/output" 'crate' 'cli|commands'                             "output must not import cli or commands"
+
+# The kit's test isolation is for tests only: no non-test source names it.
+ban crates 'cw_testkit'                                                  "cw-testkit is a dev-dependency: only test code names it"
 
 # Persisted shapes never fabricate a timestamp on read (R16).
 ban crates 'serde\(default *= *"[A-Za-z_:]*(now|now_utc)"'    "a persisted timestamp must not default to the current time"

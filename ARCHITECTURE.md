@@ -12,26 +12,29 @@ tmpl-cli  ->  tmpl-cli-core  ->  tmpl-cli-store
                     +--> cw-base <-+        +--> cw-fs -> cw-base
 ```
 
-`cw-base` and `cw-fs` are the cw-kit, from
+`cw-base` and `cw-fs` are the cw-kit, with `cw-testkit` (test isolation, a
+dev-dependency only), all from
 [constellation-works/satellites](https://github.com/constellation-works/satellites),
 a git dependency pinned in the root `Cargo.toml` to commit
-`320e07f8d41c218c57f57a9f50820a2b6c34fb98` (no release is published yet; moving the
-pin is a change of its own).
+`5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b` (no release is published yet; moving the
+pin is a change of its own). Every kit crate is pinned to that one rev.
 
 | Crate | Kind | Owns | Internal and kit dependencies | Banned |
 |-------|------|------|-------------------------------|--------|
-| `tmpl-cli` | binary `tmpl-cli` | Argument declarations, the mapping from arguments to an app's `Command`, rendering, exit codes. The only stdout, stderr and terminal access. | `tmpl-cli-core` | `tmpl-cli-store`, every kit crate |
-| `tmpl-cli-core` | library | The apps, the runtime they share, and composition. | `tmpl-cli-store`, `cw-base`; `cw-fs` as a dev-dependency only | `cw-fs`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
-| `tmpl-cli-store` | library | The data directory: the persisted document, one repository per record, the record shapes (`contracts`), and the store's stable code for each of the kit's file errors. It names no file primitive; it reaches the directory through `cw-fs`. | `cw-base`, `cw-fs` | `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
+| `tmpl-cli` | binary `tmpl-cli` | Argument declarations, the mapping from arguments to an app's `Command`, rendering, exit codes. The only stdout, stderr and terminal access. | `tmpl-cli-core`; `cw-testkit` as a dev-dependency only | `tmpl-cli-store`, every kit crate |
+| `tmpl-cli-core` | library | The apps, the runtime they share, and composition. | `tmpl-cli-store`, `cw-base`; `cw-fs` and `cw-testkit` as dev-dependencies only | `cw-fs`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
+| `tmpl-cli-store` | library | The data directory: the persisted document, one repository per record, the record shapes (`contracts`), and the store's stable code for each of the kit's file errors. It names no file primitive; it reaches the directory through `cw-fs`. | `cw-base`, `cw-fs`; `cw-testkit` as a dev-dependency only | `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
 
 `scripts/check-dependency-direction.sh` reads these edges from Cargo's own
 package graph (`cargo metadata --no-deps --locked`), so a quoted or renamed
 dependency is seen by its package. It holds each crate's kit list: a normal
 or build dependency on a `cw-*` crate outside it fails the check, and so
 does a dev-dependency outside the kit list and the dev-only kit list. The
-one dev-only kit edge is `tmpl-cli-core` to `cw-fs`: its integration tests
+dev-only kit edges are `cw-testkit` from every crate (the private temp
+root, the isolated child and the goldens of their tests; no non-test source
+names `cw_testkit`), and `tmpl-cli-core` to `cw-fs` (its integration tests
 match the kit's file error behind a store failure, while its sources never
-name `cw_fs`. The binary names
+name `cw_fs`). The binary names
 only `tmpl-cli-core`. The core re-exports the store's record shapes as
 `tmpl_cli_core::contracts` and the kit's error type as
 `tmpl_cli_core::Error` and `tmpl_cli_core::Kind`, so a surface needs no

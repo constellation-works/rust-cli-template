@@ -34,8 +34,9 @@ fn copy_script(name: &str, dest_root: &Path) -> PathBuf {
 
 #[test]
 fn deny_uses_a_writable_cache_when_the_cargo_home_is_unusable() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
+    // make runs in the kit's temp root and isolated environment.
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
     for name in ["Makefile", "deny.toml"] {
         fs::copy(repo_root().join(name), root.join(name)).unwrap();
     }
@@ -57,11 +58,9 @@ grep -Fx '[licenses]' "$4"
     fs::set_permissions(&cargo, fs::Permissions::from_mode(0o755)).unwrap();
     let cargo_home = root.join("cargo-home");
     fs::write(&cargo_home, b"not a directory").unwrap();
-    let out = Command::new("make")
+    let out = temp
+        .command("make")
         .args(["deny", "CARGO=./cargo"])
-        .current_dir(root)
-        .env_clear()
-        .env("PATH", "/usr/bin:/bin")
         .env("CARGO_HOME", cargo_home)
         .output()
         .unwrap();

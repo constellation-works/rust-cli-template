@@ -156,15 +156,9 @@ fn timeout_holder(record: &str) -> Option<cw_fs::Holder> {
 }
 
 /// A temporary directory that is owner-only whatever the umask, as a store
-/// directory must be (STD-05 R9). `tempfile` leaves the mode to the umask.
-fn tempdir() -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-    }
-    dir
+/// directory must be (STD-05 R9). The kit's temp root is `0700`.
+fn tempdir() -> cw_testkit::TempRoot {
+    cw_testkit::TempRoot::new("TMPL_CLI").unwrap()
 }
 
 /// Write a store file by hand, owner-only as the store itself would.

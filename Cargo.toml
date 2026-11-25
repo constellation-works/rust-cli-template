@@ -25,8 +25,11 @@ repository = "https://github.com/constellation-works/tmpl-cli"
 # error type and a clock (cw-base), and file access for a private data
 # directory (cw-fs). No release is published yet, so the workspace pins a
 # commit of the satellites `agent-main`; moving the pin is a change of its own.
-cw-base = { git = "https://github.com/constellation-works/satellites", rev = "320e07f8d41c218c57f57a9f50820a2b6c34fb98" }
-cw-fs = { git = "https://github.com/constellation-works/satellites", rev = "320e07f8d41c218c57f57a9f50820a2b6c34fb98" }
+cw-base = { git = "https://github.com/constellation-works/satellites", rev = "5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b" }
+cw-fs = { git = "https://github.com/constellation-works/satellites", rev = "5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b" }
+# Test isolation (a private temp root, an isolated child, goldens): a
+# dev-dependency only (scripts/check-dependency-direction.sh).
+cw-testkit = { git = "https://github.com/constellation-works/satellites", rev = "5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b" }
 tmpl-cli-store = { path = "crates/tmpl-cli-store" }
 tmpl-cli-core = { path = "crates/tmpl-cli-core" }
 # No `color` or `wrap_help`: both make clap query the terminal itself, and the

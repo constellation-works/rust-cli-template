@@ -71,7 +71,7 @@ checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 [[package]]
 name = "cw-base"
 version = "0.1.0"
-source = "git+https://github.com/constellation-works/satellites?rev=320e07f8d41c218c57f57a9f50820a2b6c34fb98#320e07f8d41c218c57f57a9f50820a2b6c34fb98"
+source = "git+https://github.com/constellation-works/satellites?rev=5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b#5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b"
 dependencies = [
  "thiserror",
  "time",
@@ -80,9 +80,19 @@ dependencies = [
 [[package]]
 name = "cw-fs"
 version = "0.1.0"
-source = "git+https://github.com/constellation-works/satellites?rev=320e07f8d41c218c57f57a9f50820a2b6c34fb98#320e07f8d41c218c57f57a9f50820a2b6c34fb98"
+source = "git+https://github.com/constellation-works/satellites?rev=5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b#5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b"
 dependencies = [
  "cw-base",
+ "rustix",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "cw-testkit"
+version = "0.1.0"
+source = "git+https://github.com/constellation-works/satellites?rev=5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b#5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b"
+dependencies = [
  "rustix",
  "tempfile",
  "thiserror",
@@ -404,6 +414,7 @@ name = "tmpl-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "cw-testkit",
  "serde",
  "serde_json",
  "tempfile",
@@ -419,8 +430,8 @@ version = "0.1.0"
 dependencies = [
  "cw-base",
  "cw-fs",
+ "cw-testkit",
  "serde_json",
- "tempfile",
  "thiserror",
  "time",
  "tmpl-cli-core",
@@ -434,9 +445,9 @@ version = "0.1.0"
 dependencies = [
  "cw-base",
  "cw-fs",
+ "cw-testkit",
  "serde",
  "serde_json",
- "tempfile",
  "thiserror",
  "time",
  "tracing",

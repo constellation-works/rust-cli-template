@@ -1,7 +1,10 @@
-//! Shared fixture for the integration tests: a temporary data root and a
-//! command builder that runs the built binary against it.
+//! Shared fixture for the integration tests: the kit's private temp root
+//! (`cw_testkit::TempRoot`) and the template's own parts on top of it, the
+//! binary's name, the notes the goldens are seeded with, and store files
+//! written by hand.
 //!
-//! Every child gets a cleared environment with `HOME` and `TMPL_CLI_ROOT`
+//! Every child runs through `TempRoot::command`: a cleared environment with
+//! only `HOME`, `PATH`, `TMPL_CLI_ROOT` and `GIT_CEILING_DIRECTORIES`
 //! pointing into the fixture, so no test can read or write the real home or
 //! inherit the developer's `TMPL_CLI_*`, `NO_COLOR` or `TERM` (STD-03 R20).
 
@@ -12,45 +15,57 @@
     reason = "each integration target uses a different subset of the fixture"
 )]
 
+use cw_testkit::TempRoot;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output};
 
 /// The binary under test, exactly as cargo built it (STD-01 R24).
 pub const BIN: &str = env!("CARGO_BIN_EXE_tmpl-cli");
 
-/// A temporary home and data root, deleted on drop.
+/// The binary's environment prefix: the kit points `TMPL_CLI_ROOT` at the
+/// fixture's data root.
+pub const PREFIX: &str = "TMPL_CLI";
+
+/// The kit's temporary home and data root, deleted on drop.
 pub struct Fixture {
-    dir: tempfile::TempDir,
+    temp: TempRoot,
 }
 
 impl Fixture {
     pub fn new() -> Self {
-        let dir = tempfile::tempdir().expect("create temp dir");
-        std::fs::create_dir(dir.path().join("home")).expect("create fake home");
-        Self { dir }
+        Self {
+            temp: TempRoot::new(PREFIX).expect("create temp root"),
+        }
     }
 
-    /// The data directory the binary is pointed at.
+    /// The data directory the binary is pointed at (not created).
     pub fn root(&self) -> PathBuf {
-        self.dir.path().join("root")
+        self.temp.app_root()
     }
 
     pub fn home(&self) -> PathBuf {
-        self.dir.path().join("home")
+        self.temp.home()
     }
 
-    /// A path inside the fixture but outside both the home and the data root.
+    /// A path inside the fixture but outside both the home and the data
+    /// root. Its folder exists, so a test can write the file directly.
     pub fn elsewhere(&self, name: &str) -> PathBuf {
-        self.dir.path().join(name)
+        let path = self.temp.elsewhere(name);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).expect("create the elsewhere folder");
+        }
+        path
     }
 
-    /// A command with a hermetic environment.
+    /// `program` run in the fixture with the kit's isolated environment.
+    pub fn command(&self, program: impl AsRef<std::ffi::OsStr>) -> Command {
+        self.temp.command(program)
+    }
+
+    /// The binary with `args`, in the kit's isolated environment.
     pub fn cmd(&self, args: &[&str]) -> Command {
-        let mut cmd = Command::new(BIN);
-        cmd.args(args)
-            .env_clear()
-            .env("HOME", self.home())
-            .env("TMPL_CLI_ROOT", self.root());
+        let mut cmd = self.command(BIN);
+        cmd.args(args);
         cmd
     }
 
@@ -105,34 +120,6 @@ impl Fixture {
 
 pub fn text(bytes: &[u8]) -> String {
     String::from_utf8(bytes.to_vec()).expect("utf-8 output")
-}
-
-/// Replace every RFC 3339 UTC timestamp (`YYYY-MM-DDTHH:MM:SSZ`) with a
-/// placeholder so goldens do not depend on the clock.
-pub fn redact_timestamps(s: &str) -> String {
-    const SHAPE: &[u8] = b"dddd-dd-ddTdd:dd:ddZ";
-    let bytes = s.as_bytes();
-    let mut out = String::with_capacity(s.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        let fits = bytes.len() - i >= SHAPE.len()
-            && SHAPE
-                .iter()
-                .zip(&bytes[i..])
-                .all(|(&want, &got)| match want {
-                    b'd' => got.is_ascii_digit(),
-                    other => got == other,
-                });
-        if fits {
-            out.push_str("<timestamp>");
-            i += SHAPE.len();
-        } else {
-            let ch = s[i..].chars().next().expect("char boundary");
-            out.push(ch);
-            i += ch.len_utf8();
-        }
-    }
-    out
 }
 
 /// A spawned child that is killed and reaped if the test ends early, panics

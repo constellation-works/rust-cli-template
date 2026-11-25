@@ -10,7 +10,7 @@ Loaded as both `AGENTS.md` and `CLAUDE.md` (a symlink). tmpl-cli keeps short not
 - Don't touch `CHANGELOG.md` during tasks; it is compiled at release time.
 - Use integration tests or goldens first (STD-04 R23). Every test must exercise behavior (STD-02 R21). No text-matching tests (`include_str!` plus `contains()` over source or copy).
 - A fix comes with a regression test through the real entry point (the built binary or the public API), seen failing before the fix (STD-04 R1, R2).
-- Tests never touch real host state: temp roots, and `HOME`/`TMPL_CLI_*` set on the child command ([test support](crates/tmpl-cli/tests/support/mod.rs); STD-03 R20).
+- Tests never touch real host state: a private temp root is `cw_testkit::TempRoot`; the binary fixture and the kit-based script checks run their child through `TempRoot::command` (its environment cleared to `HOME`, `PATH`, `TMPL_CLI_ROOT` and `GIT_CEILING_DIRECTORIES`), while the copied-script checks in `tests/scripts.rs` run their scripts with their own commands in a plain temp directory; goldens compare through `cw_testkit::Goldens` ([test support](crates/tmpl-cli/tests/support/mod.rs); STD-03 R20). `cw-testkit` is a dev-dependency only.
 
 ## Branching
 

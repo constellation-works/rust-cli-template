@@ -28,12 +28,8 @@ fn lock_timeout_audited_command_waits_one_deadline_and_records_one_failure_line(
     use std::time::{Duration, Instant};
     use tmpl_cli_store::Store;
 
-    let dir = tempfile::tempdir().unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-    }
+    // The kit's private (0700) temp root, as a store directory must be.
+    let dir = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
 
     // Hold the store lock `.lock` for the duration of the command.
     let lock_path = dir.path().join(".lock");

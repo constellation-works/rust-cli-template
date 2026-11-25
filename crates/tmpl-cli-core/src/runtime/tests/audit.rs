@@ -12,14 +12,8 @@ const ADD: AuditMeta = AuditMeta {
 };
 
 /// An owner-only temporary directory, as a store directory must be.
-fn private_tempdir() -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
-    }
-    dir
+fn private_tempdir() -> cw_testkit::TempRoot {
+    cw_testkit::TempRoot::new("TMPL_CLI").unwrap()
 }
 
 fn lines(store: &Store) -> Vec<serde_json::Value> {
