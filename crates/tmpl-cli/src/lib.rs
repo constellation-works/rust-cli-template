@@ -19,9 +19,13 @@
 )]
 
 mod cli;
+
 mod command;
+
 mod error;
+
 mod help;
+
 mod output;
 
 pub use cli::every_command;

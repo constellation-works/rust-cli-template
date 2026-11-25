@@ -73,4 +73,4 @@ there.
 | Audit line, its upgrades | [crates/tmpl-cli-store/src/db/audit.rs](../../../crates/tmpl-cli-store/src/db/audit.rs) |
 | Private SQLite database: WAL, one write transaction, read-only reader, migrations | `cw-sqlite` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/9c9cc998720f0a75041be3451c14fbaf80f29dc8/crates/cw-sqlite) |
 | Append, lock, private state | `cw-fs` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/9c9cc998720f0a75041be3451c14fbaf80f29dc8/crates/cw-fs) |
-| Goldens of help and output | [crates/tmpl-cli/tests/goldens.rs](../../../crates/tmpl-cli/tests/goldens.rs) |
+| Goldens of help and output | [crates/tmpl-cli/tests/golden.rs](../../../crates/tmpl-cli/tests/golden.rs) |

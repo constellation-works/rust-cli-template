@@ -827,7 +827,7 @@ the store cannot depend on the core, so it has to sit below both.
 ## The foundation is the cw-kit
 
 **Recorded:** 2026-11-24
-**Code anchors:** `Cargo.toml` `[workspace.dependencies]` `cw-base`, `cw-fs`, `cw-testkit`; `crates/tmpl-cli/tests/support/mod.rs::Fixture`; `crates/tmpl-cli/tests/goldens.rs::goldens`; `deny.toml` `[sources] allow-git`; `crates/tmpl-cli-store/src/error.rs::Error::code`; `crates/tmpl-cli-store/src/db/mod.rs::STORE_CAP`; `crates/tmpl-cli/src/error.rs::exit_code`; `scripts/check-dependency-direction.sh::policy`
+**Code anchors:** `Cargo.toml` `[workspace.dependencies]` `cw-base`, `cw-fs`, `cw-testkit`; `crates/tmpl-cli/tests/support/mod.rs::Fixture`; `crates/tmpl-cli/tests/golden.rs::goldens`; `deny.toml` `[sources] allow-git`; `crates/tmpl-cli-store/src/error.rs::Error::code`; `crates/tmpl-cli-store/src/db/mod.rs::STORE_CAP`; `crates/tmpl-cli/src/error.rs::exit_code`; `scripts/check-dependency-direction.sh::policy`
 
 ### Context
 

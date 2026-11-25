@@ -44,7 +44,7 @@ fn goldens() -> Goldens {
 /// Returns the failure instead of panicking so one run reports every stale
 /// or missing golden at once.
 fn check(goldens: &Goldens, rel: &str, actual: &str) -> Option<String> {
-    goldens.check(rel, actual).err().map(|e| e.to_string())
+    goldens.check(rel, actual).err().map(|err| err.to_string())
 }
 
 fn report(failures: &[String]) {

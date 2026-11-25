@@ -38,11 +38,17 @@
 )]
 
 pub mod contract;
+
 mod db;
+
 mod driver;
+
 mod error;
+
 pub mod repository;
+
 mod store;
+
 #[cfg(feature = "test-support")]
 pub mod test_support;
 

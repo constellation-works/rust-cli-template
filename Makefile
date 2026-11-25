@@ -111,10 +111,10 @@ test:
 # Goldens of the shipped surface (STD-01 R24): captured from the built binary.
 goldens:
 	@if $(CARGO) nextest --version >/dev/null 2>&1; then \
-		UPDATE_GOLDENS=$(if $(UPDATE),1,0) $(CARGO) nextest run -p $(BINARY) --test goldens $(LOCKED) --no-tests=fail; \
+		UPDATE_GOLDENS=$(if $(UPDATE),1,0) $(CARGO) nextest run -p $(BINARY) --test golden $(LOCKED) --no-tests=fail; \
 	else \
 		$(call missing_tool,cargo-nextest,the zero-test check); \
-		UPDATE_GOLDENS=$(if $(UPDATE),1,0) $(CARGO) test -p $(BINARY) --test goldens $(LOCKED); \
+		UPDATE_GOLDENS=$(if $(UPDATE),1,0) $(CARGO) test -p $(BINARY) --test golden $(LOCKED); \
 	fi
 
 # The constellation standards this repo adopted are vendored under

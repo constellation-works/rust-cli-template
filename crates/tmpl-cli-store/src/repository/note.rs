@@ -151,14 +151,14 @@ fn one_row(
 ) -> Result<Option<std::result::Result<Note, BadRecord>>> {
     let sql = format!("SELECT {COLUMNS} FROM note WHERE id = ?1");
     let action = "read a note from";
-    let id = sql_id(id).map_err(|e| sqlite(action, path, e))?;
+    let id = sql_id(id).map_err(|err| sqlite(action, path, err))?;
     let mut statement = conn
         .prepare_cached(&sql)
-        .map_err(|e| sqlite(action, path, e))?;
+        .map_err(|err| sqlite(action, path, err))?;
     let row = statement
         .query_row(params![id], StoredRow::read)
         .optional()
-        .map_err(|e| sqlite(action, path, e))?;
+        .map_err(|err| sqlite(action, path, err))?;
     Ok(row.map(|row| row.into_note(path)))
 }
 
@@ -171,13 +171,13 @@ fn query(
     let action = "read the notes in";
     let mut statement = conn
         .prepare_cached(sql)
-        .map_err(|e| sqlite(action, path, e))?;
+        .map_err(|err| sqlite(action, path, err))?;
     let rows = statement
         .query_map(params, StoredRow::read)
-        .map_err(|e| sqlite(action, path, e))?;
+        .map_err(|err| sqlite(action, path, err))?;
     rows.map(|row| {
         row.map(|row| row.into_note(path))
-            .map_err(|e| sqlite(action, path, e))
+            .map_err(|err| sqlite(action, path, err))
     })
     .collect()
 }
@@ -214,7 +214,7 @@ fn put(conn: &Connection, path: &Path, note: &Note) -> Result<()> {
             created_at,
         ])
     })
-    .map_err(|e| sqlite(action, path, e))?;
+    .map_err(|err| sqlite(action, path, err))?;
     Ok(())
 }
 
@@ -222,11 +222,11 @@ fn put(conn: &Connection, path: &Path, note: &Note) -> Result<()> {
 /// this conversion always succeeds.
 fn sql_id(id: NoteId) -> cw_sqlite::rusqlite::Result<i64> {
     i64::try_from(id.get())
-        .map_err(|e| cw_sqlite::rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
+        .map_err(|err| cw_sqlite::rusqlite::Error::ToSqlConversionFailure(Box::new(err)))
 }
 
-fn sqlite(action: &'static str, path: &Path, e: cw_sqlite::rusqlite::Error) -> Error {
-    Error::Sqlite(cw_sqlite::Error::sqlite(action, path, e))
+fn sqlite(action: &'static str, path: &Path, err: cw_sqlite::rusqlite::Error) -> Error {
+    Error::Sqlite(cw_sqlite::Error::sqlite(action, path, err))
 }
 
 /// One row as SQLite holds it, before the contract types check it. The
@@ -261,11 +261,11 @@ impl StoredRow {
             .and_then(NoteId::try_from);
         let id = match id {
             Ok(id) => id,
-            Err(e) => {
+            Err(err) => {
                 return Err(BadRecord {
                     path: path.to_path_buf(),
                     locator: RecordLocator::Row(self.id),
-                    reason: BadRecordReason::Validation(e),
+                    reason: BadRecordReason::Validation(err),
                 });
             }
         };
@@ -274,14 +274,15 @@ impl StoredRow {
             locator: RecordLocator::Id(id),
             reason,
         };
-        let title = Title::try_from(self.title).map_err(|e| bad(BadRecordReason::Validation(e)))?;
+        let title =
+            Title::try_from(self.title).map_err(|err| bad(BadRecordReason::Validation(err)))?;
         let tags = parse_tags(&self.tags).map_err(bad)?;
-        let priority =
-            Priority::from_str(&self.priority).map_err(|e| bad(BadRecordReason::Validation(e)))?;
-        let created_at = OffsetDateTime::parse(&self.created_at, &Rfc3339).map_err(|e| {
+        let priority = Priority::from_str(&self.priority)
+            .map_err(|err| bad(BadRecordReason::Validation(err)))?;
+        let created_at = OffsetDateTime::parse(&self.created_at, &Rfc3339).map_err(|err| {
             bad(BadRecordReason::InvalidField {
                 field: "created_at",
-                detail: e.to_string(),
+                detail: err.to_string(),
             })
         })?;
         Ok(Note {

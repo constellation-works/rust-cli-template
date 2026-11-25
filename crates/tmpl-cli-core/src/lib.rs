@@ -28,8 +28,11 @@
 )]
 
 pub mod app;
+
 mod composition;
+
 mod runtime;
+
 #[cfg(feature = "test-support")]
 pub mod test_support;
 

@@ -45,7 +45,7 @@ impl NewNote {
 /// [`NoteId::FIRST`] when there are none, or `None` when the highest id is
 /// already [`NoteId::MAX`], so an existing id is never handed out again.
 pub(crate) fn next_id(notes: &[Note]) -> Option<NoteId> {
-    match notes.iter().map(|n| n.id).max() {
+    match notes.iter().map(|note| note.id).max() {
         None => Some(NoteId::FIRST),
         Some(max) => max
             .get()
@@ -67,8 +67,10 @@ pub struct ListFilter {
 
 impl ListFilter {
     fn matches(&self, note: &Note) -> bool {
-        self.tag.as_ref().is_none_or(|t| note.tags.contains(t))
-            && self.priority.is_none_or(|p| note.priority == p)
+        self.tag.as_ref().is_none_or(|tag| note.tags.contains(tag))
+            && self
+                .priority
+                .is_none_or(|priority| note.priority == priority)
     }
 }
 
@@ -93,7 +95,10 @@ impl NoteList {
 /// filters apply before the limit, and `total` counts every match, so a cut
 /// list can say how much it left out (STD-01 R33, R34).
 pub(crate) fn select(notes: Vec<Note>, filter: &ListFilter) -> NoteList {
-    let mut notes: Vec<Note> = notes.into_iter().filter(|n| filter.matches(n)).collect();
+    let mut notes: Vec<Note> = notes
+        .into_iter()
+        .filter(|note| filter.matches(note))
+        .collect();
     let total = notes.len();
     if let Some(limit) = filter.limit {
         notes.truncate(limit.get());

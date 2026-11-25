@@ -10,6 +10,7 @@
 //! or borrowed document crosses into its hands.
 
 mod audit;
+
 mod note;
 
 pub use audit::Audit;

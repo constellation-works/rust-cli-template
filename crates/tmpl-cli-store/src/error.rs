@@ -145,7 +145,7 @@ impl Error {
     pub fn code(&self) -> &'static str {
         match self {
             // The kit's file failures get the store's codes here.
-            Self::Fs(e) | Self::Sqlite(cw_sqlite::Error::File(e)) => fs_code(e),
+            Self::Fs(source) | Self::Sqlite(cw_sqlite::Error::File(source)) => fs_code(source),
             // The kit's database failures get the store's codes here.
             Self::Sqlite(cw_sqlite::Error::Missing { .. }) => "store_missing",
             Self::Sqlite(cw_sqlite::Error::Locked { .. }) => "store_locked",
@@ -169,8 +169,8 @@ impl Error {
     #[must_use]
     pub fn kind(&self) -> Kind {
         match self {
-            Self::Fs(e) => e.kind(),
-            Self::Sqlite(e) => e.kind(),
+            Self::Fs(source) => source.kind(),
+            Self::Sqlite(source) => source.kind(),
             Self::Encode { .. } | Self::Timestamp { .. } => Kind::Internal,
             Self::Corrupt { .. } | Self::BadRecord(_) => Kind::Corrupt,
             Self::NewerFormat { .. } => Kind::Incompatible,
@@ -180,8 +180,8 @@ impl Error {
 
 /// The store's code for each of the kit's file errors, met on the data
 /// directory, the audit log or the database's own files.
-fn fs_code(e: &cw_fs::Error) -> &'static str {
-    match e {
+fn fs_code(source: &cw_fs::Error) -> &'static str {
+    match source {
         cw_fs::Error::Io { .. } => "io_error",
         cw_fs::Error::Locked { .. } => "store_locked",
         cw_fs::Error::Symlink { .. } => "store_symlink",

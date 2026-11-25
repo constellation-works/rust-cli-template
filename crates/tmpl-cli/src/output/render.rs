@@ -61,7 +61,7 @@ pub(crate) fn note_list(
         }
         OutputMode::Plain => notes
             .iter()
-            .try_for_each(|n| writeln!(out, "{}", plain_line(n))),
+            .try_for_each(|note| writeln!(out, "{}", plain_line(note))),
     }
 }
 
@@ -99,14 +99,14 @@ pub(crate) fn note_detail(out: &mut dyn Write, sink: &Sink, note: &NotePayload) 
 fn sanitize_for_display(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '\r' && chars.peek() == Some(&'\n') {
+    while let Some(ch) = chars.next() {
+        if ch == '\r' && chars.peek() == Some(&'\n') {
             continue;
         }
-        if c == '\n' || c == '\t' || !c.is_control() {
-            out.push(c);
+        if ch == '\n' || ch == '\t' || !ch.is_control() {
+            out.push(ch);
         } else {
-            for escaped in c.escape_default() {
+            for escaped in ch.escape_default() {
                 out.push(escaped);
             }
         }

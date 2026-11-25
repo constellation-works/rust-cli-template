@@ -102,7 +102,7 @@ fn piped_output_is_one_undecorated_line_per_record() {
     let stdout = text(&out.stdout);
     assert_eq!(stdout.lines().count(), 3);
     assert!(!stdout.contains('\x1b'), "no ANSI escapes off a terminal");
-    assert!(stdout.lines().all(|l| l.split('\t').count() == 5));
+    assert!(stdout.lines().all(|line| line.split('\t').count() == 5));
     assert!(out.stderr.is_empty(), "stderr: {}", text(&out.stderr));
 }
 
@@ -296,7 +296,7 @@ fn audit_lines(fx: &Fixture) -> Vec<serde_json::Value> {
     std::fs::read_to_string(fx.root().join("audit.jsonl"))
         .unwrap_or_default()
         .lines()
-        .map(|l| serde_json::from_str(l).unwrap())
+        .map(|line| serde_json::from_str(line).unwrap())
         .collect()
 }
 
@@ -406,7 +406,7 @@ fn title_rejects_control_characters_and_piped_output_strips_body_control_bytes()
             .stdout
             .iter()
             .copied()
-            .find(|&b| b < 0x20 && b != b'\n' && b != b'\t');
+            .find(|&byte| byte < 0x20 && byte != b'\n' && byte != b'\t');
         assert_eq!(
             bad_byte,
             None,
@@ -433,8 +433,8 @@ fn json_error_object_precedes_audit_failure_warning_on_stderr() {
     assert_eq!(out.status.code(), Some(1));
     let stderr = text(&out.stderr);
     let first_line = stderr.lines().next().expect("stderr has error line");
-    let err: serde_json::Value = serde_json::from_str(first_line).unwrap_or_else(|e| {
-        panic!("first stderr line must be JSON error object ({e}): {stderr:?}")
+    let err: serde_json::Value = serde_json::from_str(first_line).unwrap_or_else(|err| {
+        panic!("first stderr line must be JSON error object ({err}): {stderr:?}")
     });
     assert_eq!(err["code"], "store_corrupt");
 }
@@ -502,7 +502,8 @@ fn bad_records_warn_on_reads_fail_on_show_and_refuse_writes_without_touching_sto
         warn_lines[1]
     );
 
-    // `note list --json`: exits 0, stdout keeps documented envelope, stderr has 1 warning per bad record.
+    // `note list --json`: exits 0, stdout keeps documented envelope, stderr has 1
+    // warning per bad record.
     let list_json = fx.ok(&["note", "list", "--json"]);
     let doc = json(&list_json.stdout);
     assert_eq!(doc["total"], 1);
@@ -545,14 +546,14 @@ fn help_states_defaults_for_tag_and_json() {
     let root_help = text(&fx.ok(&["--help"]).stdout);
     let json_line = root_help
         .lines()
-        .find(|l| l.contains("--json"))
+        .find(|line| line.contains("--json"))
         .expect("--json line in root --help");
     assert!(json_line.contains("[default:"), "got {json_line:?}");
 
     let add_help = text(&fx.ok(&["note", "add", "--help"]).stdout);
     let tag_line = add_help
         .lines()
-        .find(|l| l.contains("--tag"))
+        .find(|line| line.contains("--tag"))
         .expect("--tag line in note add --help");
     assert!(tag_line.contains("[default:"), "got {tag_line:?}");
 }
@@ -573,11 +574,11 @@ mod unix {
     fn snapshot(dir: &Path) -> Vec<(String, Vec<u8>)> {
         let mut entries: Vec<_> = fs::read_dir(dir)
             .unwrap()
-            .map(|e| {
-                let e = e.unwrap();
+            .map(|entry| {
+                let entry = entry.unwrap();
                 (
-                    e.file_name().to_string_lossy().into_owned(),
-                    fs::read(e.path()).unwrap(),
+                    entry.file_name().to_string_lossy().into_owned(),
+                    fs::read(entry.path()).unwrap(),
                 )
             })
             .collect();
@@ -693,22 +694,22 @@ mod unix {
 /// quotes separates, `'…'` and `"…"` group. Enough for documentation.
 fn shell_words(line: &str) -> Vec<String> {
     let (mut words, mut word, mut in_word, mut quote) = (Vec::new(), String::new(), false, None);
-    for c in line.chars() {
+    for ch in line.chars() {
         match quote {
-            Some(q) if c == q => quote = None,
-            Some(_) => word.push(c),
-            None if c == '\'' || c == '"' => {
-                quote = Some(c);
+            Some(open) if ch == open => quote = None,
+            Some(_) => word.push(ch),
+            None if ch == '\'' || ch == '"' => {
+                quote = Some(ch);
                 in_word = true;
             }
-            None if c.is_whitespace() => {
+            None if ch.is_whitespace() => {
                 if in_word {
                     words.push(std::mem::take(&mut word));
                     in_word = false;
                 }
             }
             None => {
-                word.push(c);
+                word.push(ch);
                 in_word = true;
             }
         }

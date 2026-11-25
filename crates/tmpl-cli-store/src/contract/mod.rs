@@ -6,6 +6,7 @@
 //! (`scripts/check-dependency-direction.sh`).
 
 mod audit;
+
 mod note;
 
 pub use audit::{AuditEvent, AuditStatus};

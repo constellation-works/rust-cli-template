@@ -7,9 +7,13 @@
 //! instead of a panic.
 
 mod color;
+
 mod payload;
+
 mod render;
+
 mod sink;
+
 mod table;
 
 pub(crate) use payload::{NotePayload, Output};
@@ -34,10 +38,10 @@ pub(crate) fn init_logging() {
     use tracing_subscriber::EnvFilter;
     let default = || EnvFilter::new("warn");
     let filter = match std::env::var(LOG_ENV) {
-        Ok(spec) => EnvFilter::try_new(&spec).unwrap_or_else(|e| {
+        Ok(spec) => EnvFilter::try_new(&spec).unwrap_or_else(|err| {
             let _ = writeln!(
                 io::stderr().lock(),
-                "warning: ignoring {LOG_ENV}={spec:?} ({e}); logging at warn"
+                "warning: ignoring {LOG_ENV}={spec:?} ({err}); logging at warn"
             );
             default()
         }),
@@ -64,8 +68,10 @@ pub(crate) fn finish(sink: &Sink, outcome: Result<Output, Error>) -> ExitCode {
     let err = match outcome {
         Ok(output) => match emit(sink, &output) {
             Ok(()) => return ExitCode::SUCCESS,
-            Err(e) if e.kind() == io::ErrorKind::BrokenPipe => return ExitCode::SUCCESS,
-            Err(e) => output_error(e),
+            Err(write_err) if write_err.kind() == io::ErrorKind::BrokenPipe => {
+                return ExitCode::SUCCESS;
+            }
+            Err(write_err) => output_error(write_err),
         },
         Err(err) => err,
     };
@@ -82,7 +88,7 @@ pub(crate) fn finish_parse_error(err: &clap::Error, args: &[OsString]) -> ExitCo
             .lock()
             .write_all(err.render().to_string().as_bytes());
         return match written {
-            Err(e) if e.kind() != io::ErrorKind::BrokenPipe => ExitCode::from(1),
+            Err(write_err) if write_err.kind() != io::ErrorKind::BrokenPipe => ExitCode::from(1),
             _ => ExitCode::from(code),
         };
     }

@@ -24,7 +24,7 @@ fn notes() -> Vec<Note> {
 }
 
 fn ids(notes: &[Note]) -> Vec<u64> {
-    notes.iter().map(|n| n.id.get()).collect()
+    notes.iter().map(|note| note.id.get()).collect()
 }
 
 #[test]

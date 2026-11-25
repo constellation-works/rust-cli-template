@@ -120,7 +120,7 @@ impl Store {
             }
             apply(&mut Tx::new(tx, path)).map_err(Failed)
         })
-        .map_err(|Failed(e)| e)
+        .map_err(|Failed(err)| err)
     }
 
     /// The audit log's repository.
@@ -156,7 +156,7 @@ impl Store {
         match db.read() {
             Ok(reader) => Ok(Snapshot::new(Some(reader), path)),
             Err(cw_sqlite::Error::Missing { .. }) => Ok(Snapshot::new(None, path)),
-            Err(e) => Err(e.into()),
+            Err(err) => Err(err.into()),
         }
     }
 }
@@ -167,14 +167,14 @@ impl Store {
 struct Failed(cw_base::Error);
 
 impl From<Error> for Failed {
-    fn from(e: Error) -> Self {
-        Self(e.into())
+    fn from(err: Error) -> Self {
+        Self(err.into())
     }
 }
 
 impl From<cw_sqlite::Error> for Failed {
-    fn from(e: cw_sqlite::Error) -> Self {
-        Self::from(Error::Sqlite(e))
+    fn from(err: cw_sqlite::Error) -> Self {
+        Self::from(Error::Sqlite(err))
     }
 }
 

@@ -1,9 +1,11 @@
 //! The root command groups use the summaries from the clap declarations.
 
-use clap::{Command, builder::StyledStr};
+use clap::Command;
+use clap::builder::StyledStr;
 use std::fmt::Write;
 
 const GROUPS: &[(&str, &[&str])] = &[("Notes", &["note"]), ("Help", &["help"])];
+
 const COMMANDS_HEADING: &str = "__ROOT_SUBCOMMANDS__";
 
 /// Replace the root command section and keep clap's usage, flags and footer.

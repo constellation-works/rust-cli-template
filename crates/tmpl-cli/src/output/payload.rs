@@ -34,7 +34,11 @@ impl From<&Note> for NotePayload {
             id: note.id.get(),
             title: note.title.as_str().to_owned(),
             body: note.body.clone(),
-            tags: note.tags.iter().map(|t| t.as_str().to_owned()).collect(),
+            tags: note
+                .tags
+                .iter()
+                .map(|tag| tag.as_str().to_owned())
+                .collect(),
             priority: note.priority,
             created_at: note.created_at,
         }

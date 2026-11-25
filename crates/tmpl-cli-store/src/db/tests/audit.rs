@@ -27,7 +27,7 @@ fn the_audit_format_is_one_more_than_the_number_of_upgrade_steps() {
 fn a_line_is_one_json_object_with_its_format_and_a_newline() {
     let line = encode_line(&failed_add()).unwrap();
     assert_eq!(line.last(), Some(&b'\n'));
-    assert_eq!(line.iter().filter(|&&b| b == b'\n').count(), 1);
+    assert_eq!(line.iter().filter(|&&byte| byte == b'\n').count(), 1);
     let value: serde_json::Value = serde_json::from_slice(&line).unwrap();
     assert_eq!(value["format"], AUDIT_FORMAT);
     assert_eq!(value["actor"], "alice");
@@ -55,7 +55,8 @@ fn an_unset_actor_serializes_as_null() {
 
 #[test]
 fn a_format_one_audit_line_without_actor_upgrades_to_null_actor() {
-    let v1 = br#"{"format":1,"at":"2026-09-26T12:00:00Z","command":"note add","status":"success","target":"1","error_code":null,"duration_ms":5}"#;
+    let v1 =
+        br#"{"format":1,"at":"2026-09-26T12:00:00Z","command":"note add","status":"success","target":"1","error_code":null,"duration_ms":5}"#;
     let upgraded = decode_line(Path::new(PATH), v1).unwrap();
     assert_eq!(upgraded.format, AUDIT_FORMAT);
     assert_eq!(upgraded.event.actor, None);
@@ -69,7 +70,11 @@ fn a_newer_audit_line_format_is_refused() {
     let newer = format!(r#"{{"format": {}, "command": "future"}}"#, AUDIT_FORMAT + 1);
     let err = decode_line(Path::new(PATH), newer.as_bytes()).unwrap_err();
     assert!(
-        matches!(err, Error::NewerFormat { found, supported, .. } if found == AUDIT_FORMAT + 1 && supported == AUDIT_FORMAT),
+        matches!(
+            err,
+            Error::NewerFormat { found, supported, .. }
+                if found == AUDIT_FORMAT + 1 && supported == AUDIT_FORMAT
+        ),
         "got {err:?}"
     );
 }
