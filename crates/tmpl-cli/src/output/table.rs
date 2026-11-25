@@ -61,7 +61,10 @@ pub(super) fn render(
 ) -> String {
     let widths = fit(columns, &natural_widths(columns, rows), width);
     let mut out = String::new();
-    let header: Vec<Cell> = columns.iter().map(|c| Cell::plain(c.header)).collect();
+    let header: Vec<Cell> = columns
+        .iter()
+        .map(|column| Cell::plain(column.header))
+        .collect();
     push_line(&mut out, columns, &widths, &header, Color::Plain);
     for row in rows {
         push_line(&mut out, columns, &widths, row, color);
@@ -70,25 +73,25 @@ pub(super) fn render(
 }
 
 /// Display width of `s` in terminal columns.
-pub(crate) fn display_width(s: &str) -> usize {
-    s.chars().map(char_width).sum()
+pub(crate) fn display_width(text: &str) -> usize {
+    text.chars().map(char_width).sum()
 }
 
 /// Terminal column width of one Unicode scalar value: 0 for control, format
 /// and combining marks, 2 for East Asian Wide/Fullwidth characters, else 1.
-fn char_width(c: char) -> usize {
-    if c.is_control() || is_zero_width(c) {
+fn char_width(ch: char) -> usize {
+    if ch.is_control() || is_zero_width(ch) {
         0
-    } else if is_wide(c) {
+    } else if is_wide(ch) {
         2
     } else {
         1
     }
 }
 
-fn is_zero_width(c: char) -> bool {
+fn is_zero_width(ch: char) -> bool {
     matches!(
-        c as u32,
+        ch as u32,
         0x0300..=0x036F   // Combining Diacritical Marks
         | 0x1AB0..=0x1AFF // Combining Diacritical Marks Extended
         | 0x1DC0..=0x1DFF // Combining Diacritical Marks Supplement
@@ -103,9 +106,9 @@ fn is_zero_width(c: char) -> bool {
     )
 }
 
-fn is_wide(c: char) -> bool {
+fn is_wide(ch: char) -> bool {
     matches!(
-        c as u32,
+        ch as u32,
         0x1100..=0x115F   // Hangul Jamo init. consonants
         | 0x231A..=0x231B // Watch, Hourglass
         | 0x2329..=0x232A // Angle brackets
@@ -169,9 +172,9 @@ fn natural_widths(columns: &[Column], rows: &[Vec<Cell>]) -> Vec<usize> {
     columns
         .iter()
         .enumerate()
-        .map(|(i, col)| {
+        .map(|(index, col)| {
             rows.iter()
-                .filter_map(|r| r.get(i))
+                .filter_map(|row| row.get(index))
                 .map(|cell| display_width(&cell.text))
                 .chain([display_width(col.header)])
                 .max()
@@ -188,14 +191,14 @@ fn fit(columns: &[Column], natural: &[usize], width: Option<usize>) -> Vec<usize
     };
     let gutters = 2 * columns.len().saturating_sub(1);
     let mut excess = (widths.iter().sum::<usize>() + gutters).saturating_sub(limit);
-    for (i, col) in columns.iter().enumerate() {
+    for (index, col) in columns.iter().enumerate() {
         if excess == 0 {
             break;
         }
         if col.truncate {
             let floor = MIN_TRUNCATED_WIDTH.max(display_width(col.header));
-            let give = excess.min(widths[i].saturating_sub(floor));
-            widths[i] -= give;
+            let give = excess.min(widths[index].saturating_sub(floor));
+            widths[index] -= give;
             excess -= give;
         }
     }
@@ -204,25 +207,25 @@ fn fit(columns: &[Column], natural: &[usize], width: Option<usize>) -> Vec<usize
 
 fn push_line(out: &mut String, columns: &[Column], widths: &[usize], cells: &[Cell], color: Color) {
     let last = columns.len().saturating_sub(1);
-    for (i, (col, &w)) in columns.iter().zip(widths).enumerate() {
+    for (index, (col, &width)) in columns.iter().zip(widths).enumerate() {
         let (text, role) = cells
-            .get(i)
-            .map_or(("-", Role::Neutral), |c| (c.text.as_str(), c.role));
-        let text = truncate(text, w);
-        let pad = " ".repeat(w.saturating_sub(display_width(&text)));
+            .get(index)
+            .map_or(("-", Role::Neutral), |cell| (cell.text.as_str(), cell.role));
+        let text = truncate(text, width);
+        let pad = " ".repeat(width.saturating_sub(display_width(&text)));
         let painted = paint(&text, role, color);
         match col.align {
             Align::Right => {
                 out.push_str(&pad);
                 out.push_str(&painted);
             }
-            Align::Left if i == last => out.push_str(&painted),
+            Align::Left if index == last => out.push_str(&painted),
             Align::Left => {
                 out.push_str(&painted);
                 out.push_str(&pad);
             }
         }
-        if i != last {
+        if index != last {
             out.push_str("  ");
         }
     }
@@ -241,12 +244,12 @@ pub(crate) fn truncate(text: &str, width: usize) -> String {
     let keep = width.saturating_sub(1);
     let mut cut = String::new();
     let mut used = 0usize;
-    for c in text.chars() {
-        let cw = char_width(c);
+    for ch in text.chars() {
+        let cw = char_width(ch);
         if used + cw > keep {
             break;
         }
-        cut.push(c);
+        cut.push(ch);
         used += cw;
     }
     cut.push('…');

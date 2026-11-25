@@ -9,7 +9,7 @@ fn note(id: u64, tags: &[&str]) -> NotePayload {
         id,
         title: format!("note {id}"),
         body: None,
-        tags: tags.iter().map(|t| (*t).to_owned()).collect(),
+        tags: tags.iter().map(|tag| (*tag).to_owned()).collect(),
         priority: Priority::High,
         created_at: datetime!(2026-01-02 03:04:05 UTC),
     }
@@ -38,7 +38,7 @@ fn the_plain_form_is_one_tab_separated_line_per_record() {
     );
     let text = render_list(OutputMode::Plain, &[note(1, &[]), note(2, &[])]);
     assert_eq!(text.lines().count(), 2);
-    assert!(text.lines().all(|l| l.split('\t').count() == 5));
+    assert!(text.lines().all(|line| line.split('\t').count() == 5));
 }
 
 #[test]
@@ -87,17 +87,17 @@ fn a_single_record_list_is_still_a_table() {
 
 #[test]
 fn detail_view_sanitizes_body_control_characters_and_normalizes_crlf() {
-    let mut n = note(1, &[]);
-    n.body = Some(String::from(
+    let mut note_payload = note(1, &[]);
+    note_payload.body = Some(String::from(
         "first\r\nsecond\rthird\x1b[31mred\x1b[0m\tkept",
     ));
     let mut out = Vec::new();
-    note_detail(&mut out, &sink(OutputMode::Table), &n).unwrap();
+    note_detail(&mut out, &sink(OutputMode::Table), &note_payload).unwrap();
     let rendered = String::from_utf8(out).unwrap();
     assert!(
         rendered
             .bytes()
-            .all(|b| b >= 0x20 || b == b'\n' || b == b'\t'),
+            .all(|byte| byte >= 0x20 || byte == b'\n' || byte == b'\t'),
         "raw control byte leaked into detail output: {rendered:?}"
     );
     assert!(rendered.contains("first\n          second\\rthird\\u{1b}[31mred\\u{1b}[0m\tkept"));

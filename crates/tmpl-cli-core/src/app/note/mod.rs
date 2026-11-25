@@ -7,8 +7,11 @@
 //! (`add.rs`, `list.rs`, `show.rs`); the rules they share are in `rule.rs`.
 
 mod add;
+
 mod list;
+
 mod rule;
+
 mod show;
 
 pub use rule::{ListFilter, NewNote, NoteList};
@@ -130,7 +133,7 @@ impl Error {
         match self {
             Self::NotFound { .. } => "note_not_found",
             Self::IdExhausted { .. } => "note_id_exhausted",
-            Self::Store(e) => e.code(),
+            Self::Store(err) => err.code(),
         }
     }
 
@@ -141,7 +144,7 @@ impl Error {
         match self {
             Self::NotFound { .. } => Kind::NotFound,
             Self::IdExhausted { .. } => Kind::Refused,
-            Self::Store(e) => e.kind(),
+            Self::Store(err) => err.kind(),
         }
     }
 }

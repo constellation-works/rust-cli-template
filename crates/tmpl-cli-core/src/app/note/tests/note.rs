@@ -77,7 +77,7 @@ fn lock_timeout_audited_command_waits_one_deadline_and_records_one_failure_line(
     let audit_raw = std::fs::read_to_string(ctx.store().audit_path()).unwrap();
     let lines: Vec<serde_json::Value> = audit_raw
         .lines()
-        .map(|l| serde_json::from_str(l).unwrap())
+        .map(|line| serde_json::from_str(line).unwrap())
         .collect();
     assert_eq!(lines.len(), 1, "expected 1 audit line, got {lines:?}");
     assert_eq!(lines[0]["command"], "note add");

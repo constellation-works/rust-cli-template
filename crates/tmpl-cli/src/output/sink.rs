@@ -107,7 +107,7 @@ pub(crate) fn resolve_mode(
     env_format: Option<&str>,
     requested: Option<FormatArg>,
 ) -> OutputMode {
-    let from_env = env_format.and_then(|v| FormatArg::from_str(v.trim(), true).ok());
+    let from_env = env_format.and_then(|value| FormatArg::from_str(value.trim(), true).ok());
     match requested.or(from_env).unwrap_or(FormatArg::Auto) {
         FormatArg::Json => OutputMode::Json,
         FormatArg::Table => OutputMode::Table,
@@ -120,7 +120,7 @@ pub(crate) fn resolve_mode(
 /// `TERM=dumb`; a non-empty `CLICOLOR_FORCE` overrides `TERM=dumb` but never
 /// `NO_COLOR` or a pipe (STD-01 R17).
 pub(super) fn resolve_color(is_tty: bool, env: &SinkEnv) -> Color {
-    let set = |v: &Option<String>| v.as_deref().is_some_and(|s| !s.is_empty());
+    let set = |value: &Option<String>| value.as_deref().is_some_and(|text| !text.is_empty());
     if !is_tty || set(&env.no_color) {
         return Color::Plain;
     }
@@ -142,8 +142,8 @@ fn resolve_width(is_tty: bool, columns: Option<&str>) -> Option<usize> {
         return None;
     }
     columns
-        .and_then(|c| c.trim().parse::<usize>().ok())
-        .filter(|&w| w > 0)
+        .and_then(|text| text.trim().parse::<usize>().ok())
+        .filter(|&width| width > 0)
 }
 
 /// Whether a command line that failed to parse asked for JSON, so the usage
@@ -152,12 +152,12 @@ fn resolve_width(is_tty: bool, columns: Option<&str>) -> Option<usize> {
 /// else the environment variable.
 pub(crate) fn raw_args_request_json(args: &[OsString], env_format: Option<&str>) -> bool {
     let mut explicit = None;
-    let mut iter = args.iter().skip(1).map(|a| a.to_string_lossy());
+    let mut iter = args.iter().skip(1).map(|os_arg| os_arg.to_string_lossy());
     while let Some(arg) = iter.next() {
         match arg.as_ref() {
             "--" => break,
             "--json" => explicit = Some(true),
-            "--format" => explicit = iter.next().map(|v| v == "json"),
+            "--format" => explicit = iter.next().map(|value| value == "json"),
             other => {
                 if let Some(value) = other.strip_prefix("--format=") {
                     explicit = Some(value == "json");
@@ -165,5 +165,7 @@ pub(crate) fn raw_args_request_json(args: &[OsString], env_format: Option<&str>)
             }
         }
     }
-    explicit.unwrap_or_else(|| env_format.is_some_and(|v| v.trim().eq_ignore_ascii_case("json")))
+    explicit.unwrap_or_else(|| {
+        env_format.is_some_and(|value| value.trim().eq_ignore_ascii_case("json"))
+    })
 }

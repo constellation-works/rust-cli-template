@@ -6,7 +6,7 @@ dependency-direction gate reads `cargo metadata` with it). The
 cargo-deny and cargo-nextest versions.
 
 ```sh
-make ci-fast          # formatting, structure, docs and standards
+make ci-fast          # formatting, structure and source style, docs and standards
 make ci-lint          # Clippy and cargo-deny
 make test             # nextest and doctests
 make goldens          # compare help and output from the built binary

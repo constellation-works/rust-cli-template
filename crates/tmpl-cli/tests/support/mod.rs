@@ -173,7 +173,8 @@ pub fn write_store(root: &Path, count: usize) {
         &format!(
             "WITH RECURSIVE n(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM n WHERE id < {count})
              INSERT INTO note (id, title, body, tags, priority, created_at)
-             SELECT id, 'note number ' || id || ' with a title long enough to fill the pipe quickly',
+             SELECT id,
+                    'note number ' || id || ' with a title long enough to fill the pipe quickly',
                     NULL, '[]', 'normal', '2026-01-02T03:04:05Z'
              FROM n;"
         ),
@@ -186,8 +187,8 @@ pub fn corrupt_store(root: &Path) {
     for sidecar in ["notes.db-wal", "notes.db-shm"] {
         match std::fs::remove_file(root.join(sidecar)) {
             Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => panic!("remove {sidecar}: {e}"),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => panic!("remove {sidecar}: {err}"),
         }
     }
     std::fs::write(root.join("notes.db"), b"not a database").expect("corrupt store");

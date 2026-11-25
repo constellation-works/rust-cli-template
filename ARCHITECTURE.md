@@ -229,3 +229,7 @@ Checked by grep over non-test sources, except that `rusqlite` and
   `command`.
 - Only `tmpl-cli/src/output/` touches stdout, stderr, `IsTerminal` or the
   color/format variables (`scripts/check-terminal-guard.sh`).
+- Every crate: module, source directory and source file names are singular
+  (`scripts/check-singular-names.sh`, STD-12 R1), and the source style that
+  stable rustfmt cannot check holds (`scripts/check-source-style.sh`, STD-12
+  R12, R13, R16, R19).

@@ -20,7 +20,7 @@ fn lines(store: &Store) -> Vec<serde_json::Value> {
     std::fs::read_to_string(store.audit_path())
         .unwrap()
         .lines()
-        .map(|l| serde_json::from_str(l).unwrap())
+        .map(|line| serde_json::from_str(line).unwrap())
         .collect()
 }
 

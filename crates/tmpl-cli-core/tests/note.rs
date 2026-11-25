@@ -28,8 +28,8 @@ const NOW: OffsetDateTime = datetime!(2026-01-02 03:04:05 UTC);
 
 /// The store failure behind an app error, when there is one.
 fn store_error(err: &Error) -> Option<&StoreError> {
-    if let Error::Store(e) = err {
-        e.downcast_ref::<StoreError>()
+    if let Error::Store(source) = err {
+        source.downcast_ref::<StoreError>()
     } else {
         None
     }
@@ -114,15 +114,15 @@ fn write_store_file(dir: &Path, text: &str) {
     }
 }
 
-fn limit(n: usize) -> Option<NonZeroUsize> {
-    NonZeroUsize::new(n)
+fn limit(count: usize) -> Option<NonZeroUsize> {
+    NonZeroUsize::new(count)
 }
 
 fn new_note(title: &str, tags: &[&str], priority: Priority) -> NewNote {
     NewNote {
         title: title.parse().unwrap(),
         body: None,
-        tags: tags.iter().map(|t| t.parse().unwrap()).collect(),
+        tags: tags.iter().map(|tag| tag.parse().unwrap()).collect(),
         priority,
     }
 }
@@ -193,7 +193,7 @@ fn list_filters_before_the_limit_and_reports_the_total() {
             .value
             .notes
             .into_iter()
-            .map(|n| n.title.as_str().to_owned())
+            .map(|note| note.title.as_str().to_owned())
             .collect()
     };
     assert_eq!(
@@ -249,12 +249,15 @@ fn concurrent_writers_never_lose_a_note_or_reuse_an_id() {
     let dir = tempdir();
     let store = Arc::new(Store::open(dir.path()));
     let threads: Vec<_> = (0..4)
-        .map(|t| {
+        .map(|thread| {
             let store = Arc::clone(&store);
             std::thread::spawn(move || {
-                for i in 0..5 {
+                for seq in 0..5 {
                     store
-                        .add(new_note(&format!("t{t}-{i}"), &[], Priority::Normal), NOW)
+                        .add(
+                            new_note(&format!("t{thread}-{seq}"), &[], Priority::Normal),
+                            NOW,
+                        )
                         .unwrap();
                 }
             })
@@ -269,7 +272,7 @@ fn concurrent_writers_never_lose_a_note_or_reuse_an_id() {
         .value
         .notes
         .iter()
-        .map(|n| n.id.get())
+        .map(|note| note.id.get())
         .collect();
     ids.sort_unstable();
     assert_eq!(ids, (1..=20).collect::<Vec<_>>());
@@ -343,7 +346,8 @@ fn bad_records_are_isolated_on_read_fail_on_show_and_refuse_writes() {
     assert_eq!(err.code(), "store_bad_record");
     assert!(matches!(
         store_error(&err),
-        Some(StoreError::BadRecord(r)) if r.locator == RecordLocator::Id(NoteId::try_from(2).unwrap())
+        Some(StoreError::BadRecord(record))
+            if record.locator == RecordLocator::Id(NoteId::try_from(2).unwrap())
     ));
 
     // Adding refuses and adds nothing.

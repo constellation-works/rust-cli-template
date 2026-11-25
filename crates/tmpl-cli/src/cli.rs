@@ -47,7 +47,8 @@ pub(crate) struct GlobalArgs {
     #[arg(long, global = true, value_name = "DIR", help_heading = GLOBAL)]
     pub(crate) root: Option<PathBuf>,
 
-    /// Output format; auto is a table on a terminal, tab-separated lines otherwise, and json is one JSON document [default: $TMPL_CLI_FORMAT, else auto]
+    /// Output format; auto is a table on a terminal, tab-separated lines otherwise,
+    /// and json is one JSON document [default: $TMPL_CLI_FORMAT, else auto]
     #[arg(long, global = true, value_enum, value_name = "FORMAT", help_heading = GLOBAL)]
     pub(crate) format: Option<FormatArg>,
 
@@ -67,7 +68,12 @@ impl Cli {
         let matches = crate::help::with_groups(Self::command(), crate::output::help_width())
             .try_get_matches_from(args)?;
         let cli = Self::from_arg_matches(&matches)?;
-        if cli.global.json && cli.global.format.is_some_and(|f| f != FormatArg::Json) {
+        if cli.global.json
+            && cli
+                .global
+                .format
+                .is_some_and(|format| format != FormatArg::Json)
+        {
             return Err(Self::command().error(
                 ErrorKind::ArgumentConflict,
                 "--json cannot be used with a --format other than json",

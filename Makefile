@@ -47,15 +47,29 @@ build:
 fmt:
 	$(CARGO) fmt --all
 
+# STD-12 R11: rustfmt on the stable toolchain is the layout gate, and
+# rustfmt.toml sets only stable options: stable rustfmt warns about an
+# unstable one and ignores it, so that warning fails the gate. Its stderr is
+# kept in target/ for the check.
 fmt-check:
-	$(CARGO) fmt --all -- --check
+	@set -e; mkdir -p target; log=target/fmt-check.log; \
+	status=0; $(CARGO) fmt --all -- --check 2>"$$log" || status=$$?; \
+	cat "$$log" >&2; \
+	if grep -qi 'unstable features are only available in nightly' "$$log"; then \
+		echo "error: rustfmt.toml sets an option that is unstable on this toolchain (STD-12 R11)" >&2; exit 1; \
+	fi; \
+	exit $$status
 
 # Source-only structure checks: dependency direction (STD-02 R1-R6), unit-test
-# module reachability (STD-02 R19), terminal/stream ownership (STD-01 R17).
+# module reachability (STD-02 R19), terminal/stream ownership (STD-01 R17),
+# singular names (STD-12 R1) and the source style rustfmt cannot check
+# (STD-12 R12, R13, R16, R19).
 structure:
 	./scripts/check-dependency-direction.sh
 	./scripts/check-test-modules.sh
 	./scripts/check-terminal-guard.sh
+	./scripts/check-singular-names.sh
+	./scripts/check-source-style.sh
 	sh scripts/check-private-task-ids.sh
 
 clippy:
@@ -97,10 +111,10 @@ test:
 # Goldens of the shipped surface (STD-01 R24): captured from the built binary.
 goldens:
 	@if $(CARGO) nextest --version >/dev/null 2>&1; then \
-		UPDATE_GOLDENS=$(if $(UPDATE),1,0) $(CARGO) nextest run -p $(BINARY) --test goldens $(LOCKED) --no-tests=fail; \
+		UPDATE_GOLDENS=$(if $(UPDATE),1,0) $(CARGO) nextest run -p $(BINARY) --test golden $(LOCKED) --no-tests=fail; \
 	else \
 		$(call missing_tool,cargo-nextest,the zero-test check); \
-		UPDATE_GOLDENS=$(if $(UPDATE),1,0) $(CARGO) test -p $(BINARY) --test goldens $(LOCKED); \
+		UPDATE_GOLDENS=$(if $(UPDATE),1,0) $(CARGO) test -p $(BINARY) --test golden $(LOCKED); \
 	fi
 
 # The constellation standards this repo adopted are vendored under

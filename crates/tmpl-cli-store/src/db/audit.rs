@@ -4,8 +4,8 @@
 //! when, and did it work". The core's audit guard builds each
 //! [`AuditEvent`] and the audit repository appends it; this module only turns
 //! an event into a line and back. Each line carries its own `format` so a
-//! reader can upgrade older lines and refuse newer ones (STD-03 R10, R23); a crash can leave a torn last line,
-//! which a reader skips.
+//! reader can upgrade older lines and refuse newer ones (STD-03 R10, R23); a
+//! crash can leave a torn last line, which a reader skips.
 
 use crate::contract::AuditEvent;
 use crate::error::{Error, Result};

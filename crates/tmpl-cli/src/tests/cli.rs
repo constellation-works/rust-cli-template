@@ -94,17 +94,18 @@ fn every_command_and_flag_has_help_text() {
 /// True when `text` contains something shaped like a tracker id: `ABC-123`
 /// or `F2026-09-042`.
 fn has_tracker_id(text: &str) -> Option<String> {
-    text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+    text.split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '-'))
         .find(|word| {
             let Some((prefix, rest)) = word.split_once('-') else {
                 return false;
             };
-            let prefix_ok = prefix.len() >= 2 && prefix.chars().all(|c| c.is_ascii_uppercase());
+            let prefix_ok = prefix.len() >= 2 && prefix.chars().all(|ch| ch.is_ascii_uppercase());
             let dated = prefix.len() == 5
                 && prefix.starts_with('F')
-                && prefix[1..].chars().all(|c| c.is_ascii_digit());
-            let digits =
-                |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit() || c == '-');
+                && prefix[1..].chars().all(|ch| ch.is_ascii_digit());
+            let digits = |text: &str| {
+                !text.is_empty() && text.chars().all(|ch| ch.is_ascii_digit() || ch == '-')
+            };
             (prefix_ok || dated) && digits(rest)
         })
         .map(str::to_owned)
@@ -139,8 +140,8 @@ fn no_subcommand_argument_shares_an_id_with_a_global_one() {
     let root = Cli::command();
     let globals: Vec<String> = root
         .get_arguments()
-        .filter(|a| a.is_global_set())
-        .map(|a| a.get_id().to_string())
+        .filter(|arg| arg.is_global_set())
+        .map(|arg| arg.get_id().to_string())
         .collect();
     assert!(globals.len() >= 3, "the walk must see the global flags");
     let mut unbuilt = Vec::new();
@@ -149,7 +150,7 @@ fn no_subcommand_argument_shares_an_id_with_a_global_one() {
         for arg in cmd.get_arguments() {
             let id = arg.get_id().as_str();
             assert!(
-                !globals.iter().any(|g| g == id),
+                !globals.iter().any(|global| global == id),
                 "`{path}` argument `{id}` shares its id with a global argument"
             );
         }

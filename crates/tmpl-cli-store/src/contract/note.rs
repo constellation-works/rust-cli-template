@@ -222,7 +222,7 @@ impl TryFrom<String> for Tag {
             && value.len() <= Self::MAX_CHARS
             && value
                 .bytes()
-                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-');
         if valid {
             Ok(Self(value))
         } else {

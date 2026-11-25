@@ -87,7 +87,8 @@ pub(crate) struct ListArgs {
     #[arg(long, value_name = "PRIORITY", value_parser = priority_parser())]
     pub(crate) priority: Option<Priority>,
 
-    /// Show at most this many of the matching notes, 1 or more; --json reports the total and whether the list was cut [default: all]
+    /// Show at most this many of the matching notes, 1 or more; --json reports the
+    /// total and whether the list was cut [default: all]
     #[arg(long, value_name = "N")]
     pub(crate) limit: Option<NonZeroUsize>,
 }
@@ -103,7 +104,7 @@ pub(crate) struct ShowArgs {
 /// Allowed priorities come from the domain type, so help and parsing cannot
 /// drift from it (STD-01 R25).
 fn priority_parser() -> impl TypedValueParser<Value = Priority> {
-    PossibleValuesParser::new(Priority::NAMES).try_map(|s| s.parse::<Priority>())
+    PossibleValuesParser::new(Priority::NAMES).try_map(|value| value.parse::<Priority>())
 }
 
 /// Run one `note` verb through the `note` app and pass the payload to

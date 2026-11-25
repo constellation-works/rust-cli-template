@@ -118,7 +118,7 @@ pub(crate) fn now() -> OffsetDateTime {
 
 /// The data-directory precedence, separated so tests can check it directly.
 pub(crate) fn resolve_root(root_flag: Option<&Path>, env: &Env) -> Result<PathBuf, Error> {
-    let non_empty = |v: &Option<OsString>| v.clone().filter(|s| !s.is_empty());
+    let non_empty = |value: &Option<OsString>| value.clone().filter(|os| !os.is_empty());
     if let Some(flag) = root_flag {
         return Ok(flag.to_path_buf());
     }
@@ -133,10 +133,11 @@ pub(crate) fn resolve_root(root_flag: Option<&Path>, env: &Env) -> Result<PathBu
 /// The actor precedence (`USER`, else `USERNAME`, else `None`), separated so
 /// tests can check it directly without touching the process environment.
 pub(crate) fn resolve_actor(env: &Env) -> Option<String> {
-    let non_empty = |v: &Option<OsString>| {
-        v.as_deref()
+    let non_empty = |value: &Option<OsString>| {
+        value
+            .as_deref()
             .and_then(std::ffi::OsStr::to_str)
-            .filter(|s| !s.is_empty())
+            .filter(|os| !os.is_empty())
             .map(str::to_owned)
     };
     non_empty(&env.user).or_else(|| non_empty(&env.username))

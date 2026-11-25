@@ -19,8 +19,9 @@ pub fn execute(store: &Store, sql: &str) -> std::result::Result<(), cw_base::Err
     store.prepare_root()?;
     let db = crate::driver::sqlite::open(store.root(), std::time::Duration::from_secs(5));
     db.write(|tx| {
-        tx.execute_batch(sql)
-            .map_err(|e| Error::Sqlite(cw_sqlite::Error::sqlite("run test SQL on", db.path(), e)))
+        tx.execute_batch(sql).map_err(|err| {
+            Error::Sqlite(cw_sqlite::Error::sqlite("run test SQL on", db.path(), err))
+        })
     })
     .map_err(cw_base::Error::from)
 }
