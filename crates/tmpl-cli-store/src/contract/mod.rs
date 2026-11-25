@@ -10,6 +10,3 @@ mod note;
 
 pub use note::{Body, Note, NoteError, NoteId, Priority, Tag, Title};
 // example:end
-
-#[cfg(test)]
-mod tests;

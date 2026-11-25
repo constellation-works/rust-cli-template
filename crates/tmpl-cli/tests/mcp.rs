@@ -251,4 +251,31 @@ fn a_failing_call_is_a_tool_error_with_the_templates_code() {
     assert_eq!(bad_tag["error"]["code"], -32602, "{bad_tag}");
     session.close();
 }
+
+#[test]
+fn a_tool_reads_each_text_field_through_its_types_rules() {
+    // STD-01 R25: a call is checked by the rules the command line uses.
+    let fx = Fixture::new();
+    let mut session = Session::start(&fx);
+    for (tool, arguments) in [
+        ("note_add", json!({"title": "a\nb"})),
+        ("note_add", json!({"title": "x", "body": " "})),
+        ("note_add", json!({"title": "x", "tags": ["ok", "Bad"]})),
+        ("note_add", json!({"title": 7})),
+        ("note_show", json!({"id": 0})),
+    ] {
+        let refused = session.call(tool, &arguments);
+        assert_eq!(refused["error"]["code"], -32602, "{arguments}: {refused}");
+    }
+    assert!(!fx.root().join("store.db").exists(), "a refused call wrote");
+    let added = session.call(
+        "note_add",
+        &json!({"title": "  spaced ", "body": null, "tags": ["b", "a", "b"]}),
+    );
+    let note = structured(&added);
+    assert_eq!(note["title"], "spaced", "{added}");
+    assert_eq!(note["body"], Value::Null);
+    assert_eq!(note["tags"], json!(["a", "b"]));
+    session.close();
+}
 // example:end

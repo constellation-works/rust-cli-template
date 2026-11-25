@@ -636,8 +636,8 @@ govern. Each binds as soon as it does, and this entry is edited then:
   network request at all (§R20).
 - No persisted free text besides note content the caller asked to store,
   kept verbatim, so there is no redaction layer (STD-05@1 §R13, §R14). The
-  audit log persists identifiers and stable codes only; a unit test pins its
-  fields, and adding a free-text field to it brings §R13 into force.
+  audit log persists identifiers and stable codes only; the integration
+  tests pin its fields, and adding a free-text field to it brings §R13 into force.
 
 ### Consequences
 
@@ -1295,7 +1295,8 @@ crate names it.
   wraps the kit's output error with its own code. A usage error is reported
   the same way, with clap's tip and usage lines after it as text.
 - Logging is `Logging::from_env(env, APP).init()`; root help is
-  `cw_cli::help::grouped`, and a unit test runs `help::check_summaries`.
+  `cw_cli::help::grouped`, and the golden tests hold every summary to one
+  short line.
 - `output/` keeps the payloads, each command's view and the priority's
   colour role. `output/env.rs` still declares `CLICOLOR_FORCE` and
   `COLUMNS`, which the kit reads but `cw_app` does not declare yet, so the

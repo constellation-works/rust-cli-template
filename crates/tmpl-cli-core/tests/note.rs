@@ -389,6 +389,23 @@ fn a_hand_edited_value_is_escaped_in_its_bad_record_reason() {
 }
 
 #[test]
+fn the_next_id_is_one_past_the_highest_whatever_the_stored_order() {
+    let dir = tempdir();
+    let store = Store::open(dir.path());
+    execute(
+        &store,
+        "INSERT INTO note (id, title, body, tags, priority, created_at) VALUES
+            (3, 'three', NULL, '[]', 'normal', '2026-01-02T03:04:05Z'),
+            (1, 'one', NULL, '[]', 'normal', '2026-01-02T03:04:05Z'),
+            (7, 'seven', NULL, '[]', 'normal', '2026-01-02T03:04:05Z');",
+    );
+    let added = store
+        .add(new_note("next", &[], Priority::Normal), NOW)
+        .unwrap();
+    assert_eq!(added.id.get(), 8);
+}
+
+#[test]
 fn add_refuses_when_max_id_is_already_in_use() {
     let dir = tempdir();
     let store = Store::open(dir.path());

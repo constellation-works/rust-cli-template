@@ -216,7 +216,7 @@ fn output(outcome: Outcome) -> Output {
 
 /// The stderr line for a list, if it needs one: nothing matched (STD-01
 /// R16), or the limit cut the list (R34). A full, non-empty list has none.
-pub(super) fn list_notice(filter: &ListFilter, listed: &NoteList) -> Option<String> {
+fn list_notice(filter: &ListFilter, listed: &NoteList) -> Option<String> {
     if listed.total == 0 {
         Some(empty_notice(filter))
     } else if listed.truncated() {

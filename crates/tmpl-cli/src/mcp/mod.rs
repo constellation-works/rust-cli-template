@@ -34,7 +34,7 @@ use serde_json::Value;
 use tmpl_cli_core::{APP, Error, Origin, Runtime, State};
 
 /// Every tool, one per command, in the order `tools/list` gives them.
-pub(crate) fn tools() -> Vec<Tool<State>> {
+fn tools() -> Vec<Tool<State>> {
     vec![
         tool::<StatusArgs>(&["status"], Access::ReadOnly, Command::Status),
         // example:begin
@@ -112,6 +112,3 @@ fn call(runtime: &Runtime, origin: &Origin, command: Command) -> Result<Value, E
 fn json(payload: &Payload) -> Result<Value, Error> {
     serde_json::to_value(payload.json()).map_err(encode_error)
 }
-
-#[cfg(test)]
-mod tests;
