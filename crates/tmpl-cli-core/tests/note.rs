@@ -93,13 +93,17 @@ impl NoteApp for Store {
 #[test]
 fn a_lock_timeout_omits_an_oversized_holder_record() {
     // The kit's holder record is one JSON line read back up to 4096 bytes.
-    // The control, the same record with a short label, is named; past the
-    // bound the record is unreadable and the timeout names no holder.
+    // The control, the same record with a short label, is named where the
+    // kit names a holder (Unix; native Windows never does); past the bound
+    // the record is unreadable and the timeout names no holder.
     let control = timeout_holder(&holder_record("holder"));
+    #[cfg(unix)]
     assert!(
         matches!(&control, Some(h) if h.pid == std::process::id() && h.label == "holder"),
         "an in-bound record names its live holder, got {control:?}"
     );
+    #[cfg(not(unix))]
+    assert!(control.is_none(), "got {control:?}");
     let oversized = timeout_holder(&holder_record(&"x".repeat(4096)));
     assert!(oversized.is_none(), "got {oversized:?}");
 }

@@ -43,8 +43,8 @@ leave unparseable state.
   re-read under it. Readers take no lock.
 - Lock acquisition gives up after 10 seconds with `store_locked`, naming the
   holder from its record while that process is still alive (on Linux, the
-  pid and its start time; elsewhere, the pid), and otherwise "another
-  process". The same thread asking again for a lock it holds is refused at
+  pid and its start time; on other Unix, the pid), and otherwise "another
+  process". Native Windows never names a holder. The same thread asking again for a lock it holds is refused at
   once (`store_lock_reentrant`).
 - A missing `notes.json` is an empty store. Reads take no lock, create
   nothing and work on a read-only directory.
