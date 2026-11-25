@@ -1,3 +1,8 @@
+---
+type: guide
+summary: How to run tmpl-cli: its commands, output modes, data directory, environment variables and exit status.
+---
+
 # Using tmpl-cli
 
 Run `tmpl-cli --help` for command groups and global flags, or add `--help`

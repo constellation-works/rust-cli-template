@@ -183,6 +183,7 @@ cat >"$ROOT/about.md" <<CARD
 ---
 codebase: $NAME
 owner: daniel
+type: codebase
 summary: <One line — what $NAME does and for whom.>
 status: active
 stack: Rust

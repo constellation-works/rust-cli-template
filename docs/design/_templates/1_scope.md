@@ -1,10 +1,12 @@
 ---
 title: <Feature> — Scope
 owner: <accountable person or agent family>
-last_updated: YYYY-MM-DD
+created_date: YYYY-MM-DD
+updated_date: YYYY-MM-DD
 status: Draft
 feature: <feature-slug>
 doc_role: scope
+type: design
 summary: <one line describing the change>
 stage: idea
 next: <one concrete next step>

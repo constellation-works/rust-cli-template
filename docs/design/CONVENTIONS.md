@@ -1,8 +1,9 @@
 ---
 title: Design Doc Conventions
 owner: claude
-last_updated: 2026-09-26
 status: Accepted
+type: design
+summary: How a feature's design docs under docs/design/ are laid out, what their frontmatter carries, and what earns a decision entry.
 ---
 
 # Design Doc Conventions
@@ -43,7 +44,8 @@ roadmap, changelog or tutorial inside a feature folder.
 
 Every numbered doc keeps the frontmatter from `_templates/` (`title` equals
 the H1, `status` is `Draft` until reviewed, then `Accepted`; `doc_role`
-matches the filename). The entry document also carries the delivery `stage`
+matches the filename; `created_date` stays as first written and
+`updated_date` changes with every content edit, STD-06 R4). The entry document also carries the delivery `stage`
 and `next` step. Run `make feature-board` after changing either field. A
 document that cites public tasks ends with a **Task References** section.
 
