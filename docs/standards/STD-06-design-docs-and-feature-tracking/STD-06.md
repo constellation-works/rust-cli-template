@@ -4,8 +4,8 @@ title: Design docs and feature tracking — one folder per feature, a delivery s
 summary: Normative rules for how a project keeps feature designs and knows where each feature stands — one docs/design/<feature>/ folder on a scope or full track, required frontmatter, a `stage` and `next` on the entry doc kept apart from the doc's approval `status`, a generated and CI-checked feature board, decision entries admitted only when they explain surprising code or govern future choices, and every implementation task tagged with its feature slug so live progress is read from the tracker; follow it in any project with design docs.
 tags: [standard, docs, design, tracking, agents]
 version: 2
-created: 2026-10-25
-updated: 2026-11-25
+created_date: 2026-10-25
+updated_date: 2026-11-25
 last_validated: 2026-10-25
 related: [STD-04-testing-and-verification]
 ---

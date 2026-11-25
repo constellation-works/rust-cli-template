@@ -4,8 +4,8 @@ title: Source style — names, vertical spacing, line width and the formatter ga
 summary: Normative rules for how source code reads on the page — singular module and file names, blank lines between items, a line-width limit, named bindings, file order and the formatter as the CI gate plus checks for what it misses — as a core every language follows and a profile per language (Rust first) that names its formatter, lints and checks; follow them in every constellation code repository.
 tags: [standard, style, naming, formatting, rust]
 version: 1
-created: 2026-11-25
-updated: 2026-11-25
+created_date: 2026-11-25
+updated_date: 2026-11-25
 last_validated: 2026-11-25
 related: [STD-02-rust-architecture-and-errors, STD-09-project-docs]
 ---

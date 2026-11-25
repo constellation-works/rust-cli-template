@@ -4,8 +4,8 @@ title: Rust architecture and errors — layering, visibility, typed errors, fail
 summary: Normative structure and failure rules for any constellation Rust repo (workspace or single-crate CLI) — dependency direction, crate splits, visibility, one definition per rule, typed thiserror errors translated at the boundary, errors that name verified causes, exhaustive matches, load-time config validation, unknown-never-reads-as-success, fail-closed vs fail-open, batch isolation, preconditions before side effects, no boolean mode parameters, Rust API naming, borrow-general signatures, reasoned and expiring lint suppressions, lossless persisted shapes, tracing, dead code, test layout — plus the copyable lint, dependency-direction and cargo-deny gates. Read before creating or restructuring a Rust project or designing how it fails.
 tags: [standard, rust, architecture, errors, failure-semantics, idioms, naming, testing, lints]
 version: 8
-created: 2026-09-26
-updated: 2026-11-25
+created_date: 2026-09-26
+updated_date: 2026-11-25
 last_validated: 2026-09-26
 related: [STD-01-cli-surface, STD-03-concurrency-and-process-safety, STD-04-testing-and-verification, STD-05-security-boundaries]
 ---

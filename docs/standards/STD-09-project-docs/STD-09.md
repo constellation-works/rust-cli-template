@@ -3,9 +3,9 @@ id: STD-09-project-docs
 title: Project docs — a shared structure for the README and common repository documentation
 summary: Normative rules for the README and common project documentation, including shared frontmatter, an index, links, changelog, architecture, runbooks, contributing and security.
 tags: [standard, docs, readme]
-version: 3
-created: 2026-11-21
-updated: 2026-11-25
+version: 4
+created_date: 2026-11-21
+updated_date: 2026-11-25
 last_validated: 2026-11-21
 related: [STD-04-testing-and-verification, STD-08-economy]
 ---
@@ -72,6 +72,8 @@ This standard is a directory. This file holds the binding text: the rules, where
 - **R16.** `docs/INDEX.md` MUST be generated from the `summary` fields of the documents §R15 covers, by a script in the repository. CI MUST fail when the committed file differs from the generated output.
 - **R17.** Every relative link and heading anchor in a document §R15 covers MUST resolve, and CI MUST check it.
 - **R27.** In the constellation canon under `docs/standards/`, each Markdown paragraph, list item and table row MUST occupy one source line; prose MUST NOT be hard-wrapped at a column. Line breaks within a block are permitted where Markdown gives them meaning, including fenced code blocks, deliberate hard breaks, nested list items and YAML front matter; table rows remain separate lines.
+- **R29.** Every project document that carries YAML frontmatter MUST carry `created_date` and `updated_date`, both formatted as `YYYY-MM-DD`. `created_date` MUST record the document's creation date and MUST NOT change on subsequent edits; `updated_date` MUST change with every content edit, and legacy `created`, `updated` and `last_updated` keys MUST NOT be used.
+- **R30.** Where a document records when its commands, procedures or claims were last checked against the live system or code, that date MUST be kept in `last_validated` (`YYYY-MM-DD`), separate from `updated_date`, so prose edits do not claim re-validation.
 
 ### Changelog
 
@@ -88,6 +90,7 @@ This standard is a directory. This file holds the binding text: the rules, where
 ### Runbooks
 
 - **R24.** A runbook MUST cover one operator goal or one failure mode, MUST lead with the command, and MUST NOT carry a host inventory or a credential. A runbook directory has no README; the index lists the runbooks.
+- **R28.** A runbook file (excluding templates such as `_template.md`) MUST be named `RB-<nn>-<slug>.md`, where `nn` is a two-digit sequence number that is never reused and `slug` is lowercase kebab-case. Its frontmatter `id` MUST equal the file name without `.md`.
 
 ### Contributing and security
 

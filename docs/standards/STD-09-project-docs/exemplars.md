@@ -15,3 +15,6 @@ Paths are relative to `codebases/orbit/`. Line numbers are at `e83ed04050`.
 - R11, followed — `README.md` `## Contributing` and `## License`; `SECURITY.md` is not linked.
 - R12, partly followed — `scripts/check-doc-links.py`: Markdown links and heading anchors, run from `scripts/ci-guardrails.sh`; HTML attributes are not read.
 - R14, counter-example — `README.md` `## Learn more`, the changelog bullet: the only place the pre-1.0 status is stated.
+- R28 — constellation umbrella `docs/runbooks/RB-22-steward-the-engineering-standards.md` (`id: RB-22-steward-the-engineering-standards`).
+- R29 — constellation umbrella `docs/standards/STD-09-project-docs/STD-09.md` frontmatter and `.orbit-plugin/lib/standards/amend.py#_write_frontmatter`.
+- R30 — constellation umbrella `docs/runbooks/RB-22-steward-the-engineering-standards.md` (`last_validated` separate from `updated_date`).

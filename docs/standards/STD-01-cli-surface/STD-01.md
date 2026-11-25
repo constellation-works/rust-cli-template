@@ -4,8 +4,8 @@ title: CLI surface — command grammar, inputs and effects, output modes, errors
 summary: Normative rules for any constellation CLI's user-facing surface — noun-verb grammar, honoring every input or rejecting it, read-only commands that never write, human vs `--json` output, stdout/stderr split, tables, color/TTY, errors and exit codes, help, goldens, deprecation, no internal IDs; adopt at a pinned version in every new CLI.
 tags: [standard, cli, output, ux, help, errors, deprecation]
 version: 4
-created: 2026-09-26
-updated: 2026-11-25
+created_date: 2026-09-26
+updated_date: 2026-11-25
 last_validated: 2026-09-26
 related: [STD-02-rust-architecture-and-errors, STD-03-concurrency-and-process-safety, STD-04-testing-and-verification, STD-05-security-boundaries]
 ---
