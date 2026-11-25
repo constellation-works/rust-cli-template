@@ -5,7 +5,7 @@
 //! `IMMEDIATE` write transaction, a read-only reader, versioned migrations);
 //! this driver holds only what is this project's: the file name here and the
 //! schema steps in `schema/`. It runs no query: each record's SQL and row
-//! mapping live in its repository (`crate::repository::notes`).
+//! mapping live in its repository (`crate::repository::note`).
 
 use cw_sqlite::Db;
 use std::path::Path;

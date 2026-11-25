@@ -1,7 +1,7 @@
 //! The audit repository: append-only audit events in `<root>/audit.jsonl`.
 
 use crate::Store;
-use crate::contracts::AuditEvent;
+use crate::contract::AuditEvent;
 use crate::db::audit;
 use crate::error::Result;
 

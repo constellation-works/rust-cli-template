@@ -222,16 +222,19 @@ CLI=crates/tmpl-cli/src
 # database through the kit's cw-sqlite. driver/ sets each mechanism up and
 # returns its handle; repository/ holds each record's use of it (its SQL and
 # row mapping); db/ holds the audit log's file names and converts its bytes;
-# contracts are shapes that know nothing of how they are stored and hold no
+# contract/ holds shapes that know nothing of how they are stored and hold no
 # rule (R4).
 ban "$STORE"         'std::(fs|net|process)|tempfile::|rustix::'           "the store reaches files through cw_fs"
 ban_import "$STORE"  'std' 'fs|net|process'                                "the store reaches files through cw_fs"
 ban "$STORE/db/audit.rs" 'cw_fs::|cw_sqlite\b'                           "db/audit.rs converts bytes; it must not do I/O"
-ban "$STORE/contracts" 'crate::(db|driver|repository|store|Store)|super::super::|cw_fs::|cw_sqlite\b|rusqlite\b' "contracts are record shapes; they must not import db, the driver, repository, the store, file access or SQLite"
-ban_import "$STORE/contracts" 'crate' 'db|driver|repository|store|Store'    "contracts are record shapes; they must not import db, the driver, repository or the store"
-ban "$STORE/contracts" 'fn check_|now_utc|SystemTime'                      "contracts hold shapes only: no checks across records and no clock"
+ban "$STORE/contract" 'crate::(db|driver|repository|store|Store)|super::super::|cw_fs::|cw_sqlite\b|rusqlite\b' "contract/ holds record shapes; they must not import db, the driver, repository, the store, file access or SQLite"
+ban_import "$STORE/contract" 'crate' 'db|driver|repository|store|Store'    "contract/ holds record shapes; they must not import db, the driver, repository or the store"
+ban "$STORE/contract" 'fn check_|now_utc|SystemTime'                      "contract/ holds shapes only: no checks across records and no clock"
 [[ -e "$STORE/db/fsio.rs" ]] && err "store/db/fsio.rs: file access is the kit's cw-fs"
 [[ -e "$STORE/driver/fs" || -e "$STORE/driver/fs.rs" ]] && err "store/driver/fs: there is no file driver; a file record's repository uses cw_fs directly"
+# Module names are singular: one record's module is named for the record.
+[[ -e "$STORE/contracts" ]] && err "store/contracts: the record shapes live in contract/"
+[[ -e "$STORE/repository/notes.rs" || -e "$STORE/repository/notes" ]] && err "store/repository/notes: the note repository is repository/note.rs"
 # rusqlite is named only through the kit's re-export (cw_sqlite::rusqlite),
 # never as a crate of its own.
 ban "$STORE"         '(^|[^:[:alnum:]_])rusqlite::|extern crate rusqlite'  "the store names rusqlite only through cw_sqlite's re-export"

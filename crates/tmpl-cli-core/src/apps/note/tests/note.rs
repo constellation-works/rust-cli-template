@@ -1,6 +1,6 @@
 use crate::apps::note::{Command, ListFilter, NewNote};
 use time::OffsetDateTime;
-use tmpl_cli_store::contracts::{NoteId, Priority};
+use tmpl_cli_store::contract::{NoteId, Priority};
 
 fn new_note(title: &str) -> NewNote {
     NewNote {

@@ -15,7 +15,7 @@ use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::{ArgAction, Args, Subcommand};
 use std::num::NonZeroUsize;
 use tmpl_cli_core::apps::note::{self, ListFilter, NewNote, NoteList, Outcome};
-use tmpl_cli_core::contracts::{Body, NoteId, Priority, Tag, Title};
+use tmpl_cli_core::contract::{Body, NoteId, Priority, Tag, Title};
 use tmpl_cli_core::{Env, Error};
 
 pub(super) const NOTE_EXAMPLES: &str = "\

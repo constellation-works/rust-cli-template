@@ -7,7 +7,7 @@ status: Draft
 feature: tmpl-cli
 doc_role: decisions
 type: design
-summary: Why three crates laid out by app over the cw-kit (binary, core with apps, runtime and composition, store with a driver, repositories and contracts; the one error type, file access and the SQLite notes database from the kit's cw-base, cw-fs and cw-sqlite), why commands are one module per noun, why mutating commands are audited through one guard, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, why the notes live in SQLite and how its schema evolves, how the store stays private, and every recorded standard deviation or rule the template does not exercise.
+summary: Why three crates laid out by app over the cw-kit (binary, core with apps, runtime and composition, store with a driver, repositories and a contract module; the one error type, file access and the SQLite notes database from the kit's cw-base, cw-fs and cw-sqlite), why commands are one module per noun, why mutating commands are audited through one guard, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, why the notes live in SQLite and how its schema evolves, how the store stays private, and every recorded standard deviation or rule the template does not exercise.
 tags: [tmpl-cli, decisions]
 paths: ["Cargo.toml", "crates/**", "Makefile"]
 related_features: [tmpl-cli]
@@ -495,7 +495,7 @@ per record instead.
 ## Bad note records are isolated on read and block writes
 
 **Recorded:** 2026-11-21
-**Code anchors:** `crates/tmpl-cli-store/src/db/format.rs::decode`, `crates/tmpl-cli-store/src/store.rs::Store::write`, `crates/tmpl-cli-store/src/repository/notes.rs::Notes`
+**Code anchors:** `crates/tmpl-cli-store/src/db/format.rs::decode`, `crates/tmpl-cli-store/src/store.rs::Store::write`, `crates/tmpl-cli-store/src/repository/note.rs::Notes`
 
 ### Context
 
@@ -528,7 +528,7 @@ bad record is present (`store_bad_record`), leaving `notes.json` untouched.
   `add` refuses on its own read before any side effect, and `Store::write`
   refuses again under the lock, since a rewrite would drop the bad records.
 - Update (2026-11-25): on SQLite each row is mapped to the contract types in
-  `repository/notes.rs`; the table's `STRICT` types, `NOT NULL` columns,
+  `repository/note.rs`; the table's `STRICT` types, `NOT NULL` columns,
   primary key and `json_valid` check leave a bad value in a valid column
   (a title, tag or priority a contract refuses, an unparseable timestamp) as
   the remaining failure, and a bad record is located by its id. A write no
@@ -674,7 +674,7 @@ Three crates, `tmpl-cli -> tmpl-cli-core -> tmpl-cli-store`
   `store.write(|tx| …)`.
 - `tmpl-cli-store` holds `db/` (fsio, the persisted document and its
   upgrades, the audit line, locks; `fsio` later moved to the foundation), `repository/` (notes, audit) and
-  `contracts/` (`Note`, `NoteId`, `Title`, `Body`, `Tag`, `Priority`,
+  `contract/` (`Note`, `NoteId`, `Title`, `Body`, `Tag`, `Priority`,
   `AuditEvent`). It holds no rule of the note app.
 
 Two departures from scribe's layout, both from the template's size: no
@@ -708,7 +708,7 @@ or the persisted format, only the repositories.
 - Tests that need a pinned clock or a short lock wait run an app through the
   core's `test-support` feature (`Ctx`, `note_run`) instead of `exec`.
 - Cost: three manifests; record shapes are `pub` across a crate boundary;
-  STD-02@4 §R5's I/O-free contract unit is the `contracts` module, kept free
+  STD-02@4 §R5's I/O-free contract unit is the `contract` module, kept free
   of I/O by grep, inside a crate that does I/O, which is weaker than a crate
   edge; and `exec` carries a `finish` callback instead of returning the
   outcome.
@@ -769,7 +769,7 @@ of the workspace. It is grouped by subject, one folder each:
   error as `Error::Fs` and gives each variant the store's stable code, so
   no code changed.
 
-The record shapes (`contracts/`) stay in the store: the core imports the
+The record shapes (`contract/`) stay in the store: the core imports the
 store already, so a lower home would serve no unit that cannot reach them.
 
 Each unit keeps its typed `thiserror` enum for its own matching (§R10) and
@@ -786,7 +786,7 @@ The binary has no error enum. It decides the exit code from `Kind` in one
 exhaustive match, keeps the remedy text (spelled in its own commands) keyed
 on the app's typed error through `downcast_ref`, and builds its one failure
 (output that could not be written) as the same type. It still names only
-the core, which re-exports `Error`, `Kind` and the store's `contracts`.
+the core, which re-exports `Error`, `Kind` and the store's `contract`.
 
 Three readings of the standard are deliberate. STD-02@4 §R10 says library
 code never returns `Box<dyn Error>`: `Error` holds one inside a typed
@@ -809,7 +809,7 @@ the store cannot depend on the core, so it has to sit below both.
 - The guard keeps the foundation grouped by subject (no file beside
   `lib.rs`, no folder named for no responsibility) and keeps `error/` free
   of I/O and of the clock.
-- STD-02@4 §R5's I/O-free contract unit is still the store's `contracts`
+- STD-02@4 §R5's I/O-free contract unit is still the store's `contract`
   module, kept so by grep; the store crate itself now names no file
   primitive either.
 - Cost: four manifests. A surface matches on `Kind` and code instead of an
@@ -899,7 +899,7 @@ is deleted, and the template keeps three crates.
 ## The notes are a SQLite database
 
 **Recorded:** 2026-11-25
-**Code anchors:** `crates/tmpl-cli-store/src/driver/sqlite/mod.rs::open`; `crates/tmpl-cli-store/src/driver/sqlite/schema/mod.rs::MIGRATIONS`; `crates/tmpl-cli-store/src/driver/sqlite/schema/note.rs::CREATE_NOTE`; `crates/tmpl-cli-store/src/repository/notes.rs`; `crates/tmpl-cli-store/src/store.rs::Store::read`, `::Store::write`; `crates/tmpl-cli-store/src/contracts/note.rs::NoteId::MAX`
+**Code anchors:** `crates/tmpl-cli-store/src/driver/sqlite/mod.rs::open`; `crates/tmpl-cli-store/src/driver/sqlite/schema/mod.rs::MIGRATIONS`; `crates/tmpl-cli-store/src/driver/sqlite/schema/note.rs::CREATE_NOTE`; `crates/tmpl-cli-store/src/repository/note.rs`; `crates/tmpl-cli-store/src/store.rs::Store::read`, `::Store::write`; `crates/tmpl-cli-store/src/contract/note.rs::NoteId::MAX`
 
 ### Context
 
@@ -918,7 +918,7 @@ The notes live in `<root>/notes.db`, opened only through `cw_sqlite::Db`.
   repository is one record's use of it.** `driver/sqlite/mod.rs` holds the
   file name and the lock wait and returns the `Db`; it runs no query. Its
   `schema/` holds one module per table, exporting that table's steps as
-  named items, and `schema/mod.rs` names every step in one ordered list. `repository/notes.rs` holds the notes' SQL and the mapping
+  named items, and `schema/mod.rs` names every step in one ordered list. `repository/note.rs` holds the notes' SQL and the mapping
   between a row and the contract types, run on the reader `Store::read`
   opened or the transaction `Store::write` began. There is no `driver/fs/`:
   the audit repository uses `cw_fs` directly, and the audit files move with
@@ -936,7 +936,7 @@ The notes live in `<root>/notes.db`, opened only through `cw_sqlite::Db`.
   with a caller in the core. Repository calls return owned values and are
   fallible, since each runs a query. There is no trait per repository and no
   driver chosen at run time; when a second driver is added,
-  `repository/notes.rs` becomes `repository/notes/{mod.rs, sqlite.rs,
+  `repository/note.rs` becomes `repository/note/{mod.rs, sqlite.rs,
   <other>.rs}` ([ARCHITECTURE.md](../../../ARCHITECTURE.md)).
 - `rusqlite` is named only inside `tmpl-cli-store`, through `cw_sqlite`'s
   re-export. Another crate's test that needs a store the public API never

@@ -40,7 +40,7 @@ over `driver/sqlite/` (the notes database's file and lock wait, and in
 `schema/` one module per table and the one ordered step list, handed out as
 a `cw_sqlite::Db`; no query), one repository per record
 (`notes`: the notes' SQL and row mapping; `audit`), `db/audit.rs` (the
-persisted audit line) and the record shapes in `contracts/`. A driver sets
+persisted audit line) and the record shapes in `contract/`. A driver sets
 one storage mechanism up once and returns a handle; a repository is one
 record's use of it. The core reaches a record only through
 `snapshot.<record>()` and `tx.<record>()`. The foundation is the cw-kit from

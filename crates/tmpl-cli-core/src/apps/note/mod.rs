@@ -18,7 +18,7 @@ use crate::runtime::{self, App, AuditMeta, Ctx};
 use cw_base::Kind;
 use std::path::PathBuf;
 use tmpl_cli_store::BadRecord;
-use tmpl_cli_store::contracts::{Note, NoteId};
+use tmpl_cli_store::contract::{Note, NoteId};
 
 /// What the `note` app can be asked to do.
 #[derive(Clone, Debug, PartialEq, Eq)]

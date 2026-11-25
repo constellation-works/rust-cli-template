@@ -22,7 +22,7 @@
 use std::time::Instant;
 use time::OffsetDateTime;
 use tmpl_cli_store::Store;
-use tmpl_cli_store::contracts::{AuditEvent, AuditStatus};
+use tmpl_cli_store::contract::{AuditEvent, AuditStatus};
 
 /// How a command appears in the audit log.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

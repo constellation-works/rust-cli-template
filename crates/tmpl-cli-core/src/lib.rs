@@ -9,7 +9,7 @@
 //!   environment ([`Env`]), the data directory, the store and the clock.
 //!
 //! Persistence is the `tmpl-cli-store` crate; the record shapes it defines
-//! are re-exported as [`contracts`]. The one error type is the kit's,
+//! are re-exported as [`contract`]. The one error type is the kit's,
 //! `cw-base`, re-exported as [`Error`] and [`Kind`]. A surface so
 //! names only this crate. This crate never parses arguments and never touches
 //! the terminal. Anything another surface (an MCP server, a desktop app)
@@ -35,7 +35,7 @@ pub mod test_support;
 
 pub use composition::Env;
 pub use cw_base::{Error, Kind};
-pub use tmpl_cli_store::contracts;
+pub use tmpl_cli_store::contract;
 
 #[cfg(test)]
 mod tests;

@@ -2,7 +2,7 @@
 
 use super::{Error, Outcome};
 use crate::runtime::Ctx;
-use tmpl_cli_store::contracts::NoteId;
+use tmpl_cli_store::contract::NoteId;
 
 /// The note with this id, plus any bad records isolated from other entries
 /// in the store. If `id` belongs to a bad record, fails with that

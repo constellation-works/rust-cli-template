@@ -8,7 +8,7 @@
 
 use serde::Serialize;
 use time::OffsetDateTime;
-use tmpl_cli_core::contracts::{Note, Priority};
+use tmpl_cli_core::contract::{Note, Priority};
 
 /// One note as every output mode sees it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]

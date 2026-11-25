@@ -109,12 +109,12 @@ impl fmt::Display for NoteId {
 /// control bytes such as ESC would reach terminals or pipes raw.
 ///
 /// ```
-/// use tmpl_cli_store::contracts::Title;
+/// use tmpl_cli_store::contract::Title;
 ///
 /// let title: Title = "  Buy milk ".parse()?;
 /// assert_eq!(title.as_str(), "Buy milk");
 /// assert!("Buy\tmilk".parse::<Title>().is_err(), "a title is one line");
-/// # Ok::<(), tmpl_cli_store::contracts::NoteError>(())
+/// # Ok::<(), tmpl_cli_store::contract::NoteError>(())
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(transparent)]

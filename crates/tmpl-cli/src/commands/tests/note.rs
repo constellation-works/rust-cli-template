@@ -5,7 +5,7 @@ use clap::Parser;
 use std::num::NonZeroUsize;
 use time::OffsetDateTime;
 use tmpl_cli_core::apps::note::{ListFilter, NoteList};
-use tmpl_cli_core::contracts::{Note, NoteId, Priority};
+use tmpl_cli_core::contract::{Note, NoteId, Priority};
 
 fn listed(shown: u64, total: usize) -> NoteList {
     let notes = (1..=shown)

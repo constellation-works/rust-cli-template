@@ -7,7 +7,7 @@
 //! workspace's error type is the `From` impl at the end of this file
 //! (STD-02 R12).
 
-use crate::contracts::{NoteError, NoteId};
+use crate::contract::{NoteError, NoteId};
 use cw_base::Kind;
 use std::fmt;
 use std::path::PathBuf;
