@@ -27,6 +27,9 @@ repository = "https://github.com/constellation-works/tmpl-cli"
 # commit of the satellites `agent-main`; moving the pin is a change of its own.
 cw-base = { git = "https://github.com/constellation-works/satellites", rev = "320e07f8d41c218c57f57a9f50820a2b6c34fb98" }
 cw-fs = { git = "https://github.com/constellation-works/satellites", rev = "320e07f8d41c218c57f57a9f50820a2b6c34fb98" }
+# Test isolation (a private temp root, an isolated child, goldens): a
+# dev-dependency only (scripts/check-dependency-direction.sh).
+cw-testkit = { git = "https://github.com/constellation-works/satellites", rev = "320e07f8d41c218c57f57a9f50820a2b6c34fb98" }
 tmpl-cli-store = { path = "crates/tmpl-cli-store" }
 tmpl-cli-core = { path = "crates/tmpl-cli-core" }
 # No `color` or `wrap_help`: both make clap query the terminal itself, and the

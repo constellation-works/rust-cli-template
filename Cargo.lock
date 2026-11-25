@@ -89,6 +89,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cw-testkit"
+version = "0.1.0"
+source = "git+https://github.com/constellation-works/satellites?rev=320e07f8d41c218c57f57a9f50820a2b6c34fb98#320e07f8d41c218c57f57a9f50820a2b6c34fb98"
+dependencies = [
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "deranged"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -404,6 +413,7 @@ name = "tmpl-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "cw-testkit",
  "serde",
  "serde_json",
  "tempfile",
@@ -419,8 +429,8 @@ version = "0.1.0"
 dependencies = [
  "cw-base",
  "cw-fs",
+ "cw-testkit",
  "serde_json",
- "tempfile",
  "thiserror",
  "time",
  "tmpl-cli-core",
@@ -434,9 +444,9 @@ version = "0.1.0"
 dependencies = [
  "cw-base",
  "cw-fs",
+ "cw-testkit",
  "serde",
  "serde_json",
- "tempfile",
  "thiserror",
  "time",
  "tracing",

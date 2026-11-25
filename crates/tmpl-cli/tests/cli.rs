@@ -592,14 +592,13 @@ mod unix {
         // STD-05 R8: modes are set explicitly, so even umask 000 gives 0700/0600.
         // The umask is set on the child alone (STD-04 R6), through sh.
         let fx = Fixture::new();
-        let hermetic = fx.cmd(&["note", "add", "x"]);
-        let out = std::process::Command::new("/bin/sh")
+        // sh runs in the kit's isolated environment, which the binary inherits.
+        let out = fx
+            .command("/bin/sh")
             .arg("-c")
             .arg("umask 000; exec \"$0\" \"$@\"")
-            .arg(hermetic.get_program())
-            .args(hermetic.get_args())
-            .env_clear()
-            .envs(hermetic.get_envs().filter_map(|(k, v)| Some((k, v?))))
+            .arg(super::support::BIN)
+            .args(["note", "add", "x"])
             .output()
             .unwrap();
         assert_eq!(out.status.code(), Some(0), "stderr: {}", text(&out.stderr));

@@ -26,12 +26,12 @@ time = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+cw-testkit = { workspace = true }
 # The crate's own integration tests run the apps through `test-support`.
 tmpl-cli-core = { path = ".", features = ["test-support"] }
 # The integration tests name the kit's file error behind a store failure.
 cw-fs = { workspace = true }
 serde_json = { workspace = true }
-tempfile = { workspace = true }
 time = { workspace = true, features = ["macros"] }
 
 [lints]

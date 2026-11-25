@@ -23,7 +23,7 @@ time = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
+cw-testkit = { workspace = true }
 time = { workspace = true, features = ["macros"] }
 
 [lints]

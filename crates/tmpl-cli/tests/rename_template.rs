@@ -11,12 +11,13 @@
 
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 #[test]
 fn rename_template_leaves_git_target_and_standards_untouched() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
+    // The kit's temp root holds the copy; the script runs in its isolated
+    // environment.
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
 
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/rename-template.sh");
     let script = root.join("scripts/rename-template.sh");
@@ -42,12 +43,7 @@ fn rename_template_leaves_git_target_and_standards_untouched() {
         fs::write(path, "tmpl-cli placeholder content\n").unwrap();
     }
 
-    let out = Command::new(&script)
-        .arg("demo-cli")
-        .env_clear()
-        .env("PATH", "/usr/bin:/bin")
-        .output()
-        .unwrap();
+    let out = temp.command(&script).arg("demo-cli").output().unwrap();
     assert_eq!(
         out.status.code(),
         Some(0),

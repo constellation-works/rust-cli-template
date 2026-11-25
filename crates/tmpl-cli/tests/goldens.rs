@@ -16,8 +16,8 @@
 
 mod support;
 
-use std::path::PathBuf;
-use support::{Fixture, redact_timestamps, text};
+use cw_testkit::{Goldens, redact_timestamps};
+use support::{Fixture, text};
 
 const OUTPUT: &[(&str, &[&str])] = &[
     ("note-list.plain.txt", &["note", "list"]),
@@ -34,38 +34,17 @@ const OUTPUT: &[(&str, &[&str])] = &[
     ("note-show.json", &["note", "show", "3", "--json"]),
 ];
 
-fn golden_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("goldens")
-}
-
-fn updating() -> bool {
-    std::env::var_os("UPDATE_GOLDENS").is_some_and(|v| v == "1")
+/// The goldens folder. `Goldens` rewrites a file instead of comparing it
+/// when `UPDATE_GOLDENS=1`, which `make goldens UPDATE=1` sets.
+fn goldens() -> Goldens {
+    Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"))
 }
 
 /// Compare `actual` to the golden at `rel`, or rewrite it when updating.
-/// Returns a failure description instead of panicking so one run reports
-/// every stale or missing golden at once.
-fn check(rel: &str, actual: &str) -> Option<String> {
-    let path = golden_dir().join(rel);
-    if updating() {
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, actual).unwrap();
-        return None;
-    }
-    let Ok(expected) = std::fs::read_to_string(&path) else {
-        return Some(format!(
-            "missing golden {rel} ({})\n--- actual\n{actual}",
-            path.display()
-        ));
-    };
-    (expected != actual).then(|| {
-        format!(
-            "golden {rel} differs\n--- expected ({})\n{expected}\n--- actual\n{actual}",
-            path.display()
-        )
-    })
+/// Returns the failure instead of panicking so one run reports every stale
+/// or missing golden at once.
+fn check(goldens: &Goldens, rel: &str, actual: &str) -> Option<String> {
+    goldens.check(rel, actual).err().map(|e| e.to_string())
 }
 
 fn report(failures: &[String]) {
@@ -79,6 +58,7 @@ fn report(failures: &[String]) {
 #[test]
 fn help_matches_goldens() {
     let fx = Fixture::new();
+    let goldens = goldens();
     let commands = tmpl_cli::every_command();
     assert!(!commands.is_empty(), "every_command() returned no commands");
     let failures: Vec<String> = commands
@@ -93,7 +73,7 @@ fn help_matches_goldens() {
             let mut args = subcommands;
             args.push("--help");
             let out = fx.ok(&args);
-            check(&format!("help/{name}.txt"), &text(&out.stdout))
+            check(&goldens, &format!("help/{name}.txt"), &text(&out.stdout))
         })
         .collect();
     report(&failures);
@@ -145,11 +125,13 @@ fn assert_summary(path: &str, command: &clap::Command, limit: usize) -> String {
 fn output_matches_goldens() {
     let fx = Fixture::new();
     fx.seed();
+    let goldens = goldens();
     let failures: Vec<String> = OUTPUT
         .iter()
         .filter_map(|(name, args)| {
             let out = fx.ok(args);
             check(
+                &goldens,
                 &format!("output/{name}"),
                 &redact_timestamps(&text(&out.stdout)),
             )
