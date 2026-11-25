@@ -36,7 +36,7 @@ pub(super) fn add(ctx: &Ctx<'_>, new: NewNote) -> Result<Outcome, Error> {
         let id = rule::next_id(&tx.notes().all()?)
             .ok_or_else(|| cw_base::Error::from(Error::IdExhausted { path: store.path() }))?;
         let note = new.into_note(id, now);
-        tx.notes().put(note.clone())?;
+        tx.notes().put(&note)?;
         Ok(note)
     })?;
     let path = store.path();

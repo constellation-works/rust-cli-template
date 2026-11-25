@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/check-dependency-direction.sh — STD-02 R1–R6, R16, R17, R39 for this workspace.
+# scripts/check-dependency-direction.sh — STD-02 R1–R6, R16, R17, R35, R39 for this workspace.
 #
 # Two layers of checks, neither of which compiles, so the gate runs in
 # `make ci-fast`:
@@ -20,6 +20,9 @@
 #      `scripts/check-module-cycles.sh` checks each crate's top-level modules
 #      and the modules of each top-level directory. Cargo refuses a cyclic
 #      crate graph itself.
+#   4. No `deny(warnings)` in any Rust source, tests included (STD-02 R35):
+#      CI denies warnings with `-D warnings`, and a source-level deny turns a
+#      new toolchain's new lint into a broken build for everyone.
 #
 # File access, the process environment and spawning a process are refused
 # by clippy, not here: `clippy.toml` lists the std paths (and
@@ -274,6 +277,24 @@ compgen -G "$CORE/app/*/rules" >/dev/null && err "core/app/<app>/rules/: an app'
 # rusqlite is named only through the kit's re-export (cw_sqlite::rusqlite),
 # never as a crate of its own.
 ban "$STORE"         '(^|[^:[:alnum:]_])rusqlite::|extern crate rusqlite'  "the store names rusqlite only through cw_sqlite's re-export"
+# Example, not enforced: "this dependency only in this module". When a crate
+# may name a dependency in one module alone (say an HTTP client only in the
+# store's driver/http/), Cargo cannot state it, because the edge is the
+# crate's; ban the name everywhere else in the crate, as the rusqlite rule
+# above and the schema rule below do:
+#
+#   hits=$(grep -rnHE --include='*.rs' --exclude-dir=tests '\breqwest::' "$STORE" 2>/dev/null \
+#     | grep -v "^$STORE/driver/http/" | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)
+#   [[ -n "$hits" ]] && { echo "$hits" >&2; err "reqwest is named only in the store's driver/http/"; }
+#
+# Example, not a grep: "only this module may spawn a process" is clippy's to
+# hold, not this script's. clippy.toml already refuses std::process::Command's
+# spawn, output and status everywhere, so the one module that must spawn
+# (through the kit's cw_supervise, or std where that is the point) opens with
+#
+#   #![expect(clippy::disallowed_methods, reason = "the one module that spawns a process: <why>")]
+#
+# and a module that spawns without it fails `make ci-lint`.
 # A statement that changes the schema appears only in driver/sqlite/schema/:
 # one module per table and the one ordered list of steps.
 schema_hits=$(grep -rnHiE --include='*.rs' --exclude-dir=tests \
@@ -387,6 +408,16 @@ check_crate_edges
 
 # The module import graph is acyclic (STD-02 R6, R39).
 ./scripts/check-module-cycles.sh || fail=1
+
+# No deny(warnings) in source, tests included (STD-02 R35): warnings are
+# denied by CI's `-D warnings`, never by the code.
+if compgen -G 'crates/*' >/dev/null; then
+  deny_hits=$(grep -rnHE --include='*.rs' 'deny\([[:space:]]*warnings[[:space:]]*\)' crates 2>/dev/null || true)
+  if [[ -n "$deny_hits" ]]; then
+    echo "$deny_hits" >&2
+    err "deny(warnings) in source: CI denies warnings with -D warnings (STD-02 R35)"
+  fi
+fi
 
 if [[ "$fail" -eq 0 ]]; then
   echo "dependency-direction: ok"

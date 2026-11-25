@@ -53,7 +53,7 @@ impl Session {
         }
     }
 
-    fn request(&mut self, method: &str, params: Value) -> Value {
+    fn request(&mut self, method: &str, params: &Value) -> Value {
         let id = self.next_id;
         self.next_id += 1;
         let reply = self
@@ -65,13 +65,13 @@ impl Session {
     }
 
     /// `tools/call`: the result, or the JSON-RPC error.
-    fn call(&mut self, name: &str, arguments: Value) -> Value {
-        let reply = self.request("tools/call", json!({"name": name, "arguments": arguments}));
+    fn call(&mut self, name: &str, arguments: &Value) -> Value {
+        let reply = self.request("tools/call", &json!({"name": name, "arguments": arguments}));
         reply.get("result").cloned().unwrap_or(reply)
     }
 
     fn tools(&mut self) -> Value {
-        self.request("tools/list", json!({}))["result"]["tools"].clone()
+        self.request("tools/list", &json!({}))["result"]["tools"].clone()
     }
 
     fn close(self) {
@@ -97,7 +97,7 @@ fn status_returns_what_json_prints() {
     // STD-01 R6, R10.
     let fx = Fixture::new();
     let mut session = Session::start(&fx);
-    let result = session.call("status", json!({}));
+    let result = session.call("status", &json!({}));
     assert_eq!(structured(&result), cli_json(&fx, &["status"]));
     session.close();
 }
@@ -158,7 +158,7 @@ fn tools_list_matches_its_golden() {
 fn a_call_the_server_cannot_route_runs_nothing() {
     let fx = Fixture::new();
     let mut session = Session::start(&fx);
-    let reply = session.call("status", json!({"root": "/elsewhere"}));
+    let reply = session.call("status", &json!({"root": "/elsewhere"}));
     assert_eq!(reply["error"]["code"], -32602, "{reply}");
     session.close();
 }
@@ -203,14 +203,14 @@ fn note_list_and_show_return_what_json_prints() {
     let fx = Fixture::new();
     fx.seed();
     let mut session = Session::start(&fx);
-    let listed = session.call("note_list", json!({}));
+    let listed = session.call("note_list", &json!({}));
     assert_eq!(structured(&listed), cli_json(&fx, &["note", "list"]));
-    let filtered = session.call("note_list", json!({"tag": "work", "limit": 1}));
+    let filtered = session.call("note_list", &json!({"tag": "work", "limit": 1}));
     assert_eq!(
         structured(&filtered),
         cli_json(&fx, &["note", "list", "--tag", "work", "--limit", "1"])
     );
-    let shown = session.call("note_show", json!({"id": 3}));
+    let shown = session.call("note_show", &json!({"id": 3}));
     assert_eq!(structured(&shown), cli_json(&fx, &["note", "show", "3"]));
     session.close();
 }
@@ -221,7 +221,7 @@ fn note_add_returns_the_note_json_prints_and_is_audited_as_mcp() {
     let mut session = Session::start(&fx);
     let added = session.call(
         "note_add",
-        json!({"title": "From a tool", "tags": ["agent"], "priority": "high"}),
+        &json!({"title": "From a tool", "tags": ["agent"], "priority": "high"}),
     );
     let note = structured(&added);
     session.close();
@@ -240,14 +240,14 @@ fn a_failing_call_is_a_tool_error_with_the_templates_code() {
     // STD-01 R19: the same code the command line reports.
     let fx = Fixture::new();
     let mut session = Session::start(&fx);
-    let missing = session.call("note_show", json!({"id": 9}));
+    let missing = session.call("note_show", &json!({"id": 9}));
     assert_eq!(missing["isError"], json!(true), "{missing}");
     assert_eq!(missing["structuredContent"]["code"], "note_not_found");
     assert_eq!(missing["structuredContent"]["kind"], "not_found");
     let cli = fx.run(&["note", "show", "9", "--json"]);
     let cli: Value = serde_json::from_slice(&cli.stderr).unwrap();
     assert_eq!(cli["code"], missing["structuredContent"]["code"]);
-    let bad_tag = session.call("note_add", json!({"title": "x", "tags": ["Not A Tag"]}));
+    let bad_tag = session.call("note_add", &json!({"title": "x", "tags": ["Not A Tag"]}));
     assert_eq!(bad_tag["error"]["code"], -32602, "{bad_tag}");
     session.close();
 }

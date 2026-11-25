@@ -11,7 +11,8 @@ updated_date: 2026-11-25
 # Design Doc Conventions
 
 How design docs under `docs/design/<feature>/` are laid out, condensed from
-Orbit's `docs/design/CONVENTIONS.md` (the source this template follows).
+the design-doc conventions of Orbit, the constellation project this
+template follows, and from STD-06.
 
 ## 1. Folder layout
 

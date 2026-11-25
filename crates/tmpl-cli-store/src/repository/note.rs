@@ -111,8 +111,8 @@ impl<'a> NotesMut<'a> {
     ///
     /// The store's typed `Error` when the note cannot be encoded or the
     /// statement fails, translated into `cw_base::Error`.
-    pub fn put(&mut self, note: Note) -> std::result::Result<(), cw_base::Error> {
-        Ok(put(self.conn, self.path, &note)?)
+    pub fn put(&mut self, note: &Note) -> std::result::Result<(), cw_base::Error> {
+        Ok(put(self.conn, self.path, note)?)
     }
 }
 

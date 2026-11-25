@@ -12,5 +12,6 @@ use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let env = tmpl_cli_core::capture_env();
-    tmpl_cli::run(std::env::args_os().collect(), &env)
+    let args: Vec<_> = std::env::args_os().collect();
+    tmpl_cli::run(&args, &env)
 }
