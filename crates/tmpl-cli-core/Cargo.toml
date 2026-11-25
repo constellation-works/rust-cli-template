@@ -27,10 +27,11 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 cw-testkit = { workspace = true }
+# Hand-made store state (a bad record, the last id, a newer schema) for
+# the tests, through the store's raw-SQL test support.
+tmpl-cli-store = { workspace = true, features = ["test-support"] }
 # The crate's own integration tests run the apps through `test-support`.
 tmpl-cli-core = { path = ".", features = ["test-support"] }
-# The integration tests name the kit's file error behind a store failure.
-cw-fs = { workspace = true }
 serde_json = { workspace = true }
 time = { workspace = true, features = ["macros"] }
 

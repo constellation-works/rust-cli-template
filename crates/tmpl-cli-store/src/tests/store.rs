@@ -8,9 +8,8 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 use time::OffsetDateTime;
 
-/// A lock held by another thread until this is dropped: cw-fs refuses a
-/// thread that asks again for a lock it holds (`Reentrant`), so the other
-/// writer must be another thread, as it would be another process.
+/// A lock or a write held by another thread until this is dropped, as
+/// another process would hold it.
 struct HeldElsewhere {
     release: Option<mpsc::Sender<()>>,
     thread: Option<JoinHandle<()>>,
@@ -25,15 +24,35 @@ impl Drop for HeldElsewhere {
     }
 }
 
-fn hold_elsewhere(path: &Path) -> HeldElsewhere {
+/// The kit's file lock at `path`, held by another thread: cw-fs refuses a
+/// thread that asks again for a lock it holds (`Reentrant`).
+fn hold_lock_elsewhere(path: &Path) -> HeldElsewhere {
     let path = path.to_path_buf();
+    held(move |taken, release| {
+        let _lock = Lock::acquire(&path, "test", Duration::from_secs(1)).unwrap();
+        taken.send(()).unwrap();
+        let _ = release.recv();
+    })
+}
+
+/// A write transaction on the store at `root`, open in another thread.
+fn hold_write_elsewhere(root: &Path) -> HeldElsewhere {
+    let store = Store::open(root);
+    held(move |taken, release| {
+        store
+            .write(|_tx| {
+                taken.send(()).unwrap();
+                let _ = release.recv();
+                Ok(())
+            })
+            .unwrap();
+    })
+}
+
+fn held(hold: impl FnOnce(mpsc::Sender<()>, mpsc::Receiver<()>) + Send + 'static) -> HeldElsewhere {
     let (taken_tx, taken_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel::<()>();
-    let thread = std::thread::spawn(move || {
-        let _lock = Lock::acquire(&path, "test", Duration::from_secs(1)).unwrap();
-        taken_tx.send(()).unwrap();
-        let _ = release_rx.recv();
-    });
+    let thread = std::thread::spawn(move || hold(taken_tx, release_rx));
     taken_rx.recv().unwrap();
     HeldElsewhere {
         release: Some(release_tx),
@@ -54,10 +73,7 @@ fn new_note(title: &str) -> Note {
 
 /// Store one note in one write, as the note app's add does.
 fn add(store: &Store, note: Note) -> Result<(), cw_base::Error> {
-    store.write("note add", |tx| {
-        tx.notes().put(note);
-        Ok(())
-    })
+    store.write(|tx| tx.notes().put(note))
 }
 
 fn event(command: &str) -> AuditEvent {
@@ -76,14 +92,15 @@ fn event(command: &str) -> AuditEvent {
 fn add_refuses_when_another_writer_holds_the_lock_and_writes_nothing() {
     let dir = crate::db::tests::private_tempdir();
     let store = Store::open(dir.path()).with_lock_wait(Duration::from_millis(60));
-    let _held = hold_elsewhere(&dir.path().join(".lock"));
+    let held = hold_write_elsewhere(dir.path());
     let err = add(&store, new_note("blocked")).unwrap_err();
     assert_eq!(err.code(), "store_locked", "got {err:?}");
     assert!(matches!(
         err.downcast_ref::<Error>(),
-        Some(Error::Fs(FsError::Locked { .. }))
+        Some(Error::Sqlite(cw_sqlite::Error::Locked { .. }))
     ));
-    assert!(!dir.path().join(crate::STORE_FILE).exists());
+    drop(held);
+    assert!(store.read().unwrap().notes().all().unwrap().is_empty());
 }
 
 #[test]
@@ -109,7 +126,7 @@ fn record_audit_succeeds_while_the_store_lock_is_held() {
     let dir = crate::db::tests::private_tempdir();
     let deadline = Duration::from_millis(80);
     let store = Store::open(dir.path()).with_lock_wait(deadline);
-    let _held = hold_elsewhere(&dir.path().join(".lock"));
+    let _held = hold_write_elsewhere(dir.path());
     let started = std::time::Instant::now();
     let err = add(&store, new_note("blocked")).unwrap_err();
     assert_eq!(err.code(), "store_locked");
@@ -127,7 +144,7 @@ fn record_audit_succeeds_while_the_store_lock_is_held() {
 fn record_audit_waits_for_the_audit_lock() {
     let dir = crate::db::tests::private_tempdir();
     let store = Store::open(dir.path()).with_lock_wait(Duration::from_millis(60));
-    let _held = hold_elsewhere(&dir.path().join(".audit.lock"));
+    let _held = hold_lock_elsewhere(&dir.path().join(".audit.lock"));
     let err = store.audit().append(&event("note add")).unwrap_err();
     assert!(
         matches!(
@@ -159,28 +176,11 @@ fn record_audit_encode_failure_is_not_io_and_names_no_path() {
     );
 }
 
-#[test]
-fn a_write_that_would_pass_the_size_limit_is_refused_and_the_store_left_readable() {
-    // A write must never leave a store its own reads refuse (STD-02 R16).
-    let dir = crate::db::tests::private_tempdir();
-    let probe = Store::open(dir.path());
-    add(&probe, new_note("first")).unwrap();
-    let one_note = std::fs::read(probe.path()).unwrap();
-    let cap = u64::try_from(one_note.len()).unwrap() + 8;
-    let store = Store::open(dir.path()).with_cap(cw_fs::Cap::bytes(cap));
-    let mut second = new_note("second, which does not fit");
-    second.id = NoteId::try_from(2).unwrap();
-    let err = add(&store, second).unwrap_err();
-    assert_eq!(err.code(), "store_too_large", "got {err:?}");
-    assert_eq!(std::fs::read(store.path()).unwrap(), one_note);
-    assert_eq!(store.read().unwrap().notes().all().len(), 1);
-}
-
 #[cfg(unix)]
 #[test]
 fn a_write_through_a_symlinked_root_is_refused_before_any_side_effect() {
     // STD-02 R34: the public write checks the root before it creates the
-    // directory or the lock file, as the audit append does.
+    // directory or the database, as the audit append does.
     let dir = crate::db::tests::private_tempdir();
     let target = dir.path().join("target");
     std::fs::create_dir(&target).unwrap();

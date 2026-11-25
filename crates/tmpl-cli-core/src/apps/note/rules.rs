@@ -43,7 +43,7 @@ impl NewNote {
 
 /// The id to assign to a note added after `notes`: one past the highest, or
 /// [`NoteId::FIRST`] when there are none, or `None` when the highest id is
-/// already `u64::MAX`, so an existing id is never handed out again.
+/// already [`NoteId::MAX`], so an existing id is never handed out again.
 pub(crate) fn next_id(notes: &[Note]) -> Option<NoteId> {
     match notes.iter().map(|n| n.id).max() {
         None => Some(NoteId::FIRST),

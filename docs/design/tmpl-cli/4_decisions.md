@@ -1,13 +1,13 @@
 ---
 title: tmpl-cli — Decisions
 owner: claude
-last_updated: 2026-11-24
+last_updated: 2026-11-25
 last_validated: 2026-09-26
 status: Draft
 feature: tmpl-cli
 doc_role: decisions
 type: design
-summary: Why three crates laid out by app over the cw-kit (binary, core with apps, runtime and composition, store with repositories and contracts; the one error type and file access from the kit's cw-base and cw-fs), why commands are one module per noun, why mutating commands are audited through one guard, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, how the store format evolves and stays private, and every recorded standard deviation or rule the template does not exercise.
+summary: Why three crates laid out by app over the cw-kit (binary, core with apps, runtime and composition, store with a driver, repositories and contracts; the one error type, file access and the SQLite notes database from the kit's cw-base, cw-fs and cw-sqlite), why commands are one module per noun, why mutating commands are audited through one guard, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, why the notes live in SQLite and how its schema evolves, how the store stays private, and every recorded standard deviation or rule the template does not exercise.
 tags: [tmpl-cli, decisions]
 paths: ["Cargo.toml", "crates/**", "Makefile"]
 related_features: [tmpl-cli]
@@ -239,6 +239,10 @@ the need.
   JSON line, and a timeout names the holder only while that process is
   alive. The same thread asking again for a lock it holds is refused at
   once (`store_lock_reentrant`) instead of waiting out its deadline.
+- Update (2026-11-25): only the audit log takes this lock now. Note writes
+  are SQLite transactions, which wait on SQLite's own lock (see
+  [The notes are a SQLite database](#the-notes-are-a-sqlite-database)), and
+  a note-write timeout names no holder.
 
 ## clap without color or terminal-width features
 
@@ -401,6 +405,11 @@ registry ships empty.
 - Cost: even an additive field locks older builds out of the store until
   they are upgraded, because a JSON file has no way to open read-only for
   just the fields an old build knows.
+- Update (2026-11-25): for the notes this registry is replaced by the
+  database's append-only `MIGRATIONS` in `driver/sqlite/schema/` (see
+  [The notes are a SQLite database](#the-notes-are-a-sqlite-database)); the
+  rule is the same, keyed on `PRAGMA user_version`. The audit line keeps
+  its own `format` and `UPGRADES` in `db/audit.rs`.
 
 ## Store state is owner-only and checked on every load
 
@@ -450,6 +459,11 @@ for Windows, which would need ACLs).
   than 64 MiB is refused unread (`store_too_large`). The remedy now reads
   `chmod -- 600 '<path>'`, safe to paste for any file name. The template
   depends on `rustix` no longer; the kit does.
+- Update (2026-11-25): the notes database and its `-wal` and `-shm` are
+  checked and created by the kit's `cw-sqlite`, through `cw-fs`, the same
+  way; the store still checks the data directory itself before every read
+  and write. The 64 MiB cap went with the JSON document: SQLite reads pages,
+  not the whole file.
 
 ## One malformed note makes the store corrupt
 
@@ -513,6 +527,15 @@ bad record is present (`store_bad_record`), leaving `notes.json` untouched.
 - Update (2026-11-24): the write refusal is enforced twice: the note app's
   `add` refuses on its own read before any side effect, and `Store::write`
   refuses again under the lock, since a rewrite would drop the bad records.
+- Update (2026-11-25): on SQLite each row is mapped to the contract types in
+  `repository/notes.rs`; the table's `STRICT` types, `NOT NULL` columns,
+  primary key and `json_valid` check leave a bad value in a valid column
+  (a title, tag or priority a contract refuses, an unparseable timestamp) as
+  the remaining failure, and a bad record is located by its id. A write no
+  longer rewrites the other rows, so it could not drop a bad one; the
+  refusal stays, so a bad record is repaired before notes are added beside
+  it and the commands behave as before. Duplicate ids can no longer be
+  stored, so `store_duplicate_id` is gone.
 
 ## Missing gate tools warn locally and fail in CI
 
@@ -822,7 +845,7 @@ integration test.
 The workspace depends on the kit's `cw-base` (`Error`, `Kind`, a clock) and
 `cw-fs` (atomic write, append, bounded read, listing, removal, private
 directories, owner-only checks, one advisory lock) as git dependencies
-pinned to commit `5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b`, since no release
+pinned to commit `13e8954eee4967ad1565bdea8738d36ab0d38b3e`, since no release
 is published; `deny.toml` allows that one git source. The foundation crate
 is deleted, and the template keeps three crates.
 
@@ -865,9 +888,80 @@ is deleted, and the template keeps three crates.
   unchanged). What stays the template's is the binary's name, the seeded
   notes and the store files written by hand. A child now also gets `PATH`
   and `GIT_CEILING_DIRECTORIES`, and runs in the temp root.
+- Update (2026-11-25): the store also depends on `cw-sqlite` at the same
+  rev, for the notes database (see
+  [The notes are a SQLite database](#the-notes-are-a-sqlite-database)). The
+  64 MiB read cap and the write's cap check went with the JSON document.
 - Cost: a build fetches the satellites repository once; an unpublished pin
   is a commit hash a reader must look up; and a kit change the template
   needs waits for a satellites change and a pin move.
+
+## The notes are a SQLite database
+
+**Recorded:** 2026-11-25
+**Code anchors:** `crates/tmpl-cli-store/src/driver/sqlite/mod.rs::open`; `crates/tmpl-cli-store/src/driver/sqlite/schema/mod.rs::MIGRATIONS`; `crates/tmpl-cli-store/src/driver/sqlite/schema/note.rs::CREATE_NOTE`; `crates/tmpl-cli-store/src/repository/notes.rs`; `crates/tmpl-cli-store/src/store.rs::Store::read`, `::Store::write`; `crates/tmpl-cli-store/src/contracts/note.rs::NoteId::MAX`
+
+### Context
+
+Every `add` rewrote the whole JSON document under a file lock, a reader had
+to parse all of it, and a format change locked older builds out of every
+field. The kit now has `cw-sqlite`: one private SQLite database per tool,
+WAL, one `IMMEDIATE` write transaction, a read-only reader, owner-only files
+and an append-only list of migrations. The cw-kit design settles that the
+example store moves onto it and that the audit log stays an append-only file.
+
+### Decision
+
+The notes live in `<root>/notes.db`, opened only through `cw_sqlite::Db`.
+
+- **A driver sets one storage mechanism up once and returns a handle; a
+  repository is one record's use of it.** `driver/sqlite/mod.rs` holds the
+  file name and the lock wait and returns the `Db`; it runs no query. Its
+  `schema/` holds one module per table, exporting that table's steps as
+  named items, and `schema/mod.rs` names every step in one ordered list. `repository/notes.rs` holds the notes' SQL and the mapping
+  between a row and the contract types, run on the reader `Store::read`
+  opened or the transaction `Store::write` began. There is no `driver/fs/`:
+  the audit repository uses `cw_fs` directly, and the audit files move with
+  the `cw-app` adoption.
+- **The schema is an append-only list of steps** from version 1, with a
+  `STRICT` table, RFC 3339 UTC text timestamps and the tags as a JSON array
+  checked by `json_valid`. A statement that changes the schema appears only
+  in `driver/sqlite/schema/`. The list names each step rather than joining
+  per-table lists, so a later step for an earlier table goes at the end and
+  no shipped step is renumbered (STD-03 R23).
+- **The record-access seam.** The core reaches a record only through
+  `snapshot.<record>()` and `tx.<record>()`. The store's public surface has
+  no `rusqlite` or `cw_sqlite` type, no borrow from a connection or a
+  document, and no path but `Store::path()` and `Store::audit_path()`, each
+  with a caller in the core. Repository calls return owned values and are
+  fallible, since each runs a query. There is no trait per repository and no
+  driver chosen at run time; when a second driver is added,
+  `repository/notes.rs` becomes `repository/notes/{mod.rs, sqlite.rs,
+  <other>.rs}` ([ARCHITECTURE.md](../../../ARCHITECTURE.md)).
+- `rusqlite` is named only inside `tmpl-cli-store`, through `cw_sqlite`'s
+  re-export. Another crate's test that needs a store the public API never
+  writes (a bad record, the last id, a newer schema) runs raw SQL through the
+  store's `test-support` feature. `scripts/check-dependency-direction.sh`
+  enforces these rules where source text can show them.
+- Each `cw_sqlite::Error` the store can meet gets a template code
+  (`store_locked`, `store_corrupt`, `store_too_new`, the file codes and the
+  rest, listed in [specs/store.md](./specs/store.md)). The codes the JSON
+  document had are kept where the failure still exists.
+- `NoteId` is bounded at `i64::MAX`, SQLite's largest integer, so
+  `note_id_exhausted` is reached there.
+- No import of a JSON store: the example app has no deployed data.
+
+### Consequences
+
+- A write changes one row in one transaction instead of rewriting every
+  note, and a reader sees one committed version without a lock.
+- The schema evolves as appended steps, like the format registry did.
+- Cost: the database is not a text file to read or repair by hand; a bad row
+  is fixed with SQL. `cw-sqlite` bundles SQLite, so a cold build compiles
+  it. A note-write timeout names no holder. A note id above `i64::MAX` is now
+  a usage error (exit 2) where it was a missing note (exit 1). SQLite keeps
+  `-wal` and `-shm` beside the database, and in a writable directory a read
+  may rebuild the `-shm` index and creates either when it is missing.
 
 ## Public design documents use public references
 

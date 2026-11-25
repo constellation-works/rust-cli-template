@@ -1,7 +1,6 @@
 //! Unit tests for `db`, one file per source file (STD-02 R19).
 
 mod audit;
-mod format;
 
 /// A temporary directory that is owner-only whatever the umask, as a store
 /// directory must be (STD-05 R9). The kit's temp root is `0700`.

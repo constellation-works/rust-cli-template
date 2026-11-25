@@ -1,26 +1,27 @@
 //! The [`Store`] facade: one data directory, read as a snapshot, written in
-//! one locked transaction.
+//! one transaction.
 //!
-//! One JSON document, `<root>/notes.json`, holds every note. Reads take no
-//! lock and write nothing (STD-01 R31): the file is only ever replaced by an
-//! atomic rename, so a reader sees a whole old version or a whole new one.
-//! A write is a read-modify-write, so [`Store::write`] holds `<root>/.lock`
-//! from the read to the rename; two concurrent writers therefore never lose
-//! each other's records (STD-03 R5, R6). Audit appends take their own
-//! `<root>/.audit.lock` (see the audit repository) so a failed write that
-//! timed out on `.lock` still records its failure line within one deadline.
-//! New directories are created `0700` and new files `0600` (STD-05 R8), and
-//! every load refuses state that is a symbolic link, owned by another user,
-//! or open to any group or other permission bit (STD-05 R9). The mechanism
-//! is the kit's `cw_fs`; the store names the files and the codes.
+//! The notes live in one SQLite database, `<root>/notes.db`, with its `-wal`
+//! and `-shm` beside it, set up by the driver (`crate::driver::sqlite`) and
+//! reached through the kit's `cw_sqlite`. A read opens a read-only
+//! connection that takes no lock and writes nothing of its own (STD-01 R31)
+//! and sees one committed version. A write runs in one `IMMEDIATE`
+//! transaction, so two concurrent writers never lose each other's records
+//! (STD-03 R5, R6); a writer waits for another up to the lock wait. The
+//! audit log is a separate append-only file under its own
+//! `<root>/.audit.lock` (see the audit repository), reached through the
+//! kit's `cw_fs`. New directories are created `0700` and new files `0600`
+//! (STD-05 R8), and every read and write refuses a data directory or file
+//! that is a symbolic link, owned by another user, or open to any group or
+//! other permission bit (STD-05 R9).
 //!
 //! The store decides nothing about notes: which id comes next, which notes a
 //! listing returns and when a command is refused are the note app's rules.
 
-use crate::db::format::{self, StoreDocument};
-use crate::db::{AUDIT_LOCK_FILE, LOCK_FILE, STORE_CAP, STORE_FILE, audit};
+use crate::db::{AUDIT_LOCK_FILE, audit};
+use crate::driver::sqlite::{self, STORE_FILE};
 use crate::error::{Error, Result};
-use crate::repository::{Audit, Snapshot, Tx};
+use crate::repository::{Audit, Snapshot, Tx, first_bad};
 use cw_fs::Lock;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -33,8 +34,6 @@ const DEFAULT_LOCK_WAIT: Duration = Duration::from_secs(10);
 pub struct Store {
     root: PathBuf,
     lock_wait: Duration,
-    /// The most bytes the store file may hold, read or written.
-    cap: cw_fs::Cap,
 }
 
 impl Store {
@@ -45,66 +44,62 @@ impl Store {
         Self {
             root: root.into(),
             lock_wait: DEFAULT_LOCK_WAIT,
-            cap: STORE_CAP,
         }
     }
 
-    /// A smaller size limit, so a test can reach it without writing 64 MiB.
-    #[cfg(test)]
-    pub(crate) fn with_cap(mut self, cap: cw_fs::Cap) -> Self {
-        self.cap = cap;
-        self
-    }
-
-    /// Override how long a writer waits for the lock.
+    /// Override how long a writer waits for another connection.
     #[must_use]
     pub fn with_lock_wait(mut self, wait: Duration) -> Self {
         self.lock_wait = wait;
         self
     }
 
-    /// The data directory.
-    #[must_use]
-    pub fn root(&self) -> &Path {
-        &self.root
-    }
-
-    /// The store file, `<root>/notes.json`.
+    /// The notes database, `<root>/notes.db`. Public for the note app,
+    /// which names it in an outcome and in its refusals.
     #[must_use]
     pub fn path(&self) -> PathBuf {
         self.root.join(STORE_FILE)
     }
 
-    /// The audit log, `<root>/audit.jsonl`.
+    /// The audit log, `<root>/audit.jsonl`. Public for the core's audit
+    /// guard, which names it in the warning for a line it could not write.
     #[must_use]
     pub fn audit_path(&self) -> PathBuf {
         self.root.join(audit::AUDIT_FILE)
     }
 
-    /// Everything the store holds, read once. A missing store reads as an
-    /// empty one. Takes no lock and writes nothing.
+    /// The data directory.
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
+    }
+
+    /// Everything the store holds, as one read-only connection sees it. A
+    /// missing data directory or database reads as an empty store. Takes no
+    /// lock and creates nothing but what SQLite needs to read the database
+    /// (a missing `-wal` or `-shm`, owner-only, in a writable directory).
     ///
     /// # Errors
     ///
     /// The store's typed [`Error`], translated into `cw_base::Error` here at
     /// the crate's boundary; `downcast_ref::<Error>()` gives it back.
     pub fn read(&self) -> std::result::Result<Snapshot, cw_base::Error> {
-        Ok(Snapshot::new(self.load()?))
+        Ok(self.snapshot()?)
     }
 
     /// Change the store in one transaction: check the data directory and
-    /// create it if needed, take `.lock` (recording `label` as the holder), re-read the
-    /// store under the lock, run `apply` against it, and replace the file
-    /// atomically if `apply` succeeds. Nothing is written when `apply` fails.
+    /// create it if needed, open the database (creating and migrating it
+    /// when needed), begin an `IMMEDIATE` write transaction, run `apply`
+    /// against it, and commit if `apply` succeeds. Nothing is written when
+    /// `apply` fails: the transaction is rolled back.
     ///
     /// A store holding bad records is refused (`store_bad_record`) before
-    /// `apply` runs: the rewrite would drop them, which is data loss
-    /// (STD-02 R16, R31). Checks a caller wants made before the directory or
-    /// lock file is created belong in its own read before this call
-    /// (STD-02 R34).
+    /// `apply` runs, so a bad record is repaired before anything is added
+    /// beside it (STD-02 R31). Checks a caller wants made before the
+    /// directory or the database is created belong in its own read before
+    /// this call (STD-02 R34).
     ///
     /// `apply` returns the workspace's error type too: a caller's own
-    /// refusal inside the lock crosses the store's boundary already
+    /// refusal inside the transaction crosses the store's boundary already
     /// translated, so nothing of another crate's typed error passes through
     /// the store.
     ///
@@ -114,50 +109,18 @@ impl Store {
     /// translated into `cw_base::Error` here at the crate's boundary.
     pub fn write<T>(
         &self,
-        label: &str,
         apply: impl FnOnce(&mut Tx<'_>) -> std::result::Result<T, cw_base::Error>,
     ) -> std::result::Result<T, cw_base::Error> {
-        let (_lock, mut doc) = self.begin(label)?;
-        let value = apply(&mut Tx::new(&mut doc))?;
-        self.commit(&doc)?;
-        Ok(value)
-    }
-
-    /// Everything a write does before `apply`: check the data directory,
-    /// create it when absent, take the lock, and re-read the store under it,
-    /// refusing bad records.
-    ///
-    /// The directory is checked (a link, another user's, open to others)
-    /// before anything is created in it, so a refused root gains no lock
-    /// file (STD-02 R34).
-    fn begin(&self, label: &str) -> Result<(Lock, StoreDocument)> {
-        if !cw_fs::inspect_dir(&self.root)? {
-            cw_fs::create_private_dir(&self.root)?;
-        }
-        let lock = self.lock(label)?;
-        // Re-read under the lock: anything read before it may be stale.
-        let doc = self.load()?;
-        if let Some(bad) = doc.bad_records.first() {
-            return Err(Error::BadRecord(bad.clone()));
-        }
-        Ok((lock, doc))
-    }
-
-    /// Replace the store file with `doc`, unless it would be larger than
-    /// reads accept: a write must never leave a store its own reads refuse.
-    fn commit(&self, doc: &StoreDocument) -> Result<()> {
-        let path = self.path();
-        let bytes = format::encode(doc)?;
-        let size = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
-        if size > self.cap.get() {
-            return Err(Error::WouldExceedCap {
-                path,
-                size,
-                cap: self.cap.get(),
-            });
-        }
-        cw_fs::write_atomic(&path, &bytes)?;
-        Ok(())
+        self.prepare_root()?;
+        let db = sqlite::open(&self.root, self.lock_wait);
+        let path = db.path();
+        db.write(|tx| {
+            if let Some(bad) = first_bad(tx, path)? {
+                return Err(Failed::from(Error::BadRecord(bad)));
+            }
+            apply(&mut Tx::new(tx, path)).map_err(Failed)
+        })
+        .map_err(|Failed(e)| e)
     }
 
     /// The audit log's repository.
@@ -166,12 +129,14 @@ impl Store {
         Audit::new(self)
     }
 
-    pub(crate) fn lock(&self, label: &str) -> Result<Lock> {
-        Ok(warn_on_holder_error(Lock::acquire(
-            &self.root.join(LOCK_FILE),
-            label,
-            self.lock_wait,
-        )?))
+    /// Check the data directory (a link, another user's, open to others)
+    /// before anything is created in it, so a refused root gains nothing
+    /// (STD-02 R34), and create it `0700` when absent.
+    pub(crate) fn prepare_root(&self) -> Result<()> {
+        if !cw_fs::inspect_dir(&self.root)? {
+            cw_fs::create_private_dir(&self.root)?;
+        }
+        Ok(())
     }
 
     pub(crate) fn audit_lock(&self, label: &str) -> Result<Lock> {
@@ -182,13 +147,34 @@ impl Store {
         )?))
     }
 
-    fn load(&self) -> Result<StoreDocument> {
-        let path = self.path();
-        if !cw_fs::inspect_dir(&self.root)? || !cw_fs::inspect_file(&path)? {
-            return Ok(StoreDocument::empty());
+    fn snapshot(&self) -> Result<Snapshot> {
+        let db = sqlite::open(&self.root, self.lock_wait);
+        let path = db.path().to_path_buf();
+        if !cw_fs::inspect_dir(&self.root)? {
+            return Ok(Snapshot::new(None, path));
         }
-        let bytes = cw_fs::read(&path, self.cap)?;
-        format::decode(&path, &bytes)
+        match db.read() {
+            Ok(reader) => Ok(Snapshot::new(Some(reader), path)),
+            Err(cw_sqlite::Error::Missing { .. }) => Ok(Snapshot::new(None, path)),
+            Err(e) => Err(e.into()),
+        }
+    }
+}
+
+/// A write's failure, whichever side it came from: the kit's database
+/// error (converted by `cw_sqlite::Db::write`) or the workspace's error that
+/// `apply` or the store's own refusal returned.
+struct Failed(cw_base::Error);
+
+impl From<Error> for Failed {
+    fn from(e: Error) -> Self {
+        Self(e.into())
+    }
+}
+
+impl From<cw_sqlite::Error> for Failed {
+    fn from(e: cw_sqlite::Error) -> Self {
+        Self::from(Error::Sqlite(e))
     }
 }
 

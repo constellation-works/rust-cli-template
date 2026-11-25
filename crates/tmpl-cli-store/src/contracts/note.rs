@@ -20,7 +20,7 @@ use time::OffsetDateTime;
 /// Why a value was rejected as a note field.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum NoteError {
-    /// The id was not a positive integer.
+    /// The id was not a positive integer up to [`NoteId::MAX`].
     #[error("invalid note id '{0}': expected a positive integer such as 1")]
     InvalidId(String),
     /// The title was empty or only whitespace.
@@ -46,7 +46,8 @@ pub enum NoteError {
     InvalidPriority(String),
 }
 
-/// A note's identifier: a positive integer, assigned when the note is added.
+/// A note's identifier: a positive integer up to [`NoteId::MAX`], assigned
+/// when the note is added.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "u64", into = "u64")]
 pub struct NoteId(u64);
@@ -54,6 +55,10 @@ pub struct NoteId(u64);
 impl NoteId {
     /// The lowest id, given to the first note in a store.
     pub const FIRST: Self = Self(1);
+
+    /// The highest id: the largest integer the notes database holds
+    /// (SQLite's signed 64-bit `INTEGER`).
+    pub const MAX: Self = Self(i64::MAX.unsigned_abs());
 
     /// The id as a number.
     #[must_use]
@@ -66,7 +71,7 @@ impl TryFrom<u64> for NoteId {
     type Error = NoteError;
 
     fn try_from(value: u64) -> Result<Self, Self::Error> {
-        if value == 0 {
+        if value == 0 || value > Self::MAX.0 {
             return Err(NoteError::InvalidId(value.to_string()));
         }
         Ok(Self(value))

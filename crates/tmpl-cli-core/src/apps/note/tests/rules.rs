@@ -74,7 +74,7 @@ fn the_next_id_is_one_past_the_highest_whatever_the_order() {
     };
     assert_eq!(next_id(&[]), Some(NoteId::FIRST));
     assert_eq!(next_id(&[at(3), at(1), at(7)]).map(NoteId::get), Some(8));
-    assert_eq!(next_id(&[at(u64::MAX)]), None);
+    assert_eq!(next_id(&[at(NoteId::MAX.get())]), None);
 }
 
 #[test]

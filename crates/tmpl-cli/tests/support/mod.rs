@@ -165,24 +165,37 @@ pub fn make_private(path: &Path) {
     let _ = path;
 }
 
-/// Write a format-1 store file with `count` notes directly, for tests that
-/// need more data than is quick to add one process at a time.
+/// Store `count` notes directly in the notes database, for tests that need
+/// more data than is quick to add one process at a time.
 pub fn write_store(root: &Path, count: usize) {
-    let notes: Vec<serde_json::Value> = (1..=count)
-        .map(|id| {
-            serde_json::json!({
-                "id": id,
-                "title": format!("note number {id} with a title long enough to fill the pipe quickly"),
-                "body": serde_json::Value::Null,
-                "tags": [],
-                "priority": "normal",
-                "created_at": "2026-01-02T03:04:05Z",
-            })
-        })
-        .collect();
-    std::fs::create_dir_all(root).expect("create root");
-    make_private(root);
-    let doc = serde_json::json!({ "format": 1, "notes": notes });
-    std::fs::write(root.join("notes.json"), doc.to_string()).expect("write store");
-    make_private(&root.join("notes.json"));
+    execute(
+        root,
+        &format!(
+            "WITH RECURSIVE n(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM n WHERE id < {count})
+             INSERT INTO note (id, title, body, tags, priority, created_at)
+             SELECT id, 'note number ' || id || ' with a title long enough to fill the pipe quickly',
+                    NULL, '[]', 'normal', '2026-01-02T03:04:05Z'
+             FROM n;"
+        ),
+    );
+}
+
+/// Replace the notes database with bytes that are not one, and drop its
+/// `-wal` and `-shm`, whose committed pages would otherwise still be read.
+pub fn corrupt_store(root: &Path) {
+    for sidecar in ["notes.db-wal", "notes.db-shm"] {
+        match std::fs::remove_file(root.join(sidecar)) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => panic!("remove {sidecar}: {e}"),
+        }
+    }
+    std::fs::write(root.join("notes.db"), b"not a database").expect("corrupt store");
+}
+
+/// Run raw SQL on the notes database under `root`, for state the binary
+/// never writes (a bad record).
+pub fn execute(root: &Path, sql: &str) {
+    tmpl_cli_store::test_support::execute(&tmpl_cli_store::Store::open(root), sql)
+        .expect("run test SQL");
 }

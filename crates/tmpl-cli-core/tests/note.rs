@@ -11,7 +11,6 @@
     )
 )]
 
-use cw_fs::Error as FsError;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::Arc;
@@ -20,6 +19,7 @@ use time::macros::datetime;
 use tmpl_cli_core::apps::note::{Command, Error, ListFilter, NewNote, NoteList, Outcome};
 use tmpl_cli_core::contracts::{Note, NoteId, Priority, Tag};
 use tmpl_cli_core::test_support::{Ctx, note_run};
+use tmpl_cli_store::contracts::NoteError;
 use tmpl_cli_store::{
     BadRecord, BadRecordReason, Error as StoreError, RecordLocator, STORE_FILE, Store,
 };
@@ -90,78 +90,20 @@ impl NoteApp for Store {
     }
 }
 
-#[test]
-fn a_lock_timeout_omits_an_oversized_holder_record() {
-    // The kit's holder record is one JSON line read back up to 4096 bytes.
-    // The control, the same record with a short label, is named where the
-    // kit names a holder (Unix; native Windows never does); past the bound
-    // the record is unreadable and the timeout names no holder.
-    let control = timeout_holder(&holder_record("holder"));
-    #[cfg(unix)]
-    assert!(
-        matches!(&control, Some(h) if h.pid == std::process::id() && h.label == "holder"),
-        "an in-bound record names its live holder, got {control:?}"
-    );
-    #[cfg(not(unix))]
-    assert!(control.is_none(), "got {control:?}");
-    let oversized = timeout_holder(&holder_record(&"x".repeat(4096)));
-    assert!(oversized.is_none(), "got {oversized:?}");
-}
-
-/// A holder record for this process in the kit's format: one JSON line with
-/// the pid, on Linux the process's start time, the time and the label.
-fn holder_record(label: &str) -> String {
-    let pid = std::process::id();
-    let start = process_start().map_or_else(String::new, |s| format!("\"start\":{s},"));
-    format!("{{\"pid\":{pid},{start}\"time\":\"2026-01-02T03:04:05Z\",\"label\":\"{label}\"}}\n")
-}
-
-/// This process's start time from `/proc/self/stat` (field 22), which the
-/// kit checks on Linux before it names a holder.
-#[cfg(target_os = "linux")]
-fn process_start() -> Option<u64> {
-    let stat = std::fs::read_to_string("/proc/self/stat").ok()?;
-    let rest = &stat[stat.rfind(')')? + 1..];
-    rest.split_whitespace().nth(19)?.parse().ok()
-}
-
-#[cfg(not(target_os = "linux"))]
-fn process_start() -> Option<u64> {
-    None
-}
-
-/// The holder a store-lock timeout names while `.lock` holds `record` and is
-/// locked by another open file of this process.
-fn timeout_holder(record: &str) -> Option<cw_fs::Holder> {
-    let dir = tempdir();
-    let path = dir.path().join(".lock");
-    std::fs::write(&path, record).unwrap();
-    // Owner-only, as the store creates it: cw-fs refuses a lock file open
-    // to any group or other permission bit before it waits.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
-    }
-    let lock = std::fs::File::open(&path).unwrap();
-    lock.try_lock().unwrap();
-    let store = Store::open(dir.path()).with_lock_wait(std::time::Duration::ZERO);
-    let err = store
-        .add(new_note("waiting", &[], Priority::Normal), NOW)
-        .unwrap_err();
-    match store_error(&err) {
-        Some(StoreError::Fs(FsError::Locked { holder, .. })) => holder.clone(),
-        other => panic!("expected store_locked, got {other:?}"),
-    }
-}
-
 /// A temporary directory that is owner-only whatever the umask, as a store
 /// directory must be (STD-05 R9). The kit's temp root is `0700`.
 fn tempdir() -> cw_testkit::TempRoot {
     cw_testkit::TempRoot::new("TMPL_CLI").unwrap()
 }
 
-/// Write a store file by hand, owner-only as the store itself would.
+/// Run raw SQL on the store's database, for state the public API never
+/// writes.
+fn execute(store: &Store, sql: &str) {
+    tmpl_cli_store::test_support::execute(store, sql).unwrap();
+}
+
+/// Write bytes at the store's database path by hand, owner-only as the
+/// store itself would.
 fn write_store_file(dir: &Path, text: &str) {
     let path = dir.join(STORE_FILE);
     std::fs::write(&path, text).unwrap();
@@ -336,30 +278,19 @@ fn concurrent_writers_never_lose_a_note_or_reuse_an_id() {
 #[test]
 fn a_store_from_a_newer_build_is_refused_not_rewritten() {
     let dir = tempdir();
-    let path = dir.path().join(STORE_FILE);
-    let newer = r#"{"format": 2, "records": {"shape": "unknown to this build"}}"#;
-    write_store_file(dir.path(), newer);
     let store = Store::open(dir.path());
+    // A database a build with a second schema step migrated.
+    execute(&store, "PRAGMA user_version = 2;");
 
     let err = store.list(&ListFilter::default()).unwrap_err();
-    assert!(
-        matches!(
-            store_error(&err),
-            Some(StoreError::NewerFormat {
-                found: 2,
-                supported: 1,
-                ..
-            })
-        ),
-        "got {err:?}"
-    );
+    assert_eq!(err.code(), "store_too_new", "got {err:?}");
     let err = store
         .add(new_note("x", &[], Priority::Normal), NOW)
         .unwrap_err();
-    assert_eq!(err.code(), "store_too_new");
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), newer);
-    // STD-02 R34: refused before the first side effect, so no lock file either.
-    assert!(!dir.path().join(".lock").exists());
+    assert_eq!(err.code(), "store_too_new", "got {err:?}");
+    // Not migrated back or rewritten: a read still meets the newer version.
+    let err = store.list(&ListFilter::default()).unwrap_err();
+    assert_eq!(err.code(), "store_too_new", "got {err:?}");
 }
 
 #[test]
@@ -376,13 +307,14 @@ fn a_corrupt_store_is_reported_with_its_path() {
 #[test]
 fn bad_records_are_isolated_on_read_fail_on_show_and_refuse_writes() {
     let dir = tempdir();
-    let raw = r#"{"format": 1, "notes": [
-        {"id": 1, "title": "good", "body": null, "tags": [], "priority": "normal", "created_at": "2025-05-06T07:08:09Z"},
-        {"id": 2, "title": "bad\u001btitle", "body": null, "tags": [], "priority": "normal", "created_at": "2025-05-06T07:08:09Z"},
-        {"id": 3, "title": "missing fields", "created_at": "2025-05-06T07:08:09Z"}
-    ]}"#;
-    write_store_file(dir.path(), raw);
     let store = Store::open(dir.path());
+    execute(
+        &store,
+        "INSERT INTO note (id, title, body, tags, priority, created_at) VALUES
+            (1, 'good', NULL, '[]', 'normal', '2025-05-06T07:08:09Z'),
+            (2, 'bad' || char(27) || 'title', NULL, '[]', 'normal', '2025-05-06T07:08:09Z'),
+            (3, 'unknown priority', NULL, '[]', 'urgent', '2025-05-06T07:08:09Z');",
+    );
 
     let listed = store.list(&ListFilter::default()).unwrap();
     assert_eq!(listed.value.notes.len(), 1);
@@ -398,7 +330,7 @@ fn bad_records_are_isolated_on_read_fail_on_show_and_refuse_writes() {
     );
     assert_eq!(
         listed.bad_records[1].reason,
-        BadRecordReason::MissingField("body")
+        BadRecordReason::Validation(NoteError::InvalidPriority(String::from("urgent")))
     );
 
     // Showing the good id succeeds and still surfaces the bad records.
@@ -414,51 +346,28 @@ fn bad_records_are_isolated_on_read_fail_on_show_and_refuse_writes() {
         Some(StoreError::BadRecord(r)) if r.locator == RecordLocator::Id(NoteId::try_from(2).unwrap())
     ));
 
-    // Adding refuses without modifying the file or creating a lock.
-    let before = std::fs::read(store.path()).unwrap();
+    // Adding refuses and adds nothing.
     let err = store
         .add(new_note("new", &[], Priority::Normal), NOW)
         .unwrap_err();
     assert_eq!(err.code(), "store_bad_record");
-    assert_eq!(std::fs::read(store.path()).unwrap(), before);
-    assert!(!dir.path().join(".lock").exists());
-}
-
-#[test]
-fn format_zero_never_existed_and_reads_as_corrupt() {
-    let dir = tempdir();
-    write_store_file(dir.path(), r#"{"format": 0, "notes": []}"#);
-    let err = Store::open(dir.path())
-        .list(&ListFilter::default())
-        .unwrap_err();
-    assert_eq!(err.code(), "store_corrupt");
-}
-
-#[test]
-fn duplicate_note_ids_fail_to_load_with_a_stable_code() {
-    let dir = tempdir();
-    let dup = r#"{"format": 1, "notes": [
-        {"id": 1, "title": "first", "body": null, "tags": [], "priority": "normal", "created_at": "2026-01-02T03:04:05Z"},
-        {"id": 1, "title": "second", "body": null, "tags": [], "priority": "normal", "created_at": "2026-01-02T03:04:05Z"}
-    ]}"#;
-    write_store_file(dir.path(), dup);
-    let err = Store::open(dir.path())
-        .list(&ListFilter::default())
-        .unwrap_err();
-    assert_eq!(err.code(), "store_duplicate_id", "got {err:?}");
+    let after = store.list(&ListFilter::default()).unwrap();
+    assert_eq!((after.value.notes.len(), after.bad_records.len()), (1, 2));
 }
 
 #[test]
 fn add_refuses_when_max_id_is_already_in_use() {
     let dir = tempdir();
-    let max_doc = format!(
-        r#"{{"format": 1, "notes": [
-            {{"id": {}, "title": "last", "body": null, "tags": [], "priority": "normal", "created_at": "2026-01-02T03:04:05Z"}}
-        ]}}"#,
-        u64::MAX
+    let store = Store::open(dir.path());
+    execute(
+        &store,
+        &format!(
+            "INSERT INTO note (id, title, body, tags, priority, created_at)
+             VALUES ({}, 'last', NULL, '[]', 'normal', '2026-01-02T03:04:05Z');",
+            NoteId::MAX
+        ),
     );
-    write_store_file(dir.path(), &max_doc);
-    let err = Store::open(dir.path())
+    let err = store
         .add(new_note("overflow", &[], Priority::Normal), NOW)
         .unwrap_err();
     assert_eq!(err.code(), "note_id_exhausted", "got {err:?}");
@@ -468,14 +377,14 @@ fn add_refuses_when_max_id_is_already_in_use() {
 fn encode_failure_is_not_io_and_names_no_path() {
     let dir = tempdir();
     let store = Store::open(dir.path());
-    // RFC 3339 cannot serialize negative years, forcing a real serde_json encode error.
+    // RFC 3339 cannot format negative years, forcing a real encode error.
     let bad_date = time::Date::from_calendar_date(-1, time::Month::January, 1).unwrap();
     let bad_time = OffsetDateTime::new_utc(bad_date, time::Time::MIDNIGHT);
     let err = store
         .add(new_note("encode fail", &[], Priority::Normal), bad_time)
         .unwrap_err();
     assert!(
-        matches!(store_error(&err), Some(StoreError::Encode { .. })),
+        matches!(store_error(&err), Some(StoreError::Timestamp { .. })),
         "got {err:?}"
     );
     assert_eq!(err.code(), "encode_error");

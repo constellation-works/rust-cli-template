@@ -24,23 +24,28 @@ fn only_note_add_is_audited() {
 fn lock_timeout_audited_command_waits_one_deadline_and_records_one_failure_line() {
     use crate::apps::note::NoteApp;
     use crate::runtime::{Ctx, run_with};
-    use std::fs::OpenOptions;
+    use std::sync::mpsc;
     use std::time::{Duration, Instant};
     use tmpl_cli_store::Store;
 
     // The kit's private (0700) temp root, as a store directory must be.
     let dir = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
 
-    // Hold the store lock `.lock` for the duration of the command.
-    let lock_path = dir.path().join(".lock");
-    // Owner-only, as the store creates it: cw-fs refuses a lock file open to
-    // any group or other permission bit before it waits.
-    let mut options = OpenOptions::new();
-    options.create(true).truncate(false).read(true).write(true);
-    #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-    let lock_file = options.open(&lock_path).unwrap();
-    lock_file.try_lock().unwrap();
+    // Another writer holds a write transaction for the duration of the
+    // command, as another process would.
+    let (taken_tx, taken_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel::<()>();
+    let holder = Store::open(dir.path());
+    let held = std::thread::spawn(move || {
+        holder
+            .write(|_tx| {
+                taken_tx.send(()).unwrap();
+                let _ = release_rx.recv();
+                Ok(())
+            })
+            .unwrap();
+    });
+    taken_rx.recv().unwrap();
 
     let deadline = Duration::from_millis(80);
     let store = Store::open(dir.path()).with_lock_wait(deadline);
@@ -56,6 +61,8 @@ fn lock_timeout_audited_command_waits_one_deadline_and_records_one_failure_line(
         outcome.unwrap_err().code()
     });
     let elapsed = started.elapsed();
+    drop(release_tx);
+    held.join().unwrap();
 
     assert_eq!(err_code, "store_locked");
     assert!(

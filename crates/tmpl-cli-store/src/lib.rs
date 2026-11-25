@@ -1,16 +1,23 @@
 //! The tmpl-cli data directory as a library.
 //!
-//! - `db`: the files under the data directory (the persisted notes document
-//!   and its format upgrades, the audit line); bytes only, no I/O;
+//! - `driver`: one module per storage mechanism, each holding only this
+//!   project's part of it. `driver::sqlite` names the notes database, its
+//!   lock wait and its schema steps, and hands out the kit's
+//!   `cw_sqlite::Db`; it holds no query;
 //! - [`repository`]: one repository per record (notes, audit), read through a
-//!   [`Snapshot`] and written through a [`Tx`] inside [`Store::write`];
+//!   [`Snapshot`] and written through a [`Tx`] inside [`Store::write`]; the
+//!   notes repository holds the notes' SQL and row mapping;
 //! - [`contracts`]: the record shapes ([`contracts::Note`] and its field
 //!   types, [`contracts::AuditEvent`]);
+//! - `db`: the audit log's file and its persisted line;
 //! - the crate's typed [`Error`], and its one translator into the
 //!   workspace's error type.
 //!
-//! It reaches the data directory only through the kit's `cw_fs`: no code in
-//! this crate names `std::fs`.
+//! It reaches the notes database only through the kit's `cw_sqlite` and the
+//! data directory and the audit log only through the kit's `cw_fs`: no code
+//! in this crate names `std::fs`. No type of either crate, no path but
+//! [`Store::path`] and [`Store::audit_path`], and no borrow from a
+//! connection is in its public surface.
 //!
 //! The store holds no rule of any app: no next-id rule, no list selection,
 //! no validation beyond what a contract type enforces on itself. It never
@@ -32,11 +39,14 @@
 
 pub mod contracts;
 mod db;
+mod driver;
 mod error;
 pub mod repository;
 mod store;
+#[cfg(feature = "test-support")]
+pub mod test_support;
 
-pub use db::STORE_FILE;
+pub use driver::sqlite::STORE_FILE;
 pub use error::{BadRecord, BadRecordReason, Error, RecordLocator, Result};
 pub use repository::{Snapshot, Tx};
 pub use store::Store;

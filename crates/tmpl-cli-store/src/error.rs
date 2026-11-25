@@ -12,22 +12,21 @@ use cw_base::Kind;
 use std::fmt;
 use std::path::PathBuf;
 
-/// Where a bad record sits in the store file: its note id when readable,
-/// otherwise its 1-based line number in the file.
+/// Where a bad record sits in the notes database: its note id when it is a
+/// valid one, otherwise the row's raw id.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecordLocator {
-    /// The record had a readable note id.
+    /// The record had a valid note id.
     Id(NoteId),
-    /// The record's id itself was missing or unreadable; identified by its
-    /// 1-based line number in the store file.
-    Line(usize),
+    /// The row's id is not a valid note id; identified by the raw value.
+    Row(i64),
 }
 
 impl fmt::Display for RecordLocator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Id(id) => write!(f, "note {id}"),
-            Self::Line(line) => write!(f, "line {line}"),
+            Self::Row(row) => write!(f, "row {row}"),
         }
     }
 }
@@ -36,13 +35,8 @@ impl fmt::Display for RecordLocator {
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum BadRecordReason {
-    /// The note entry was not a JSON object.
-    #[error("expected a JSON object")]
-    NotAnObject,
-    /// A required field was absent from the stored note.
-    #[error("missing required field '{0}'")]
-    MissingField(&'static str),
-    /// A field had the wrong JSON type or an unparseable value.
+    /// A field held a value that does not parse: a timestamp that is not
+    /// RFC 3339, or tags that are not a JSON array of strings.
     #[error("invalid field '{field}': {detail}")]
     InvalidField {
         /// The offending field name.
@@ -59,9 +53,9 @@ pub enum BadRecordReason {
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[error("bad record at {locator} in {}: {reason}", path.display())]
 pub struct BadRecord {
-    /// The store file holding the record.
+    /// The notes database holding the record.
     pub path: PathBuf,
-    /// The record's id, or its 1-based line number when the id is unreadable.
+    /// The record's note id, or the row's raw id when that is not one.
     pub locator: RecordLocator,
     /// Why the record was rejected.
     pub reason: BadRecordReason,
@@ -88,12 +82,17 @@ impl BadRecord {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
-    /// A file operation on the data directory failed, was refused, or timed
-    /// out on the lock. The kit's error carries a kind and no code: the
-    /// store names the code ([`Error::code`]).
+    /// A file operation on the data directory or the audit log failed, was
+    /// refused, or timed out on the audit lock. The kit's error carries a
+    /// kind and no code: the store names the code ([`Error::code`]).
     #[error(transparent)]
     Fs(#[from] cw_fs::Error),
-    /// Serializing a store document or audit event failed before any file was touched.
+    /// Opening, migrating, reading or writing the notes database failed or
+    /// was refused. The kit's error carries a kind and no code: the store
+    /// names the code ([`Error::code`]).
+    #[error(transparent)]
+    Sqlite(#[from] cw_sqlite::Error),
+    /// Serializing a note's tags or an audit event failed before anything was written.
     #[error("cannot encode {what}")]
     Encode {
         /// What was being serialized.
@@ -102,10 +101,10 @@ pub enum Error {
         #[source]
         source: serde_json::Error,
     },
-    /// The store file exists but is not a store this build can parse.
+    /// A persisted file (the audit log) is not one this build can parse.
     #[error("{} is not a valid store file", path.display())]
     Corrupt {
-        /// The store file.
+        /// The file.
         path: PathBuf,
         /// What the parser rejected.
         #[source]
@@ -114,36 +113,23 @@ pub enum Error {
     /// One or more note records in the store failed validation.
     #[error(transparent)]
     BadRecord(#[from] BadRecord),
-    /// Two notes in the store share the same id.
-    #[error("{} contains duplicate note id {id}", path.display())]
-    DuplicateId {
-        /// The store file.
-        path: PathBuf,
-        /// The repeated id.
-        id: NoteId,
+    /// A note's timestamp could not be formatted as RFC 3339 before anything
+    /// was written.
+    #[error("cannot format a note's timestamp as RFC 3339")]
+    Timestamp {
+        /// What the formatter rejected.
+        #[source]
+        source: time::error::Format,
     },
-    /// A write would make the store file larger than reads accept, so it was
-    /// refused and the file left as it was.
-    #[error(
-        "{} would grow to {size} bytes, past the store's limit of {cap} bytes; it was left unchanged",
-        path.display()
-    )]
-    WouldExceedCap {
-        /// The store file.
-        path: PathBuf,
-        /// The encoded size the write would have produced.
-        size: u64,
-        /// The limit, in bytes.
-        cap: u64,
-    },
-    /// The store was written by a newer build (STD-03 R10: refuse, never
-    /// rewrite or reinterpret newer state).
+    /// A persisted file (the audit log) was written by a newer build
+    /// (STD-03 R10: refuse, never rewrite or reinterpret newer state). A
+    /// newer notes database is the kit's `Incompatible`.
     #[error(
         "{} uses store format {found}, but this build reads format {supported} or older; upgrade this tool",
         path.display()
     )]
     NewerFormat {
-        /// The store file.
+        /// The file.
         path: PathBuf,
         /// The format the file declares.
         found: u32,
@@ -159,21 +145,22 @@ impl Error {
     pub fn code(&self) -> &'static str {
         match self {
             // The kit's file failures get the store's codes here.
-            Self::Fs(cw_fs::Error::Io { .. }) => "io_error",
-            Self::Fs(cw_fs::Error::Locked { .. }) => "store_locked",
-            Self::Fs(cw_fs::Error::Symlink { .. }) => "store_symlink",
-            Self::Fs(cw_fs::Error::ForeignOwner { .. }) => "store_foreign_owner",
-            Self::Fs(cw_fs::Error::Permissions { .. }) => "store_permissions",
-            Self::Fs(cw_fs::Error::NotRegular { .. }) => "store_not_regular",
-            Self::Fs(cw_fs::Error::TooLarge { .. }) | Self::WouldExceedCap { .. } => {
-                "store_too_large"
+            Self::Fs(e) | Self::Sqlite(cw_sqlite::Error::File(e)) => fs_code(e),
+            // The kit's database failures get the store's codes here.
+            Self::Sqlite(cw_sqlite::Error::Missing { .. }) => "store_missing",
+            Self::Sqlite(cw_sqlite::Error::Locked { .. }) => "store_locked",
+            Self::Sqlite(cw_sqlite::Error::Corrupt { .. }) | Self::Corrupt { .. } => {
+                "store_corrupt"
             }
-            Self::Fs(cw_fs::Error::Reentrant { .. }) => "store_lock_reentrant",
-            Self::Encode { .. } => "encode_error",
-            Self::Corrupt { .. } => "store_corrupt",
+            Self::Sqlite(cw_sqlite::Error::CheckFailed { .. }) => "store_check_failed",
+            Self::Sqlite(cw_sqlite::Error::Incompatible { .. }) | Self::NewerFormat { .. } => {
+                "store_too_new"
+            }
+            Self::Sqlite(cw_sqlite::Error::NotWal { .. }) => "store_not_wal",
+            Self::Sqlite(cw_sqlite::Error::Migration { .. }) => "store_migration_failed",
+            Self::Sqlite(cw_sqlite::Error::Sqlite { .. }) => "store_sqlite_error",
+            Self::Encode { .. } | Self::Timestamp { .. } => "encode_error",
             Self::BadRecord(_) => "store_bad_record",
-            Self::DuplicateId { .. } => "store_duplicate_id",
-            Self::NewerFormat { .. } => "store_too_new",
         }
     }
 
@@ -183,11 +170,26 @@ impl Error {
     pub fn kind(&self) -> Kind {
         match self {
             Self::Fs(e) => e.kind(),
-            Self::Encode { .. } => Kind::Internal,
-            Self::Corrupt { .. } | Self::BadRecord(_) | Self::DuplicateId { .. } => Kind::Corrupt,
-            Self::WouldExceedCap { .. } => Kind::Refused,
+            Self::Sqlite(e) => e.kind(),
+            Self::Encode { .. } | Self::Timestamp { .. } => Kind::Internal,
+            Self::Corrupt { .. } | Self::BadRecord(_) => Kind::Corrupt,
             Self::NewerFormat { .. } => Kind::Incompatible,
         }
+    }
+}
+
+/// The store's code for each of the kit's file errors, met on the data
+/// directory, the audit log or the database's own files.
+fn fs_code(e: &cw_fs::Error) -> &'static str {
+    match e {
+        cw_fs::Error::Io { .. } => "io_error",
+        cw_fs::Error::Locked { .. } => "store_locked",
+        cw_fs::Error::Symlink { .. } => "store_symlink",
+        cw_fs::Error::ForeignOwner { .. } => "store_foreign_owner",
+        cw_fs::Error::Permissions { .. } => "store_permissions",
+        cw_fs::Error::NotRegular { .. } => "store_not_regular",
+        cw_fs::Error::TooLarge { .. } => "store_too_large",
+        cw_fs::Error::Reentrant { .. } => "store_lock_reentrant",
     }
 }
 
