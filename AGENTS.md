@@ -2,6 +2,14 @@
 
 Loaded as both `AGENTS.md` and `CLAUDE.md` (a symlink). tmpl-cli keeps short notes in a local store; it is a Rust CLI built from the constellation Rust CLI template.
 
+## Starting a project from this template
+
+Keep the architecture from the first command, even when the entire first feature would fit in one file. Replace the example domain in place. Follow a command from the CLI handler through the core app, runtime and composition to the store's record repositories. Use the shared kit for infrastructure and carry the dependency checks and tests into the new project. Keep this guidance when you update the project name and description.
+
+This structure comes from growing Scribe and Orbit. Moving file access, queries and application rules out of handlers after more commands depend on them costs repeated refactors across projects. Starting with the boundaries in place gives the second feature an example it can follow.
+
+Before the first commit, trace one real command against [ARCHITECTURE.md](ARCHITECTURE.md) and run the template gates. The upstream template evolves. Use the integrated revision you generated from as the baseline and check its design decisions when a layout is in transition.
+
 ## Rules
 
 - Work only on authorized scope. Neither implementation nor a PR request authorizes merging.
