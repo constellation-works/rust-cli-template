@@ -237,7 +237,7 @@ ban "$STORE/contract" 'fn check_|now_utc|SystemTime'                      "contr
 [[ -e "$CORE/apps" ]] && err "core/apps: the apps live in app/"
 [[ -e "$CLI/commands" ]] && err "cli/commands: the command handlers live in command/"
 compgen -G "$CORE/app/*/rules.rs" >/dev/null && err "core/app/<app>/rules.rs: an app's rules live in rule.rs"
-compgen -G "$CORE/app/*/rules/*" >/dev/null && err "core/app/<app>/rules/: an app's rules live in rule.rs or rule/"
+compgen -G "$CORE/app/*/rules" >/dev/null && err "core/app/<app>/rules/: an app's rules live in rule.rs or rule/"
 [[ -e "$STORE/repository/notes.rs" || -e "$STORE/repository/notes" ]] && err "store/repository/notes: the note repository is repository/note.rs"
 # rusqlite is named only through the kit's re-export (cw_sqlite::rusqlite),
 # never as a crate of its own.
