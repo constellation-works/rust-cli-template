@@ -8,9 +8,8 @@
 //! and sees one committed version. A write runs in one `IMMEDIATE`
 //! transaction, so two concurrent writers never lose each other's records
 //! (STD-03 R5, R6); a writer waits for another up to the lock wait. The
-//! audit log is a separate append-only file under its own
-//! `<root>/.audit.lock` (see the audit repository), reached through the
-//! kit's `cw_fs`. New directories are created `0700` and new files `0600`
+//! audit log in the same directory is the kit's (`cw_app`), not the
+//! store's. New directories are created `0700` and new files `0600`
 //! (STD-05 R8), and every read and write refuses a data directory or file
 //! that is a symbolic link, owned by another user, or open to any group or
 //! other permission bit (STD-05 R9).
@@ -20,9 +19,7 @@
 
 use crate::driver::sqlite::{self, STORE_FILE};
 use crate::error::{Error, Result};
-use crate::repository::audit::{AUDIT_LOCK_FILE, line};
-use crate::repository::{Audit, Snapshot, Tx};
-use cw_fs::Lock;
+use crate::repository::{Snapshot, Tx};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -59,13 +56,6 @@ impl Store {
     #[must_use]
     pub fn path(&self) -> PathBuf {
         self.root.join(STORE_FILE)
-    }
-
-    /// The audit log, `<root>/audit.jsonl`. Public for the core's audit
-    /// guard, which names it in the warning for a line it could not write.
-    #[must_use]
-    pub fn audit_path(&self) -> PathBuf {
-        self.root.join(line::AUDIT_FILE)
     }
 
     /// The data directory. Public for the apps, which report it.
@@ -135,12 +125,6 @@ impl Store {
         .map_err(|Failed(err)| err)
     }
 
-    /// The audit log's repository.
-    #[must_use]
-    pub fn audit(&self) -> Audit<'_> {
-        Audit::new(self)
-    }
-
     /// Check the data directory (a link, another user's, open to others)
     /// before anything is created in it, so a refused root gains nothing
     /// (STD-02 R34), and create it `0700` when absent.
@@ -149,14 +133,6 @@ impl Store {
             cw_fs::create_private_dir(&self.root)?;
         }
         Ok(())
-    }
-
-    pub(crate) fn audit_lock(&self, label: &str) -> Result<Lock> {
-        Ok(warn_on_holder_error(Lock::acquire(
-            &self.root.join(AUDIT_LOCK_FILE),
-            label,
-            self.lock_wait,
-        )?))
     }
 
     fn snapshot(&self) -> Result<Snapshot> {
@@ -188,14 +164,4 @@ impl From<cw_sqlite::Error> for Failed {
     fn from(err: cw_sqlite::Error) -> Self {
         Self::from(Error::Sqlite(err))
     }
-}
-
-/// Fail open (STD-02 R31): the holder record only explains a timeout to the
-/// next waiter (STD-03 R7), so the kit holds the lock even when it could not
-/// write the record, and the store reports that as a warning.
-fn warn_on_holder_error(lock: Lock) -> Lock {
-    if let Some(error) = lock.holder_error() {
-        tracing::warn!(path = %lock.path().display(), %error, "could not record the lock holder");
-    }
-    lock
 }

@@ -3,14 +3,14 @@
 //! Each noun maps to exactly one app in `tmpl-cli-core`, and lives in its own
 //! module with its subcommands, flags, help and handlers; a noun that
 //! outgrows one file becomes a directory with one file per verb. Cross-cutting
-//! behaviour (the audit log) attaches once, in the core's runtime
-//! (STD-02 R24), not here.
+//! behaviour (the audit log) attaches once, in the kit's chokepoint that
+//! every app's `exec` forwards to (STD-02 R24), not here.
 
 mod status;
 
 use crate::output::Output;
 use clap::Subcommand;
-use tmpl_cli_core::{Env, Error};
+use tmpl_cli_core::{AuditWarning, Error, Origin, Runtime};
 
 pub(crate) use status::StatusArgs;
 // example:begin
@@ -33,17 +33,19 @@ pub(crate) enum Command {
     // example:end
 }
 
-/// Run one command against `env` and pass its outcome to `finish`, which
-/// runs before the app's audit guard writes its line.
-pub(crate) fn run_with<R>(
+/// Run one command against `runtime` for the client `origin`, render its
+/// outcome with `finish`, then settle its audit record: the line follows the
+/// output, and a line that could not be written comes back as the warning.
+pub(crate) fn run<R>(
     command: Command,
-    env: &Env,
+    runtime: &Runtime,
+    origin: &Origin,
     finish: impl FnOnce(Result<Output, Error>) -> R,
-) -> R {
+) -> (R, Option<AuditWarning>) {
     match command {
-        Command::Status(args) => status::run(args, env, finish),
+        Command::Status(args) => status::run(args, runtime, origin, finish),
         // example:begin
-        Command::Note(command) => note::run(command, env, finish),
+        Command::Note(command) => note::run(command, runtime, origin, finish),
         // example:end
     }
 }

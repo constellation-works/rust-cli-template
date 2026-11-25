@@ -24,39 +24,40 @@ pub(crate) use payload::{Output, Payload, StatusPayload};
 // example:begin
 pub(crate) use note::NotePayload;
 // example:end
-pub(crate) use sink::{FORMAT_ENV, FormatArg, Sink, help_width};
+pub(crate) use sink::{FormatArg, Sink, help_width};
 
 use crate::error::{exit_code, hint, output_error};
 use serde::Serialize;
 use std::ffi::OsString;
+use std::fmt::Display;
 use std::io::{self, Write};
 use std::process::ExitCode;
-use tmpl_cli_core::Error;
+use tmpl_cli_core::{APP, Env, Error};
 
-/// Environment variable holding the log filter (`warn` when unset).
-const LOG_ENV: &str = "TMPL_CLI_LOG";
-
-/// Send `tracing` output to stderr as plain text, filtered by `TMPL_CLI_LOG`.
+/// Send `tracing` output to stderr as plain text, filtered by `TMPL_CLI_LOG`
+/// from the captured environment (`warn` when unset or empty).
 ///
 /// Fail open (STD-02 R31): logging is a side channel, so a filter that does
 /// not parse never fails the command. It is reported once and replaced by
 /// the default, not silently ignored.
-pub(crate) fn init_logging() {
+pub(crate) fn init_logging(env: &Env) {
     use tracing_subscriber::EnvFilter;
     let default = || EnvFilter::new("warn");
-    let filter = match std::env::var(LOG_ENV) {
-        Ok(spec) => EnvFilter::try_new(&spec).unwrap_or_else(|err| {
+    let app = env.app(APP);
+    let log_var = app.var_name("LOG");
+    let filter = match app.log().map(|spec| spec.to_str().ok_or(spec)) {
+        Some(Ok(spec)) => EnvFilter::try_new(spec).unwrap_or_else(|err| {
             let _ = writeln!(
                 io::stderr().lock(),
-                "warning: ignoring {LOG_ENV}={spec:?} ({err}); logging at warn"
+                "warning: ignoring {log_var}={spec:?} ({err}); logging at warn"
             );
             default()
         }),
-        Err(std::env::VarError::NotPresent) => default(),
-        Err(std::env::VarError::NotUnicode(_)) => {
+        None => default(),
+        Some(Err(_not_utf8)) => {
             let _ = writeln!(
                 io::stderr().lock(),
-                "warning: ignoring {LOG_ENV}: not valid UTF-8; logging at warn"
+                "warning: ignoring {log_var}: not valid UTF-8; logging at warn"
             );
             default()
         }
@@ -88,7 +89,7 @@ pub(crate) fn finish(sink: &Sink, outcome: Result<Output, Error>) -> ExitCode {
 
 /// Handle an argument-parsing outcome that is not a parsed command line:
 /// `--help` and `--version` (stdout, exit 0) or a usage error (stderr, exit 2).
-pub(crate) fn finish_parse_error(err: &clap::Error, args: &[OsString]) -> ExitCode {
+pub(crate) fn finish_parse_error(err: &clap::Error, args: &[OsString], env: &Env) -> ExitCode {
     let code = u8::try_from(err.exit_code()).unwrap_or(2);
     if !err.use_stderr() {
         let written = io::stdout()
@@ -99,7 +100,7 @@ pub(crate) fn finish_parse_error(err: &clap::Error, args: &[OsString]) -> ExitCo
             _ => ExitCode::from(code),
         };
     }
-    let env_format = std::env::var(FORMAT_ENV).ok();
+    let env_format = sink::env_format(env);
     let rendered = err.render().to_string();
     if sink::raw_args_request_json(args, env_format.as_deref()) {
         let first = rendered.lines().next().unwrap_or_default();
@@ -109,6 +110,13 @@ pub(crate) fn finish_parse_error(err: &clap::Error, args: &[OsString]) -> ExitCo
         let _ = io::stderr().lock().write_all(rendered.as_bytes());
     }
     ExitCode::from(code)
+}
+
+/// Print the audit log's warning after the command's own output: the line
+/// for a command that already ran could not be written. Fail open
+/// (STD-02 R31): it never changes the exit code.
+pub(crate) fn audit_warning(warning: &impl Display) {
+    let _ = writeln!(io::stderr().lock(), "warning: {warning}");
 }
 
 fn emit(sink: &Sink, output: &Output) -> io::Result<()> {

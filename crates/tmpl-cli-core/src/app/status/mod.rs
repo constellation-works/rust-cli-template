@@ -1,15 +1,17 @@
 //! The `status` app: where the data directory is and which store format it
 //! holds. Read-only, so never audited (STD-01 R31).
 //!
-//! [`exec`] forwards to the runtime's chokepoint like every app's; the app
-//! supplies what differs through [`StatusApp`]. The one flow is `show.rs`.
+//! [`exec`] forwards to the kit's chokepoint, [`cw_app::exec`], like every
+//! app's; the app supplies what differs by implementing [`cw_app::App`] on
+//! [`StatusApp`]. The one flow is `show.rs`.
 
 mod show;
 
-use crate::composition::Env;
-use crate::runtime::{self, App, AuditMeta, Ctx};
+use crate::composition::{Ctx, Runtime};
+use cw_app::{App, AuditMeta, Finished, Origin};
 use cw_base::Kind;
 use std::path::PathBuf;
+use tmpl_cli_store::Store;
 
 /// What the `status` app can be asked to do.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -87,22 +89,19 @@ impl From<Error> for cw_base::Error {
     }
 }
 
-/// Run one `status` command against the environment `env` and pass its
-/// result to `finish`, through the runtime's chokepoint. A runtime that
-/// cannot start is reported to `finish`.
-pub fn exec<R>(
-    env: &Env,
-    command: Command,
-    finish: impl FnOnce(Result<Outcome, cw_base::Error>) -> R,
-) -> R {
-    runtime::exec::<StatusApp, R>(env, command, finish)
+/// Run one `status` command through the kit's chokepoint, for the client
+/// `origin`. No `status` command is audited, so settling the returned
+/// [`Finished`] writes nothing.
+pub fn exec(runtime: &Runtime, origin: &Origin, command: Command) -> Finished<Outcome> {
+    cw_app::exec::<StatusApp>(runtime, origin, command)
 }
 
-/// The `status` app as the runtime's chokepoint sees it.
+/// The `status` app as the kit's chokepoint sees it.
 #[derive(Debug)]
 pub(crate) struct StatusApp;
 
 impl App for StatusApp {
+    type State = Store;
     type Command = Command;
     type Outcome = Outcome;
     type Error = Error;
@@ -111,18 +110,14 @@ impl App for StatusApp {
         command.audit()
     }
 
+    /// Dispatch only: the error translation is the chokepoint's.
     fn run(ctx: &Ctx<'_>, command: Command) -> Result<Outcome, Error> {
-        run(ctx, command)
+        match command {
+            Command::Show => show::show(ctx),
+        }
     }
 
     fn target(_outcome: &Outcome) -> Option<String> {
         None
-    }
-}
-
-/// Run one command without the runtime start or the audit guard.
-pub(crate) fn run(ctx: &Ctx<'_>, command: Command) -> Result<Outcome, Error> {
-    match command {
-        Command::Show => show::show(ctx),
     }
 }

@@ -16,7 +16,7 @@ use clap::{ArgAction, Args, Subcommand};
 use std::num::NonZeroUsize;
 use tmpl_cli_core::app::note::{self, ListFilter, NewNote, NoteList, Outcome};
 use tmpl_cli_core::contract::{Body, NoteId, Priority, Tag, Title};
-use tmpl_cli_core::{Env, Error};
+use tmpl_cli_core::{AuditWarning, Error, Origin, Runtime};
 
 pub(super) const NOTE_EXAMPLES: &str = "\
 Examples:
@@ -107,16 +107,17 @@ fn priority_parser() -> impl TypedValueParser<Value = Priority> {
     PossibleValuesParser::new(Priority::NAMES).try_map(|value| value.parse::<Priority>())
 }
 
-/// Run one `note` verb through the `note` app and pass the payload to
-/// `finish`.
+/// Run one `note` verb through the `note` app, pass the payload to
+/// `finish`, then settle the audit record.
 pub(super) fn run<R>(
     command: NoteCommand,
-    env: &Env,
+    runtime: &Runtime,
+    origin: &Origin,
     finish: impl FnOnce(Result<Output, Error>) -> R,
-) -> R {
-    note::exec(env, app_command(command), |outcome| {
-        finish(outcome.map(output))
-    })
+) -> (R, Option<AuditWarning>) {
+    let (outcome, audit) = note::exec(runtime, origin, app_command(command)).into_parts();
+    let rendered = finish(outcome.map(output));
+    (rendered, audit.settle())
 }
 
 /// The parsed arguments as the app's command.

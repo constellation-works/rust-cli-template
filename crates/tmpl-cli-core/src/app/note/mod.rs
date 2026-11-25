@@ -1,9 +1,10 @@
 //! The `note` app: add, list and show notes.
 //!
-//! [`exec`] forwards to the runtime's chokepoint, which starts the runtime,
-//! runs the command inside the audit guard when it mutates, and hands the
-//! result to the caller's `finish` before the guard writes its line. The app
-//! supplies what differs through [`NoteApp`]. Each command is one flow file
+//! [`exec`] forwards to the kit's chokepoint, [`cw_app::exec`], which starts
+//! the audit record of a mutating command, runs it and returns a
+//! [`Finished`]: the surface renders the result, then settles the record.
+//! The app supplies what differs by implementing [`cw_app::App`] on
+//! [`NoteApp`]. Each command is one flow file
 //! (`add.rs`, `list.rs`, `show.rs`); the rules they share are in `rule.rs`.
 
 mod add;
@@ -16,12 +17,12 @@ mod show;
 
 pub use rule::{ListFilter, NewNote, NoteList};
 
-use crate::composition::Env;
-use crate::runtime::{self, App, AuditMeta, Ctx};
+use crate::composition::{Ctx, Runtime};
+use cw_app::{App, AuditMeta, Finished, Origin};
 use cw_base::Kind;
 use std::path::PathBuf;
-use tmpl_cli_store::BadRecord;
 use tmpl_cli_store::contract::{Note, NoteId};
+use tmpl_cli_store::{BadRecord, Store};
 
 /// What the `note` app can be asked to do.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -42,9 +43,7 @@ impl Command {
     /// (STD-02 R27).
     pub(crate) fn audit(&self) -> Option<AuditMeta> {
         match self {
-            Self::Add(_) => Some(AuditMeta {
-                command: "note add",
-            }),
+            Self::Add(_) => Some(AuditMeta::new("note add")),
             Self::List(_) | Self::Show(_) => None,
         }
     }
@@ -163,26 +162,24 @@ impl From<Error> for cw_base::Error {
     }
 }
 
-/// Run one `note` command against the environment `env` and pass its result
-/// to `finish`.
+/// Run one `note` command through the kit's chokepoint, for the client
+/// `origin`.
 ///
-/// The runtime's chokepoint does the work: a mutating command runs inside the
-/// audit guard, and `finish` runs before the guard writes its line, so a
-/// fail-open audit warning reaches stderr after the command's own payload or
-/// error object. A runtime that cannot start is reported to `finish`.
-pub fn exec<R>(
-    env: &Env,
-    command: Command,
-    finish: impl FnOnce(Result<Outcome, cw_base::Error>) -> R,
-) -> R {
-    runtime::exec::<NoteApp, R>(env, command, finish)
+/// A mutating command's audit record starts before it runs, as a failure
+/// until it reports otherwise; a read-only command writes nothing. The
+/// surface renders the [`Finished`] result first, then settles the record,
+/// so the audit line follows the output and a failure to write it comes
+/// back as a warning value.
+pub fn exec(runtime: &Runtime, origin: &Origin, command: Command) -> Finished<Outcome> {
+    cw_app::exec::<NoteApp>(runtime, origin, command)
 }
 
-/// The `note` app as the runtime's chokepoint sees it.
+/// The `note` app as the kit's chokepoint sees it.
 #[derive(Debug)]
 pub(crate) struct NoteApp;
 
 impl App for NoteApp {
+    type State = Store;
     type Command = Command;
     type Outcome = Outcome;
     type Error = Error;
@@ -191,21 +188,18 @@ impl App for NoteApp {
         command.audit()
     }
 
+    /// Dispatch only: the audit record and the error translation are the
+    /// chokepoint's.
     fn run(ctx: &Ctx<'_>, command: Command) -> Result<Outcome, Error> {
-        run(ctx, command)
+        match command {
+            Command::Add(new) => add::add(ctx, new),
+            Command::List(filter) => list::list(ctx, filter),
+            Command::Show(id) => show::show(ctx, id),
+        }
     }
 
     fn target(outcome: &Outcome) -> Option<String> {
         outcome.target()
-    }
-}
-
-/// Run one command without the runtime start or the audit guard.
-pub(crate) fn run(ctx: &Ctx<'_>, command: Command) -> Result<Outcome, Error> {
-    match command {
-        Command::Add(new) => add::add(ctx, new),
-        Command::List(filter) => list::list(ctx, filter),
-        Command::Show(id) => show::show(ctx, id),
     }
 }
 

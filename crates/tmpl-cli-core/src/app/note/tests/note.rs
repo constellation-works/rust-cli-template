@@ -15,15 +15,16 @@ fn new_note(title: &str) -> NewNote {
 fn only_note_add_is_audited() {
     // STD-01 R31: list and show are read-only, so they write no audit line.
     let add = Command::Add(new_note("t")).audit().unwrap();
-    assert_eq!(add.command, "note add");
+    assert_eq!(add.command(), "note add");
     assert!(Command::List(ListFilter::default()).audit().is_none());
     assert!(Command::Show(NoteId::FIRST).audit().is_none());
 }
 
 #[test]
 fn lock_timeout_audited_command_waits_one_deadline_and_records_one_failure_line() {
-    use crate::app::note::NoteApp;
-    use crate::runtime::{Ctx, run_with};
+    use crate::app::note::exec;
+    use crate::composition::Runtime;
+    use cw_app::{Origin, Surface};
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
     use tmpl_cli_store::Store;
@@ -48,33 +49,33 @@ fn lock_timeout_audited_command_waits_one_deadline_and_records_one_failure_line(
     taken_rx.recv().unwrap();
 
     let deadline = Duration::from_millis(80);
-    let store = Store::open(dir.path()).with_lock_wait(deadline);
-    let clock = OffsetDateTime::now_utc;
-    let ctx = Ctx::new(&store, Some("alice"), &clock);
-    let cmd = Command::Add(new_note("blocked"));
+    let runtime = Runtime::new(dir.path(), Store::open(dir.path()).with_lock_wait(deadline))
+        .with_clock(cw_base::Clock::fixed(OffsetDateTime::UNIX_EPOCH));
+    let origin = Origin::new(Surface::CLI, Some("alice".to_owned()));
+    let audit_path = runtime.audit_log().path();
 
     let started = Instant::now();
-    let mut audit_written_before_finish = false;
-    let err_code = run_with::<NoteApp, _>(&ctx, cmd, |outcome| {
-        // The audit guard must not have dropped before finish runs.
-        audit_written_before_finish = ctx.store().audit_path().exists();
-        outcome.unwrap_err().code()
-    });
+    let finished = exec(&runtime, &origin, Command::Add(new_note("blocked")));
     let elapsed = started.elapsed();
+    let err_code = finished.result().unwrap_err().code();
+    // The surface renders before it settles: no line exists yet.
+    let audit_written_before_settle = audit_path.exists();
+    let (_result, warning) = finished.settle();
     drop(release_tx);
     held.join().unwrap();
 
     assert_eq!(err_code, "store_locked");
+    assert!(warning.is_none(), "unexpected audit warning: {warning:?}");
     assert!(
-        !audit_written_before_finish,
-        "finish must run before the audit guard drops"
+        !audit_written_before_settle,
+        "the audit line is written by settle, after rendering"
     );
     assert!(
         elapsed >= deadline && elapsed < deadline * 2,
         "expected roughly one deadline ({deadline:?}), took {elapsed:?}"
     );
 
-    let audit_raw = std::fs::read_to_string(ctx.store().audit_path()).unwrap();
+    let audit_raw = std::fs::read_to_string(&audit_path).unwrap();
     let lines: Vec<serde_json::Value> = audit_raw
         .lines()
         .map(|line| serde_json::from_str(line).unwrap())
@@ -84,4 +85,6 @@ fn lock_timeout_audited_command_waits_one_deadline_and_records_one_failure_line(
     assert_eq!(lines[0]["status"], "failure");
     assert_eq!(lines[0]["error_code"], "store_locked");
     assert_eq!(lines[0]["actor"], "alice");
+    assert_eq!(lines[0]["surface"], "cli");
+    assert_eq!(lines[0]["at"], "1970-01-01T00:00:00Z");
 }

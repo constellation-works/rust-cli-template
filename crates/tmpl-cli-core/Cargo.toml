@@ -11,14 +11,10 @@ publish.workspace = true
 name = "tmpl_cli_core"
 path = "src/lib.rs"
 
-[features]
-# Exposes the runtime context and each app's `run` (exec without the runtime
-# start) to tests that need a pinned clock or a short lock wait.
-test-support = []
-
 # Domain dependencies only. scripts/check-dependency-direction.sh rejects
 # clap, tracing-subscriber and any other surface crate here.
 [dependencies]
+cw-app = { workspace = true }
 cw-base = { workspace = true }
 tmpl-cli-store = { workspace = true }
 thiserror = { workspace = true }
@@ -30,8 +26,6 @@ cw-testkit = { workspace = true }
 # Hand-made store state (a bad record, the last id, a newer schema) for
 # the tests, through the store's raw-SQL test support.
 tmpl-cli-store = { workspace = true, features = ["test-support"] }
-# The crate's own integration tests run the apps through `test-support`.
-tmpl-cli-core = { path = ".", features = ["test-support"] }
 serde_json = { workspace = true }
 time = { workspace = true, features = ["macros"] }
 

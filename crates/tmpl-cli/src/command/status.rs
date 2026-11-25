@@ -6,7 +6,7 @@
 use crate::output::{Output, Payload, StatusPayload};
 use clap::Args;
 use tmpl_cli_core::app::status::{self, Outcome};
-use tmpl_cli_core::{Env, Error};
+use tmpl_cli_core::{AuditWarning, Error, Origin, Runtime};
 
 pub(super) const STATUS_EXAMPLES: &str = "\
 Examples:
@@ -20,15 +20,17 @@ A store with no database yet has no format: '-', or null with --json.";
 #[derive(Debug, Args)]
 pub(crate) struct StatusArgs {}
 
-/// Run `status` through the `status` app and pass the payload to `finish`.
+/// Run `status` through the `status` app against `runtime` for `origin`,
+/// pass the payload to `finish`, then settle the (empty) audit record.
 pub(super) fn run<R>(
     _args: StatusArgs,
-    env: &Env,
+    runtime: &Runtime,
+    origin: &Origin,
     finish: impl FnOnce(Result<Output, Error>) -> R,
-) -> R {
-    status::exec(env, status::Command::Show, |outcome| {
-        finish(outcome.map(output))
-    })
+) -> (R, Option<AuditWarning>) {
+    let (outcome, audit) = status::exec(runtime, origin, status::Command::Show).into_parts();
+    let rendered = finish(outcome.map(output));
+    (rendered, audit.settle())
 }
 
 /// The app's outcome as the payload every output mode renders.

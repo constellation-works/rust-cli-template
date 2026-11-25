@@ -434,6 +434,15 @@ fn json_error_object_precedes_audit_failure_warning_on_stderr() {
         panic!("first stderr line must be JSON error object ({err}): {stderr:?}")
     });
     assert_eq!(err["code"], "store_corrupt");
+    // The audit failure is a warning after the error object, and the exit
+    // code is the command's own.
+    assert!(
+        stderr
+            .lines()
+            .skip(1)
+            .any(|line| line.starts_with("warning: the audit line for `note add` was not written")),
+        "expected the audit warning after the error: {stderr:?}"
+    );
 }
 
 #[test]
@@ -450,10 +459,16 @@ fn audit_line_records_actor_from_user_or_username_else_null() {
     let mut cmd = fx.cmd(&["note", "add", "with-username"]);
     cmd.env("USERNAME", "bob");
     assert_eq!(cmd.output().unwrap().status.code(), Some(0));
+    // A claim that is not an identifier is not written as given.
+    let mut cmd = fx.cmd(&["note", "add", "with-odd-user"]);
+    cmd.env("USER", "not an id");
+    assert_eq!(cmd.output().unwrap().status.code(), Some(0));
 
     let lines = audit_lines(&fx);
-    assert_eq!(lines.len(), 3, "{lines:?}");
-    assert_eq!(lines[0]["format"], 2);
+    assert_eq!(lines.len(), 4, "{lines:?}");
+    // The kit's line: format 3, which records the surface.
+    assert_eq!(lines[0]["format"], 3);
+    assert_eq!(lines[0]["surface"], "cli");
     assert!(
         lines[0]
             .get("actor")
@@ -463,6 +478,7 @@ fn audit_line_records_actor_from_user_or_username_else_null() {
     );
     assert_eq!(lines[1]["actor"], "alice");
     assert_eq!(lines[2]["actor"], "bob");
+    assert_eq!(lines[3]["actor"], "<invalid>");
 }
 
 #[test]

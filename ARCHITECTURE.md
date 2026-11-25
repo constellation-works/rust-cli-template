@@ -8,12 +8,13 @@ an edge changes this file and that script in the same commit.
 
 ```
 tmpl-cli  ->  tmpl-cli-core  ->  tmpl-cli-store
-                    |              |   |    |
-                    +--> cw-base <-+   |    +--> cw-fs -> cw-base
-                                       +--> cw-sqlite -> cw-fs, cw-base
+                |   |              |   |    |
+                |   +--> cw-base <-+   |    +--> cw-fs -> cw-base
+                |                      +--> cw-sqlite -> cw-fs, cw-base
+                +--> cw-app -> cw-fs, cw-base
 ```
 
-`cw-base`, `cw-fs` and `cw-sqlite` are the cw-kit, with `cw-testkit` (test isolation, a
+`cw-base`, `cw-fs`, `cw-sqlite` and `cw-app` are the cw-kit, with `cw-testkit` (test isolation, a
 dev-dependency only), all from
 [constellation-works/satellites](https://github.com/constellation-works/satellites),
 a git dependency pinned in the root `Cargo.toml` to commit
@@ -22,9 +23,9 @@ pin is a change of its own). Every kit crate is pinned to that one rev.
 
 | Crate | Kind | Owns | Internal and kit dependencies | Banned |
 |-------|------|------|-------------------------------|--------|
-| `tmpl-cli` | binary `tmpl-cli` | Argument declarations, the mapping from arguments to an app's `Command`, rendering, exit codes. The only stdout, stderr and terminal access. | `tmpl-cli-core`; `cw-testkit` and `tmpl-cli-store` (its `test-support`) as dev-dependencies only | `tmpl-cli-store` as a normal dependency, every kit crate, `rusqlite` |
-| `tmpl-cli-core` | library | The apps, the runtime they share, and composition. | `tmpl-cli-store`, `cw-base`; `cw-testkit` and the store's `test-support` as dev-dependencies only | `cw-fs`, `cw-sqlite`, `rusqlite`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
-| `tmpl-cli-store` | library | The data directory: the database's driver, one repository per record, the record shapes (`contract`), the audit line, and the store's stable code for each of the kit's errors. It names no file primitive and no SQLite crate of its own: it reaches the directory and the audit log through `cw-fs` and the database through `cw-sqlite`, and names `rusqlite` only through its re-export. | `cw-base`, `cw-fs`, `cw-sqlite`; `cw-testkit` as a dev-dependency only | `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix`, `rusqlite` as a dependency of its own |
+| `tmpl-cli` | binary `tmpl-cli` | `main` (the one read of the process: `Env::capture()` and the arguments), argument declarations, the mapping from arguments to an app's `Command`, rendering, settling the audit record and printing its warning, exit codes. The only stdout, stderr and terminal access. | `tmpl-cli-core`; `cw-testkit` and `tmpl-cli-store` (its `test-support`) as dev-dependencies only | `tmpl-cli-store` as a normal dependency, every kit crate, `rusqlite` |
+| `tmpl-cli-core` | library | The apps, each a `cw_app::App`, and composition (the runtime every command runs against). | `tmpl-cli-store`, `cw-base`, `cw-app`; `cw-testkit` and the store's `test-support` as dev-dependencies only | `cw-fs`, `cw-sqlite`, `rusqlite`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
+| `tmpl-cli-store` | library | The data directory: the database's driver, one repository per record, the record shapes (`contract`), and the store's stable code for each of the kit's errors. No audit code or file: the audit log is `cw-app`'s. It names no file primitive and no SQLite crate of its own: it reaches the directory through `cw-fs` and the database through `cw-sqlite`, and names `rusqlite` only through its re-export. | `cw-base`, `cw-fs`, `cw-sqlite`; `cw-testkit` as a dev-dependency only | `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix`, `rusqlite` as a dependency of its own |
 
 `scripts/check-dependency-direction.sh` reads these edges from Cargo's own
 package graph (`cargo metadata --no-deps --locked`), so a quoted or renamed
@@ -39,8 +40,10 @@ database, so a test can set up a store the public API never writes
 while no crate outside the store names `rusqlite`. The binary names only
 `tmpl-cli-core`. The core re-exports the store's record shapes as
 `tmpl_cli_core::contract` and the kit's error type as
-`tmpl_cli_core::Error` and `tmpl_cli_core::Kind`, so a surface needs no
-second dependency.
+`tmpl_cli_core::Error` and `tmpl_cli_core::Kind`, and what a surface needs
+of `cw-app` (`Env`, `EnvVar`, `Origin`, `Surface`, `Finished`,
+`AuditWarning`, and the `Runtime` alias), so a surface needs no second
+dependency.
 <!-- example:begin -->
 
 Why the crates are laid out by app, and why the foundation is the kit:
@@ -51,62 +54,60 @@ Why the crates are laid out by app, and why the foundation is the kit:
 ## `tmpl-cli` (binary)
 
 ```
-main.rs              capture the environment into the core's Env, run
-lib.rs               parse, resolve the output sink, dispatch, render
+main.rs              Env::capture() and the arguments, once; run
+lib.rs               parse, resolve the output sink, start the runtime, dispatch, print an audit warning
 cli.rs               the root command and the global flags
-command/<noun>.rs    arguments -> app::<app>::Command; Outcome -> payload
+command/<noun>.rs    arguments -> app::<app>::Command; exec; Outcome -> payload; render, then settle
 output/              payloads, rendering, the sink, logging
 error.rs             the exit code and the remedy for an error; the output failure
 help.rs              grouped root help
 ```
 
-A command handler does three things: map the parsed arguments to the app's
-`Command`, call `tmpl_cli_core::app::<app>::exec`, and turn the `Outcome`
-into an output payload. It opens no store, resolves no path, reads no
-environment variable and decides nothing about a record. `main` captures the
-environment into `Env` once; `output/` alone reads the presentation variables
-(`TMPL_CLI_FORMAT`, `TMPL_CLI_LOG`, `NO_COLOR`, `CLICOLOR_FORCE`, `TERM`,
-`COLUMNS`).
+A command handler maps the parsed arguments to the app's `Command`, calls
+`tmpl_cli_core::app::<app>::exec` with the runtime and the `Origin`, turns
+the `Outcome` into an output payload, has it rendered, and then settles the
+audit record, handing back any `AuditWarning`. It opens no store, resolves
+no path, reads no environment variable and decides nothing about a record.
+`main` captures the environment once with the kit's `Env::capture()`, the
+only read of the process environment; `output/` alone interprets the
+presentation variables from it (`TMPL_CLI_FORMAT`, `TMPL_CLI_LOG`,
+`NO_COLOR`, `CLICOLOR_FORCE`, `TERM`, `COLUMNS`).
 
 ## `tmpl-cli-core`
 
 ```
-lib.rs               pub mod app; Env; contract (re-exported from the store); Error, Kind (from cw-base)
+lib.rs               pub mod app; start, Runtime, APP; contract (from the store); Error, Kind (cw-base); Env, Origin, … (cw-app)
 app/
   status/
-    mod.rs           Command, Outcome, Error, exec (forwards to runtime::exec), run: dispatch only
+    mod.rs           Command, Outcome, Error, exec (forwards to cw_app::exec); StatusApp: cw_app::App (nothing audited)
     show.rs          one flow per command: the data directory and the store format, read-only
 <!-- example:begin -->
   note/              the example domain
-    mod.rs           Command, Outcome, Error, exec, run, as for status
+    mod.rs           Command, Outcome, Error, exec, as for status; NoteApp: cw_app::App (audit, run, target)
     add.rs list.rs show.rs   one flow per command
     rule.rs          the note rules: the next id, a stored note from a new one, list selection
 <!-- example:end -->
-runtime/
-  mod.rs             Runtime (started from composition), Ctx (what a flow receives)
-  exec.rs            the one chokepoint: the App trait and exec, which every app's exec forwards to
-  audit.rs           the audit guard around a mutating command
-composition.rs       Env, the data directory, the Store, the actor, the clock; its Error (no data directory)
-test_support.rs      behind the `test-support` feature: Ctx and each app's run
+composition.rs       start: the data directory (the kit's, from Env), the Store, Runtime = cw_app::Runtime<Store>, Ctx (what a flow receives); its Error (no data directory)
 ```
 
 - An app's public surface is `Command`, `Outcome`, its typed `Error` and
-  `exec(env, command, finish)`. `exec` is one line: it forwards to
-  `runtime::exec`, the one chokepoint, which starts the runtime, runs the
-  command inside the audit guard when it mutates, and passes the result to
-  `finish` before the guard writes its line. The app supplies what differs
-  by implementing the runtime's `App` trait: whether a command is audited,
-  its dispatch, and its outcome's record id for the audit line. No app starts the runtime or the guard itself
-  (`scripts/check-dependency-direction.sh`). `run(ctx, command)` is the
-  dispatch without the runtime start or the guard; tests call it.
+  `exec(runtime, origin, command) -> Finished<Outcome>`. `exec` is one line:
+  it forwards to the kit's chokepoint, `cw_app::exec`, which starts the
+  audit record of a mutating command (as a failure until the command reports
+  otherwise), runs it, translates its error once and returns the result with
+  the pending record. The surface renders the result, then settles the
+  record. The app supplies what differs by implementing `cw_app::App` on a
+  crate-private marker: its state (the `Store`), whether a command is
+  audited, its dispatch (`run`), and its outcome's record id for the audit
+  line. Nothing calls `run` but the chokepoint
+  (`scripts/check-dependency-direction.sh`). A flow receives the kit's
+  `Ctx` over the store, and reads the clock and the actor from it.
 - A flow loads from one `store.read()`, decides with the app's pure `rule`,
   and commits in one `store.write(|tx| …)`, re-checking inside the closure
   anything that must be atomic with the write.
-- An app may call another only through that app's `run` or what its `mod.rs`
-  exports. There is no `app/common`, `app/shared` or `app/util`: code two
-  apps need goes to the lower app, or to `runtime` when it is about the
-  context, the chokepoint or the audit guard.
-- `runtime` is crate-private and imports no app.
+- An app may call another only through what its `mod.rs` exports. There is
+  no `app/common`, `app/shared` or `app/util`: code two apps need goes to
+  the lower app.
 - Errors: each unit keeps a typed enum for its own matching (the app's
   `Error`, composition's, the store's) and translates it into
   `cw_base::Error` in one `From` impl beside the enum, naming its `Kind` and
@@ -116,15 +117,17 @@ test_support.rs      behind the `test-support` feature: Ctx and each app's run
   conversion. What crosses a crate boundary is `cw_base::Error`: every public
   store operation returns it, translated at the store's edge, and a caller
   that needs the store's variant gets it back with `downcast_ref`.
-- `composition.rs` is the only place in the core that reads an environment
-  variable or discovers a path. Nothing in the core touches a file: the data
-  directory is reached through the store.
+- `composition.rs` builds the runtime from the captured `Env`: the data
+  directory is the kit's pure function of it (`--root` > `TMPL_CLI_ROOT` >
+  `$HOME/.tmpl-cli`). Nothing in the core reads the process environment,
+  discovers a path or touches a file: the records are reached through the
+  store and the audit log through the kit.
 
 ## `tmpl-cli-store`
 
 ```
 lib.rs               re-exports: Store, Snapshot, Tx, Error, contract, repository, STORE_FILE
-store.rs             Store::open, read() -> Snapshot, write(|tx| …), audit()
+store.rs             Store::open, read() -> Snapshot, write(|tx| …)
 driver/
   mod.rs             one module per storage mechanism
   sqlite/mod.rs      the database: STORE_FILE (store.db), open() -> cw_sqlite::Db; no query, no schema statement
@@ -138,14 +141,10 @@ repository/
 <!-- example:begin -->
   note.rs            notes: the SQL and row mapping; all, get, bad records; put
 <!-- example:end -->
-  audit/
-    mod.rs           audit: append; the audit log's lock file name (AUDIT_LOCK_FILE)
-    line.rs          the persisted audit line and its upgrades; bytes only, no I/O
 contract/
 <!-- example:begin -->
   note.rs            Note, NoteId (1 to NoteId::MAX), Title, Body, Tag, Priority, NoteError
 <!-- example:end -->
-  audit.rs           AuditEvent, AuditStatus
 error.rs             Error (a code for every cw_fs::Error and cw_sqlite::Error variant), its translator into cw_base::Error; BadRecord and its locator and reason
 test_support.rs      behind the `test-support` feature: raw SQL on the database, for other crates' tests
 ```
@@ -164,14 +163,14 @@ test_support.rs      behind the `test-support` feature: raw SQL on the database,
   A statement that changes the schema appears only under `schema/`.
   A record's repository (`repository/<record>.rs`) holds its SQL and the
   mapping between a row and the contract types, run on the reader `Store::read` opened or the
-  transaction `Store::write` began. There is no `driver/fs/`: the audit
-  repository reaches its file through `cw_fs` directly.
+  transaction `Store::write` began. There is no `driver/fs/`, and no audit
+  repository: the audit log is `cw-app`'s.
 - **The record-access seam.** A caller reaches a record only through
   `snapshot.<record>()` in a read and `tx.<record>()` in a write. The store's public surface names no `rusqlite` or
   `cw_sqlite` type, carries no borrow from a connection or a document, and
-  names no path but `Store::root()` (the status app reports it),
-  `Store::path()` (an app names the database in its outcome and refusals) and `Store::audit_path()` (the core's audit guard
-  names the log in its warning). Repository calls return owned values.
+  names no path but `Store::root()` (the status app reports it) and
+  `Store::path()` (an app names the database in its outcome and refusals).
+  Repository calls return owned values.
 - **A second driver.** There is no trait per repository and no driver chosen
   at run time. When a second storage mechanism is added, `driver/<other>/`
   sets it up, and `repository/<record>.rs` becomes
@@ -189,7 +188,7 @@ test_support.rs      behind the `test-support` feature: raw SQL on the database,
   directory or the database exists run on its own read first.
 - `Store` is one concrete type.
 
-## The cw-kit (`cw-base`, `cw-fs`, `cw-sqlite`)
+## The cw-kit (`cw-base`, `cw-fs`, `cw-sqlite`, `cw-app`)
 
 Not part of this workspace: crates from
 [constellation-works/satellites](https://github.com/constellation-works/satellites)
@@ -212,6 +211,15 @@ at the pinned commit. Each crate's README there is its contract.
   mechanism only, knowing no table. It bundles SQLite and re-exports
   `rusqlite`. Its `Error` has a `Kind` and no code: the store wraps it as
   `Error::Sqlite` and names a code for every variant.
+- `cw-app`: the command path, mechanism only. `App` (what a program supplies:
+  state, commands, which are audited, how to run one, what an outcome acted
+  on), `exec` (the chokepoint) returning `Finished` (render, then `settle()`;
+  a failed audit write is an `AuditWarning` value), `Runtime` and `Ctx` (the
+  state, the clock, the origin), `Env::capture()` (the only read of the
+  process environment; `Env::from_vars` for tests) and `env.app(name)` (the
+  program's variables and data directory), and `AuditLog`
+  (`<root>/audit.jsonl` under `<root>/.audit.lock`, identifiers only,
+  versioned lines, fails open).
 
 ## Module rules
 
@@ -224,20 +232,25 @@ Checked by grep over non-test sources, except that `rusqlite` and
   table, index, view or trigger, `PRAGMA user_version`, a `Step`) appears
   only under `driver/sqlite/schema/`, and only `schema/mod.rs` declares a
   list of steps. No public item names a `rusqlite` or
-  `cw_sqlite` type. `repository/audit/line.rs` names neither `cw_fs` nor
-  `cw_sqlite`. `contract/` imports no `driver`, `repository`, `Store`, file access
+  `cw_sqlite` type. Nothing names the audit log, its lock or `cw_app`.
+  `contract/` imports no `driver`, `repository`, `Store`, file access
   or SQLite, and defines no `check_*` function and reads no clock. There is
   no `db/` and no `driver/fs/`. The crate reads no environment
   variable and discovers no path.
 - `tmpl-cli-core`: no `std::fs`, `std::net`, `std::process`, `tempfile`,
   `rustix`, `cw_fs`, `cw_sqlite` or `rusqlite` anywhere, and no
   `tmpl_cli_store::repository` path: a record is reached through
-  `snapshot.<record>()` or `tx.<record>()`. Only `composition.rs` names `std::env`, `home_dir` or
-  `current_dir`. `runtime/` imports no `crate::app`. No `app/common`,
-  `app/shared` or `app/util`. An app's `rule` names no `runtime`,
-  `composition`, `Store`, `Snapshot` or `Tx`.
-- `tmpl-cli`: nothing names `tmpl_cli_store`, `cw_base`, `cw_fs`, `cw_sqlite` or `rusqlite`. `command/` names no `std::env`,
-  `std::fs`, `Store`, `Runtime` or `Ctx`. `output/` imports no `cli` or
+  `snapshot.<record>()` or `tx.<record>()`. Nothing names `home_dir` or
+  `current_dir`. Every app's `mod.rs` forwards to `cw_app::exec::<`. No
+  `app/common`, `app/shared` or `app/util`. An app's `rule` names no
+  `composition`, `cw_app`, `Ctx`, `Store`, `Snapshot` or `Tx`.
+- Every crate's `src/`, tests included: only `tmpl-cli/src/main.rs` names
+  `std::env`, and there only `std::env::args_os()`; only it calls
+  `Env::capture`. No source calls an app's `run` (`…App::run`) or writes the
+  audit log (`AuditLog::new`, `.append(`, `cw_app::Pending`).
+- `tmpl-cli`: nothing names `tmpl_cli_store`, `cw_base`, `cw_fs`, `cw_sqlite`, `cw_app` or `rusqlite`. `command/` names no `std::env`,
+  `std::fs`, `Env`, `Store`, `Ctx`, `Runtime::` or `start(`: it receives
+  the runtime, never builds it. `output/` imports no `cli` or
   `command`.
 - Only `tmpl-cli/src/output/` touches stdout, stderr, `IsTerminal` or the
   color/format variables (`scripts/check-terminal-guard.sh`).
