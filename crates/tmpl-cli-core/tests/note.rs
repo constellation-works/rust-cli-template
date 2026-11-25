@@ -1,5 +1,6 @@
 //! End-to-end tests of the note app against a real store (STD-02 R20), run
-//! through `test-support` so the clock and the lock wait can be pinned.
+//! through the kit's chokepoint with the clock pinned by
+//! `Runtime::with_clock(Clock::fixed(..))`.
 //! Every test works in its own temporary directory and never touches the
 //! real home (STD-03 R20).
 #![cfg_attr(
@@ -11,14 +12,15 @@
     )
 )]
 
+use cw_base::Clock;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::Arc;
 use time::OffsetDateTime;
 use time::macros::datetime;
-use tmpl_cli_core::app::note::{Command, Error, ListFilter, NewNote, NoteList, Outcome};
+use tmpl_cli_core::app::note::{self, Command, ListFilter, NewNote, NoteList, Outcome};
 use tmpl_cli_core::contract::{Note, NoteId, Priority, Tag};
-use tmpl_cli_core::test_support::{Ctx, note_run};
+use tmpl_cli_core::{Error, Origin, Runtime, Surface};
 use tmpl_cli_store::contract::NoteError;
 use tmpl_cli_store::{
     BadRecord, BadRecordReason, Error as StoreError, RecordLocator, STORE_FILE, Store,
@@ -26,13 +28,20 @@ use tmpl_cli_store::{
 
 const NOW: OffsetDateTime = datetime!(2026-01-02 03:04:05 UTC);
 
-/// The store failure behind an app error, when there is one.
+/// The store failure behind an error, when there is one.
 fn store_error(err: &Error) -> Option<&StoreError> {
-    if let Error::Store(source) = err {
-        source.downcast_ref::<StoreError>()
-    } else {
-        None
-    }
+    err.downcast_ref::<StoreError>()
+}
+
+/// Run `command` through the chokepoint against `store`, its data directory
+/// the store's, with the clock pinned at `now`; the audit record is settled
+/// after the result is taken, as a surface does.
+fn run(store: &Store, now: OffsetDateTime, command: Command) -> Result<Outcome, Error> {
+    let root = store.path().parent().unwrap().to_path_buf();
+    let runtime = Runtime::new(root, store.clone()).with_clock(Clock::fixed(now));
+    let origin = Origin::new(Surface::CLI, None);
+    let (result, _warning) = note::exec(&runtime, &origin, command).settle();
+    result
 }
 
 /// A read's value together with the bad records it isolated.
@@ -52,21 +61,16 @@ trait NoteApp {
 
 impl NoteApp for Store {
     fn add(&self, new: NewNote, now: OffsetDateTime) -> Result<Note, Error> {
-        let clock = move || now;
-        let Outcome::Added { note, .. } =
-            note_run(&Ctx::new(self, None, &clock), Command::Add(new))?
-        else {
+        let Outcome::Added { note, .. } = run(self, now, Command::Add(new))? else {
             panic!("add returns the added note");
         };
         Ok(note)
     }
 
     fn list(&self, filter: &ListFilter) -> Result<Loaded<NoteList>, Error> {
-        let clock = || NOW;
-        let command = Command::List(filter.clone());
         let Outcome::Listed {
             list, bad_records, ..
-        } = note_run(&Ctx::new(self, None, &clock), command)?
+        } = run(self, NOW, Command::List(filter.clone()))?
         else {
             panic!("list returns the listing");
         };
@@ -77,10 +81,7 @@ impl NoteApp for Store {
     }
 
     fn show(&self, id: NoteId) -> Result<Loaded<Note>, Error> {
-        let clock = || NOW;
-        let Outcome::Shown { note, bad_records } =
-            note_run(&Ctx::new(self, None, &clock), Command::Show(id))?
-        else {
+        let Outcome::Shown { note, bad_records } = run(self, NOW, Command::Show(id))? else {
             panic!("show returns the note");
         };
         Ok(Loaded {
@@ -161,7 +162,10 @@ fn show_of_an_unknown_id_is_not_found() {
     let store = Store::open(dir.path());
     let id: NoteId = "42".parse().unwrap();
     let err = store.show(id).unwrap_err();
-    assert!(matches!(err, Error::NotFound { .. }));
+    assert!(matches!(
+        err.downcast_ref::<note::Error>(),
+        Some(note::Error::NotFound { .. })
+    ));
     assert_eq!(err.code(), "note_not_found");
     // STD-02 R26: the message names the store that was searched.
     assert!(

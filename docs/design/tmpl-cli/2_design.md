@@ -31,16 +31,17 @@ per noun, holding its subcommands, flags and help, and mapping its arguments
 to an app's `Command` and the `Outcome` to a payload) and `output`.
 `tmpl-cli-core` holds the apps (`app/note/`: `Command`, `Outcome`, `Error`,
 `exec`, one flow per command and the pure `rule`: the next id and list
-selection), the `runtime` they share (the context, the one chokepoint every
-app's `exec` forwards to, the audit guard) and `composition` (the only code
-that reads the environment or picks the data directory, the store and the
-clock). `tmpl-cli-store` owns
+selection), each implementing the kit's `cw_app::App`, and `composition`
+(the runtime every command runs against, built from the environment `main`
+captured: the data directory, the store, the clock and the audit log). The
+command path itself is the kit's `cw-app`: the chokepoint every app's `exec`
+forwards to, the captured environment and the audit log. `tmpl-cli-store` owns
 the data directory: the `Store` facade (one read, one write transaction)
 over `driver/sqlite/` (the notes database's file and lock wait, and in
 `schema/` one module per table and the one ordered step list, handed out as
 a `cw_sqlite::Db`; no query), one repository per record
-(`note`: the notes' SQL and row mapping; `audit`: the append, and in
-`audit/line.rs` the persisted audit line) and the record shapes in `contract/`. A driver sets
+(`note`: the notes' SQL and row mapping) and the record shapes in
+`contract/`; it holds no audit code and no audit file. A driver sets
 one storage mechanism up once and returns a handle; a repository is one
 record's use of it. The core reaches a record only through
 `snapshot.<record>()` and `tx.<record>()`. The foundation is the cw-kit from
@@ -50,38 +51,45 @@ one error type every unit translates its typed error into, with its `Kind`
 and stable code), which the store and the core name; `cw-fs` (appends,
 locking and private-state checks, mechanism only) and `cw-sqlite` (one
 private SQLite database, mechanism only, re-exporting `rusqlite`), which
-only the store names. No library has clap or terminal access. The crate and module rules are in
+only the store names; and `cw-app` (the chokepoint, `Env` and the audit log),
+which only the core names and re-exports what a surface needs of. No library has clap or terminal access. The crate and module rules are in
 [ARCHITECTURE.md](../../../ARCHITECTURE.md), and
 `scripts/check-dependency-direction.sh` enforces them from source text
 alone, so it runs in `make ci-fast` without compiling.
 
 ## 2. The life of an invocation
 
-1. `main` parses argv with `Cli::parse_args`. `--help`/`--version` go to
+1. `main` captures the environment once with the kit's `Env::capture()`
+   (the only read of the process environment) and hands it to `run` with
+   the arguments, which parses them with `Cli::parse_args`. `--help`/`--version` go to
    stdout (exit 0); a usage error goes to stderr (exit 2) — as one JSON
    object when the raw arguments or `TMPL_CLI_FORMAT` asked for JSON.
-2. `Sink::from_process` resolves the output mode (flag > `TMPL_CLI_FORMAT`
+2. `Sink::from_env` resolves, from the captured `Env`, the output mode (flag > `TMPL_CLI_FORMAT`
    > auto), color (`NO_COLOR`, `CLICOLOR_FORCE`, `TERM`, TTY) and width
    (`COLUMNS`, terminals only). Nothing else in the program asks these
    questions; `scripts/check-terminal-guard.sh` rejects any attempt.
-3. The noun's handler maps the parsed arguments to the app's `Command` and
-   calls `app::note::exec` with the environment `main` captured (`Env`, plus
-   `--root`). The app's `exec` forwards to the runtime's `exec`
-   (`runtime/exec.rs`), which starts the runtime: composition picks the data
-   directory, resolves the OS actor (`USER`, else `USERNAME`, else `None`),
-   and opens the store.
-4. The runtime's `exec` is the one chokepoint, written once for every app;
-   the app supplies its parts through the `App` trait. If the command is
-   audited it starts an `AuditGuard` (section 5); then the command's flow loads from the store,
-   decides with the app's rules and commits in one write. The handler turns
-   the `Outcome` into a payload (`Output::Notes` or `Output::Note`) with an
-   optional stderr notice and any bad-record warnings; an app's typed error has already
-   crossed into the one error type through the app's translator, inside the
-   runtime's `exec`. The guard is told the outcome,
-   `output::finish` renders the payload or error inside the `finish` that
-   `exec` was given, and then the guard drops and writes its line, so any
-   fail-open audit warning reaches stderr after the payload or JSON error
-   object.
+3. `tmpl_cli_core::start` builds the runtime: the kit resolves the data
+   directory from the captured `Env` (`--root` > `TMPL_CLI_ROOT` >
+   `$HOME/.tmpl-cli`), and the runtime holds the store there, the system
+   clock and the audit log in the same directory. A failure here is reported
+   like any command error and audits nothing. The surface names its client
+   as an `Origin`: the CLI surface, and the actor the environment claims
+   (`USER`, else `USERNAME`).
+4. The noun's handler maps the parsed arguments to the app's `Command` and
+   calls `app::note::exec`, which forwards to the kit's chokepoint,
+   `cw_app::exec`, written once for every app and every surface; the app
+   supplies its parts by implementing `cw_app::App`. If the command is
+   audited the chokepoint starts its record (section 5); then the command's
+   flow loads from the store, decides with the app's rules and commits in one
+   write. An app's typed error crosses into the one error type through the
+   app's translator, inside the chokepoint. The handler takes the result
+   from the returned `Finished`, turns an `Outcome` into a payload
+   (`Output::Notes` or `Output::Note`) with an optional stderr notice and any
+   bad-record warnings, and `output::finish` renders it. Only then does the
+   handler settle the audit record, so the line follows the output, and a
+   line that could not be written comes back as an `AuditWarning` that the
+   surface prints on stderr after the payload or JSON error object, leaving
+   the exit code alone.
 5. `output::finish` renders the payload for the sink (writing any bad-record
    warnings and notices to stderr in every mode), or reports the error
    (`error: …` line, or `{"error","code"}` in JSON mode) and returns exit 1.
@@ -151,31 +159,37 @@ add`. The app's `Command::audit` declares it per command with an exhaustive matc
 new command does not compile until it decides. Read-only commands are not
 audited, because they must not write (STD-01 R31).
 
-`AuditGuard` (in the core's `runtime/audit.rs`, modelled on Orbit's) is
-created by the runtime's `exec` before the flow runs, in the failure state, so an early return or a panic is
-recorded as a failure, never as success. `mark_result` sets the outcome, the
-note id on success and the stable error code on failure; `Drop` runs after
-`output::finish` and appends one line to `<root>/audit.jsonl` through
-the audit repository (`Store::audit().append`), which checks the data directory like any write, holds
-`.audit.lock` (apart from the database, so a lock timeout on a note write
-still records its failure line within one deadline) and creates the file
-`0600`.
-Each line is `{"format": 2, "at", "actor", "command", "status", "target",
-"error_code", "duration_ms"}`: identifiers only, never argument values or
-error text (STD-05 R13). `actor` is the OS user name read once in `Env`
-from `USER`, else `USERNAME`, serialized as `null` when neither is set; older
-format-1 lines without `actor` upgrade in memory via `repository/audit/line.rs::UPGRADES`
-with `"actor": null`. The log is a side channel, so it fails open (STD-02
-R31): a line that cannot be written is a `warn` on stderr (after the command's
-own output or JSON error object) and never changes the command's result or
-exit code.
+The audit log is the kit's: `cw_app::AuditLog`, written only by the
+chokepoint's record; the template holds no audit code of its own. For an
+audited command `cw_app::exec` starts the record before the flow runs, in
+the failure state, so an early return or a panic is recorded as a failure,
+never as success; it then marks the outcome: the note id on success
+(`App::target`) and the stable error code on failure. The surface settles
+the record after `output::finish` has rendered, and the kit appends one line
+to `<root>/audit.jsonl` through `cw_fs::append` under its own
+`<root>/.audit.lock` (apart from the database, so a lock timeout on a note
+write still records its failure line within one deadline), creating the
+file `0600`. A read-only command creates no file and takes no lock.
+
+Each line is `{"format": 3, "at", "surface", "actor", "command", "status",
+"target", "error_code", "duration_ms"}`: identifiers only, never argument
+values or error text (STD-05 R13). `surface` is `cli`; `actor` is the user
+the captured environment claims (`USER`, else `USERNAME`), `null` when
+neither is set and `<invalid>` when the claim is not an identifier. The kit
+reads format 1 (no `actor`) and 2 (no `surface`) lines, which earlier
+builds of the template wrote, through its upgrade steps, and refuses to
+append to a log whose newest line is in a newer format than it writes. The
+log is a side channel, so it fails open (STD-02 R31): a line that cannot be
+written comes back to the surface as an `AuditWarning`, printed as
+`warning: …` on stderr after the command's own output or JSON error object,
+and never changes the command's result or exit code.
 
 ## 6. Gates
 
 | Gate | Make target | Holds |
 |------|-------------|-------|
 | `cargo fmt --check` on stable, with `rustfmt.toml` at `max_width = 100` and only stable options | `ci-fast` | formatting (STD-12 R11); an option stable rustfmt calls unstable fails the gate |
-| `check-dependency-direction.sh` | `ci-fast` | crate and module layering (STD-02 R1–R6), file access only in the store, `rusqlite` only in the store and only through `cw_sqlite`, schema statements only in `driver/sqlite/schema/` and step lists only in its `mod.rs`, no repository path named in the core, environment reads only in the core's `composition.rs`, no clock-defaulted timestamps (R16), retired paths stay gone (R17) |
+| `check-dependency-direction.sh` | `ci-fast` | crate and module layering (STD-02 R1–R6), file access only in the store, `rusqlite` only in the store and only through `cw_sqlite`, schema statements only in `driver/sqlite/schema/` and step lists only in its `mod.rs`, no repository path named in the core, `std::env` named only in the binary's `main.rs` (the arguments, and the environment only through `Env::capture()`), every app's `exec` forwarding to `cw_app::exec` and no audit code outside the kit, no clock-defaulted timestamps (R16), retired paths stay gone (R17) |
 | `check-test-modules.sh` | `ci-fast` | every sibling unit-test file is declared (STD-02 R19) |
 | `check-terminal-guard.sh` | `ci-fast` | one owner for streams, TTY and color env (STD-01 R12, R17) |
 | `check-singular-names.sh` | `ci-fast` | module names (paths and `mod` declarations), source directories and source files are singular; `tests`, `examples` and `benches` only where Cargo and STD-02 R19 fix them (STD-12 R1) |
@@ -204,7 +218,8 @@ the toolchain and tools. Dependabot proposes crate and action updates.
 
 ## 7. Concerns & Honest Limitations
 
-- Terminal width comes from exported `COLUMNS`. It controls table truncation
+- Terminal width comes from exported `COLUMNS`, read from the environment
+  captured at start. It controls table truncation
   and wrapping of root command summaries on a terminal. Piped help keeps
   one line per command. Sampling an unexported terminal width needs a
   dependency (`terminal_size`) the template does not take.
@@ -213,15 +228,15 @@ the toolchain and tools. Dependabot proposes crate and action updates.
 - Under plain `cargo test` (nextest absent) there is no per-test timeout;
   only the CI job timeout bounds a hang.
 - A note-write lock timeout (`store_locked`) names no holder: SQLite's locks
-  record no owner. The audit lock's holder record is best effort: the kit
-  writes it just after the lock is taken and clears it on release, and a
-  failure to write it is logged as a warning.
+  record no owner. The audit lock is the kit's (`cw-app` over `cw-fs`), and
+  its holder record is the kit's best effort.
 - `note list` and `note add` read every row: fine for thousands of notes. A
   domain that outgrows that adds a query to the notes repository.
 - The ownership and mode checks are unix-only; on Windows they are no-ops.
 - The audit log grows without bound and has no reader command; rotating or
-  querying it is left to the domain. A crash mid-append can leave a torn last
-  line, which a reader must skip.
+  querying it is left to the domain (`AuditLog::read` reads it within a
+  cap). A crash mid-append can leave a torn last line: the kit's reader
+  leaves it out and its next append closes it with a line break.
 - An audit line records that a command ran, not that its output reached the
   reader: a `note add` whose stdout write then fails is still `success`,
   because the note was written.

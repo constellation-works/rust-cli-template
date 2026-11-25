@@ -2,16 +2,35 @@
 //!
 //! This is the only module that looks at terminal state or at the output
 //! environment variables (STD-01 R8, R17); `scripts/check-terminal-guard.sh`
-//! fails CI if anything else does. `main` resolves a [`Sink`] once and every
-//! renderer reads its answers from it.
+//! fails CI if anything else does. It reads them from the environment
+//! `main` captured once ([`Env`]), never from the process. `run` resolves a
+//! [`Sink`] once and every renderer reads its answers from it.
 
 use super::color::Color;
 use clap::ValueEnum;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io::IsTerminal;
+use tmpl_cli_core::{APP, Env, EnvVar};
 
-/// Environment variable that sets the output format for a whole session.
-pub(crate) const FORMAT_ENV: &str = "TMPL_CLI_FORMAT";
+/// Forces color on a terminal even under `TERM=dumb`. The kit declares the
+/// other output variables (`TMPL_CLI_FORMAT`, `NO_COLOR`, `TERM`).
+const CLICOLOR_FORCE: EnvVar = EnvVar::global(
+    "CLICOLOR_FORCE",
+    "Any non-empty value turns color on at a terminal, even for `TERM=dumb`.",
+);
+
+/// The width tables and root help fit on a terminal.
+const COLUMNS: EnvVar = EnvVar::global("COLUMNS", "The terminal width to fit tables to.");
+
+/// A captured value as text: `None` when unset, empty or not UTF-8.
+fn text(value: Option<&OsStr>) -> Option<String> {
+    value.and_then(OsStr::to_str).map(str::to_owned)
+}
+
+/// `TMPL_CLI_FORMAT`, as text.
+pub(crate) fn env_format(env: &Env) -> Option<String> {
+    text(env.app(APP).format())
+}
 
 /// The `--format` values.
 ///
@@ -56,15 +75,15 @@ pub(crate) struct SinkEnv {
 }
 
 impl SinkEnv {
-    /// Read the variables from the real process environment.
-    pub(crate) fn from_process() -> Self {
-        let var = |key: &str| std::env::var(key).ok();
+    /// Take the variables from the environment `main` captured.
+    pub(crate) fn from_env(env: &Env) -> Self {
+        let app = env.app(APP);
         Self {
-            format: var(FORMAT_ENV),
-            no_color: var("NO_COLOR"),
-            clicolor_force: var("CLICOLOR_FORCE"),
-            term: var("TERM"),
-            columns: var("COLUMNS"),
+            format: env_format(env),
+            no_color: env.no_color().then(|| String::from("1")),
+            clicolor_force: text(app.get(&CLICOLOR_FORCE)),
+            term: text(env.term()),
+            columns: text(app.get(&COLUMNS)),
         }
     }
 }
@@ -81,16 +100,17 @@ pub(crate) struct Sink {
 }
 
 impl Sink {
-    /// Resolve the sink from the real stdout and environment. Called once.
-    pub(crate) fn from_process(requested: Option<FormatArg>) -> Self {
+    /// Resolve the sink from the real stdout and the captured environment.
+    /// Called once.
+    pub(crate) fn from_env(env: &Env, requested: Option<FormatArg>) -> Self {
         Self::resolve(
             std::io::stdout().is_terminal(),
-            &SinkEnv::from_process(),
+            &SinkEnv::from_env(env),
             requested,
         )
     }
 
-    /// Resolve from explicit inputs; the testable core of [`Sink::from_process`].
+    /// Resolve from explicit inputs; the testable core of [`Sink::from_env`].
     pub(crate) fn resolve(is_tty: bool, env: &SinkEnv, requested: Option<FormatArg>) -> Self {
         Self {
             mode: resolve_mode(is_tty, env.format.as_deref(), requested),
@@ -131,8 +151,8 @@ pub(super) fn resolve_color(is_tty: bool, env: &SinkEnv) -> Color {
 }
 
 /// Width for root help wrapping. Piped help keeps one line per command.
-pub(crate) fn help_width() -> Option<usize> {
-    let columns = std::env::var("COLUMNS").ok();
+pub(crate) fn help_width(env: &Env) -> Option<usize> {
+    let columns = text(env.app(APP).get(&COLUMNS));
     resolve_width(std::io::stdout().is_terminal(), columns.as_deref())
 }
 

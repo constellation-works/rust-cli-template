@@ -42,9 +42,10 @@ policy() {
     # crates:begin
     tmpl-cli-store)
       ALLOWED=""
-      # The one error type (cw-base), file access for the data directory and
-      # the audit log (cw-fs), and the database (cw-sqlite). The store
-      # is the only crate that names cw-fs or cw-sqlite.
+      # The one error type (cw-base), file access for the data directory
+      # (cw-fs), and the database (cw-sqlite). The store is the only crate
+      # that names cw-fs or cw-sqlite. It holds no audit code: the audit log
+      # is cw-app's, named by the core.
       KIT="cw-base cw-fs cw-sqlite"
       # Test isolation, for its unit tests' private temp roots.
       KIT_DEV="cw-testkit"
@@ -56,8 +57,10 @@ policy() {
       ;;
     tmpl-cli-core)
       ALLOWED="tmpl-cli-store"
-      # The one error type only: the apps reach files through the store.
-      KIT="cw-base"
+      # The one error type (cw-base) and the command path (cw-app: the
+      # chokepoint, the captured environment and the audit log). The apps
+      # reach the records through the store.
+      KIT="cw-base cw-app"
       # Test isolation, for its tests' private temp roots.
       KIT_DEV="cw-testkit"
       # The apps reach files only through the store, so they need no file or
@@ -66,7 +69,8 @@ policy() {
       ;;
     tmpl-cli)
       # The binary names only the core; the core re-exports the record shapes
-      # it renders and the one error type (cw-base's, as tmpl_cli_core::Error).
+      # it renders, the one error type (cw-base's, as tmpl_cli_core::Error)
+      # and what a surface needs of cw-app (Env, Origin, the runtime).
       ALLOWED="tmpl-cli-core"
       KIT=""
       # Test isolation: the temp root, the isolated child and goldens.
@@ -227,19 +231,18 @@ CORE=crates/tmpl-cli-core/src
 CLI=crates/tmpl-cli/src
 
 # Store: no code here names a file, process or network primitive; it reaches
-# the data directory and the audit log through the kit's cw-fs and the
-# database through the kit's cw-sqlite. driver/ sets each mechanism up and
-# returns its handle; repository/ holds each record's use of it (its SQL and
-# row mapping; the audit repository's line.rs converts the audit line's bytes);
+# the data directory through the kit's cw-fs and the database through the
+# kit's cw-sqlite. driver/ sets each mechanism up and returns its handle;
+# repository/ holds each record's use of it (its SQL and row mapping);
 # contract/ holds shapes that know nothing of how they are stored and hold no
-# rule (R4).
+# rule (R4). The audit log is cw-app's: the store holds no audit code.
 ban "$STORE"         'std::(fs|net|process)|tempfile::|rustix::'           "the store reaches files through cw_fs"
 ban_import "$STORE"  'std' 'fs|net|process'                                "the store reaches files through cw_fs"
-ban "$STORE/repository/audit/line.rs" 'cw_fs::|cw_sqlite\b'             "repository/audit/line.rs converts bytes; it must not do I/O"
+ban "$STORE"         'audit\.jsonl|\.audit\.lock|Audit(Event|Status|Line|Guard)|cw_app\b' "the store holds no audit code or file: the audit log is cw-app's"
 ban "$STORE/contract" 'crate::(driver|repository|store|Store)|super::super::|cw_fs::|cw_sqlite\b|rusqlite\b' "contract/ holds record shapes; they must not import the driver, repository, the store, file access or SQLite"
 ban_import "$STORE/contract" 'crate' 'driver|repository|store|Store'       "contract/ holds record shapes; they must not import the driver, repository or the store"
 ban "$STORE/contract" 'fn check_|now_utc|SystemTime'                      "contract/ holds shapes only: no checks across records and no clock"
-[[ -e "$STORE/db" || -e "$STORE/db.rs" ]] && err "store/db: each record's mapping lives in its repository (the audit line in repository/audit/line.rs)"
+[[ -e "$STORE/db" || -e "$STORE/db.rs" ]] && err "store/db: each record's mapping lives in its repository"
 [[ -e "$STORE/driver/fs" || -e "$STORE/driver/fs.rs" ]] && err "store/driver/fs: there is no file driver; a file record's repository uses cw_fs directly"
 # Module names are singular: one record's module is named for the record.
 [[ -e "$STORE/contracts" ]] && err "store/contracts: the record shapes live in contract/"
@@ -278,7 +281,7 @@ ban "$STORE"         '^[[:space:]]*pub[[:space:]]+(fn|struct|enum|type|use|const
 ban "$STORE"         'std::env\b|home_dir|current_dir'                      "the store crate must not read the environment or discover paths"
 ban_import "$STORE"  'std' 'env'                                           "the store crate must not read the environment or discover paths"
 
-# Core: apps, runtime and composition. Nothing in the core touches a file or
+# Core: apps and composition. Nothing in the core touches a file or
 # a process; it reaches the data directory through the store (R5).
 ban "$CORE"          'std::(fs|net|process)|tempfile::|rustix::|cw_fs\b|cw_sqlite\b|rusqlite\b'  "the core reaches files only through tmpl-cli-store"
 # The record-access seam: the core reaches a record only through
@@ -286,38 +289,45 @@ ban "$CORE"          'std::(fs|net|process)|tempfile::|rustix::|cw_fs\b|cw_sqlit
 ban "$CORE"          'tmpl_cli_store::repository\b'                       "the core reaches a record through snapshot.<record>() or tx.<record>(), never tmpl_cli_store::repository"
 ban_import "$CORE"   'tmpl_cli_store' 'repository'                         "the core reaches a record through snapshot.<record>() or tx.<record>(), never tmpl_cli_store::repository"
 ban_import "$CORE"   'std' 'fs|net|process'                                "the core reaches files only through tmpl-cli-store"
-# Only composition reads the host: environment variables and paths (R3).
-for path in "$CORE"/*; do
-  name=$(basename "$path")
-  case "$name" in composition.rs | tests) continue ;; esac
-  ban "$path" 'std::env\b|home_dir|current_dir'                             "core/$name: only composition.rs reads the environment or discovers paths"
-  ban_import "$path" 'std' 'env'                                           "core/$name: only composition.rs reads the environment or discovers paths"
-done
-# The runtime sits below the apps; apps depend on it, never the reverse (R1).
-ban "$CORE/runtime"  'crate::app'                                         "runtime must not import an app"
-ban_import "$CORE/runtime" 'crate' 'app'                                  "runtime must not import an app"
-# One chokepoint (R24): only runtime/exec.rs starts the runtime and the audit
-# guard. An app's exec forwards to it and supplies its parts through `App`.
-ban "$CORE/app"     'AuditGuard|Runtime::start'                           "an app runs through runtime::exec; it must not start the runtime or the audit guard"
+# Nothing in the core discovers a path (R3): the data directory is the kit's
+# pure function of the captured environment (composition.rs).
+ban "$CORE"          'home_dir|current_dir'                                 "the core discovers no path: the data directory comes from the captured Env"
+# The process environment is read once, by the kit's Env::capture() in the
+# binary's main (R3). No other source file under any crate's src/ names
+# std::env, tests included; main.rs names it only to read the arguments.
+env_hits=$(grep -rnHE --include='*.rs' 'std::env\b|use[[:space:]]+(::)?std::\{[^}]*\benv\b' crates/*/src 2>/dev/null \
+    | grep -v '^crates/tmpl-cli/src/main.rs:' | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)
+main_hits=$(sed -E 's/std::env::args_os\(\)//g' crates/tmpl-cli/src/main.rs 2>/dev/null \
+    | grep -nE 'std::env\b' | grep -vE '^[0-9]+:[[:space:]]*//' | sed 's|^|crates/tmpl-cli/src/main.rs:|' || true)
+capture_hits=$(grep -rnHE --include='*.rs' 'Env::capture\b' crates/*/src 2>/dev/null \
+    | grep -v '^crates/tmpl-cli/src/main.rs:' | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)
+if [[ -n "$env_hits$main_hits$capture_hits" ]]; then
+  printf '%s\n' "$env_hits" "$main_hits" "$capture_hits" | grep -v '^$' >&2
+  err "only crates/tmpl-cli/src/main.rs reads the process: Env::capture() for the environment, std::env::args_os() for the arguments"
+fi
+# One chokepoint (R24): the kit's cw_app::exec. An app's exec forwards to it
+# and supplies its parts by implementing cw_app::App; nothing calls an app's
+# run itself, and there is no runtime of the template's own.
 for app in "$CORE"/app/*/mod.rs; do
   [[ -e "$app" ]] || continue
-  grep -q 'runtime::exec::<' "$app" || err "${app#"$CORE"/}: exec must forward to runtime::exec"
+  grep -q 'cw_app::exec::<' "$app" || err "${app#"$CORE"/}: exec must forward to cw_app::exec"
 done
-# There is no shared app: code two apps need goes to the lower app or the runtime.
+ban crates           '(App|App>)::run\b|cw_app::(Pending|audit::)|AuditLog::new|\.append\('  "a command runs only through cw_app::exec, and only the kit writes the audit log"
+# There is no shared app: code two apps need goes to the lower app.
 for shared in common shared util; do
-  [[ -e "$CORE/app/$shared" || -e "$CORE/app/$shared.rs" ]] && err "core/app/$shared: put shared code in the lower app or in runtime/"
+  [[ -e "$CORE/app/$shared" || -e "$CORE/app/$shared.rs" ]] && err "core/app/$shared: put shared code in the lower app"
 done
-# An app's rules are pure: no store, no runtime, no composition (R5).
+# An app's rules are pure: no store, no context, no composition (R5).
 for rules in "$CORE"/app/*/rule.rs "$CORE"/app/*/rule; do
   [[ -e "$rules" ]] || continue
-  ban "$rules" 'crate::(runtime|composition)|Store\b|Snapshot|Tx\b'      "${rules#"$CORE"/}: rules are pure functions over record shapes"
-  ban_import "$rules" 'crate' 'runtime|composition'                       "${rules#"$CORE"/}: rules are pure functions over record shapes"
+  ban "$rules" 'crate::composition|cw_app\b|Ctx\b|Store\b|Snapshot|Tx\b'  "${rules#"$CORE"/}: rules are pure functions over record shapes"
+  ban_import "$rules" 'crate' 'composition'                               "${rules#"$CORE"/}: rules are pure functions over record shapes"
 done
 
 # Binary: argument declarations, the mapping to an app, rendering (R2). It
 # names only the core, and its handlers open no store and read no environment.
-ban "crates/tmpl-cli" 'tmpl_cli_store|cw_(base|fs|sqlite)\b|rusqlite\b'    "the binary names only tmpl-cli-core"
-ban "$CLI/command"  'std::(env|fs)|Store\b|Runtime|Ctx\b'               "a command handler maps arguments to an app command; it reads no environment and opens no store"
+ban "crates/tmpl-cli" 'tmpl_cli_store|cw_(base|fs|sqlite|app)\b|rusqlite\b' "the binary names only tmpl-cli-core"
+ban "$CLI/command"  'std::(env|fs)|Store\b|Runtime::|start\(|Ctx\b|\bEnv\b' "a command handler maps arguments to an app command; it reads no environment, opens no store and starts no runtime"
 ban_import "$CLI/command" 'std' 'env|fs'                                  "a command handler maps arguments to an app command; it reads no environment and opens no store"
 # Rendering is derived from payloads only; it never reaches back up (R1).
 ban "$CLI/output"    'crate::(cli|command)'                                "output must not import cli or command"
@@ -360,6 +370,10 @@ retired_paths=(
   crates/tmpl-cli-store/src/db/tests/fsio.rs
   crates/tmpl-cli-store/src/db/format.rs
   crates/tmpl-cli-store/src/db/tests/format.rs
+  crates/tmpl-cli-core/src/runtime
+  crates/tmpl-cli-core/src/test_support.rs
+  crates/tmpl-cli-store/src/repository/audit
+  crates/tmpl-cli-store/src/contract/audit.rs
   # example:begin
   crates/tmpl-cli-core/src/note.rs
   crates/tmpl-cli-core/src/tests/note.rs

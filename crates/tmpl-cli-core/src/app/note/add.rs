@@ -2,13 +2,16 @@
 
 use super::rule::{self, NewNote};
 use super::{Error, Outcome};
-use crate::runtime::Ctx;
+use crate::composition::Ctx;
 
 /// Load the notes, refuse what can be refused before any side effect, then
 /// assign the next id and store the note in one write.
 pub(super) fn add(ctx: &Ctx<'_>, new: NewNote) -> Result<Outcome, Error> {
+    // Notes keep whole seconds, as they always have; the kit's clock reads
+    // the time to the nanosecond.
     let now = ctx.now();
-    let store = ctx.store();
+    let now = now.replace_nanosecond(0).unwrap_or(now);
+    let store = ctx.state();
     // Every check that can refuse runs before the first write (STD-02 R34):
     // an unsafe, corrupt, newer, bad-record or id-exhausted store is refused
     // here, before the directory or the database is created.

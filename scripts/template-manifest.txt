@@ -90,8 +90,6 @@ regions crates/tmpl-cli/tests/cli.rs
 regions crates/tmpl-cli/tests/golden.rs
 regions crates/tmpl-cli/tests/support/mod.rs
 regions crates/tmpl-cli-core/src/app/mod.rs
-regions crates/tmpl-cli-core/src/runtime/mod.rs
-regions crates/tmpl-cli-core/src/test_support.rs
 regions crates/tmpl-cli-store/src/contract/mod.rs
 regions crates/tmpl-cli-store/src/contract/tests/mod.rs
 regions crates/tmpl-cli-store/src/driver/sqlite/schema/mod.rs

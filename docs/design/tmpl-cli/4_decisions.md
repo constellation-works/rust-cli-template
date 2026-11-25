@@ -7,7 +7,7 @@ status: Draft
 feature: tmpl-cli
 doc_role: decisions
 type: design
-summary: Why three crates laid out by app over the cw-kit (binary, core with apps, runtime and composition, store with a driver, repositories and a contract module; the one error type, file access and the SQLite notes database from the kit's cw-base, cw-fs and cw-sqlite), why commands are one module per noun, why mutating commands are audited through one guard, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, why the notes live in SQLite and how its schema evolves, how the store stays private, and every recorded standard deviation or rule the template does not exercise.
+summary: Why three crates laid out by app over the cw-kit (binary, core with apps and composition, store with a driver, repositories and a contract module; the one error type, file access, the SQLite notes database and the command path from the kit's cw-base, cw-fs, cw-sqlite and cw-app), why commands are one module per noun, why mutating commands are audited through one chokepoint and why that chokepoint, the captured environment and the audit log are the kit's, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, why the notes live in SQLite and how its schema evolves, how the store stays private, and every recorded standard deviation or rule the template does not exercise.
 tags: [tmpl-cli, decisions]
 paths: ["Cargo.toml", "crates/**", "Makefile"]
 related_features: [tmpl-cli]
@@ -156,6 +156,12 @@ line within one deadline.
   chokepoint is the runtime's `exec`, which every app's `exec` forwards to.
   It takes the surface's `finish` so the line is still written after the
   payload or error object is flushed.
+- Update (2026-11-25): superseded in its mechanism by
+  [The command path is the kit's cw-app](#the-command-path-is-the-kits-cw-app):
+  the guard is the kit's pending record, the chokepoint is `cw_app::exec`,
+  and the surface settles the record after rendering. The decision itself
+  (one chokepoint, per-command declaration, identifiers only, fail open, its
+  own lock) stands.
 - Cost: every audited command pays a second lock and an `fsync`; a command
   that cannot write its line still succeeds, so the log can miss entries,
   and it grows without rotation.
@@ -970,6 +976,59 @@ The notes live in `<root>/notes.db`, opened only through `cw_sqlite::Db`.
   `UPGRADES`, still naming neither `cw_fs` nor `cw_sqlite`.
   `scripts/check-dependency-direction.sh` fails if `db/` comes back.
 
+## The command path is the kit's cw-app
+
+**Recorded:** 2026-11-25
+**Code anchors:** `crates/tmpl-cli-core/src/app/note/mod.rs::exec`, `NoteApp`; `crates/tmpl-cli-core/src/composition.rs::start`; `crates/tmpl-cli/src/main.rs::main`; `crates/tmpl-cli/src/command/note.rs::run`; `scripts/check-dependency-direction.sh`
+
+### Context
+
+The core held its own runtime: a context, a chokepoint every app's `exec`
+forwarded to, and an audit guard writing through the store's audit
+repository; composition read the environment, and the binary's output
+module read the presentation variables from the process. Every constellation
+CLI needs the same command path, and the cw-kit design moves it into
+`cw-app` (satellites), whose README is its contract.
+
+### Decision
+
+The template drops its runtime and the store's audit code and takes `cw-app`
+at the workspace's one satellites rev.
+
+- The note app implements `cw_app::App` (state `Store`; `audit`, `run`,
+  `target`), and `app::note::exec` is one line forwarding to
+  `cw_app::exec`, which returns a `Finished`. The surface renders the result,
+  then settles the record, and prints an `AuditWarning` as `warning: …` on
+  stderr without changing the exit code.
+- `main` captures the environment once with `Env::capture()`; it is the only
+  file that names `std::env`, and only to read the arguments. The data
+  directory is `env.app("tmpl-cli").data_dir(--root)`; the output module
+  reads its variables from the captured `Env`, declaring `CLICOLOR_FORCE`
+  and `COLUMNS` as `EnvVar`s.
+- The audit log is `cw_app::AuditLog`: the same `<root>/audit.jsonl` and
+  `<root>/.audit.lock`, in the kit's format 3, which adds `surface` to the
+  template's format 2 and reads formats 1 and 2 (the template's own) through
+  its upgrade steps. The store holds no audit file.
+- Tests pin the clock with `Runtime::with_clock(Clock::fixed(..))` and the
+  environment with `Env::from_vars`; the core's `test-support` feature is
+  gone.
+- The template keeps its own `no_data_dir` code and message, and notes keep
+  whole-second creation times (the add flow truncates the kit's clock).
+
+### Consequences
+
+- A second surface (an MCP server) runs the same commands through the same
+  chokepoint and audit log by building an `Origin` of its own.
+- What an operator sees change is listed in
+  [docs/usage.md](../../usage.md#audit-log): format-3 lines with `surface`
+  and sub-second `at`, `<invalid>` for an actor that is not an identifier,
+  the audit warning's wording, and an empty variable read as unset (an empty
+  `TMPL_CLI_LOG` now logs at `warn`).
+- Cost: the audit lock wait is the kit's 5 s rather than the store's 10 s;
+  an older build run after this one on the same data directory appends
+  format-2 lines after format-3 ones without checking, which the kit still
+  reads; and the command path changes only by moving the satellites pin.
+
 ## Public design documents use public references
 
 **Recorded:** 2026-11
@@ -1030,15 +1089,10 @@ re-vendors. Each line names the rule and what is unmet.
     `disallowed-methods` baseline;
   - the script's grep bans on `std::fs`, `std::net`, `std::process` and
     `std::env` stand where Clippy is to take them over.
-- **STD-02@8 §R7**: the binary crate reads the environment, for the
-  presentation variables and the log filter, in `tmpl-cli/src/output/`.
-- **STD-02@8 §R39**: the store's top-level modules import each other in a
-  cycle: `store.rs` imports `repository::Audit`, and `repository/audit/mod.rs`
-  imports `Store` back.
-- **STD-02@8 §R44**: the format-1 audit-line upgrader (`UPGRADES` in
-  `repository/audit/line.rs`) lives in the live audit codec, which the append
-  path in `repository/audit/mod.rs` imports, rather than in a unit named for
-  upgrades.
+- **STD-02@8 §R7**: the binary crate reads the environment: its `main`
+  captures it once with the kit's `Env::capture()`, as the kit asks, and
+  `tmpl-cli/src/output/` interprets the presentation variables and the log
+  filter from that captured value.
 - **STD-02@8 §R43**: `make structure` has no unit-map gate, which would fail
   on a crate or top-level module missing from `ARCHITECTURE.md`, a mapped path
   that does not exist, or a unit with no `//!` doc.

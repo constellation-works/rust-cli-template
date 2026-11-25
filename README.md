@@ -11,7 +11,7 @@
 <!-- template:begin -->
 ## Starting point
 
-This repository is the starting point for a new constellation Rust CLI: three crates laid out by app over the cw-kit (`cw-base`, `cw-fs` and `cw-sqlite`, pinned to one commit), an output contract, a private local SQLite store, and gates and CI that meet the constellation standards. A `note` example shows every layer.
+This repository is the starting point for a new constellation Rust CLI: three crates laid out by app over the cw-kit (`cw-base`, `cw-fs`, `cw-sqlite` and `cw-app`, pinned to one commit), an output contract, a private local SQLite store, and gates and CI that meet the constellation standards. A `note` example shows every layer.
 
 Create a copy with GitHub's **Use this template**, clone it, then run `scripts/init.sh <name> [--kind cli|cli-bare|workspace] [--repository <url>]` and `make ci`:
 

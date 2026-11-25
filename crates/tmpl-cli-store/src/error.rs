@@ -88,8 +88,8 @@ impl BadRecord {
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
-    /// A file operation on the data directory or the audit log failed, was
-    /// refused, or timed out on the audit lock. The kit's error carries a
+    /// A file operation on the data directory or the database's own files
+    /// failed or was refused. The kit's error carries a
     /// kind and no code: the store names the code ([`Error::code`]).
     #[error(transparent)]
     Fs(#[from] cw_fs::Error),
@@ -98,22 +98,12 @@ pub enum Error {
     /// names the code ([`Error::code`]).
     #[error(transparent)]
     Sqlite(#[from] cw_sqlite::Error),
-    /// Serializing a record's field or an audit event failed before anything
-    /// was written.
+    /// Serializing a record's field failed before anything was written.
     #[error("cannot encode {what}")]
     Encode {
         /// What was being serialized.
         what: &'static str,
         /// What the serializer rejected.
-        #[source]
-        source: serde_json::Error,
-    },
-    /// A persisted file (the audit log) is not one this build can parse.
-    #[error("{} is not a valid store file", path.display())]
-    Corrupt {
-        /// The file.
-        path: PathBuf,
-        /// What the parser rejected.
         #[source]
         source: serde_json::Error,
     },
@@ -128,21 +118,6 @@ pub enum Error {
         #[source]
         source: time::error::Format,
     },
-    /// A persisted file (the audit log) was written by a newer build
-    /// (STD-03 R10: refuse, never rewrite or reinterpret newer state). A
-    /// newer database is the kit's `Incompatible`.
-    #[error(
-        "{} uses store format {found}, but this build reads format {supported} or older; upgrade this tool",
-        path.display()
-    )]
-    NewerFormat {
-        /// The file.
-        path: PathBuf,
-        /// The format the file declares.
-        found: u32,
-        /// The newest format this build understands.
-        supported: u32,
-    },
 }
 
 impl Error {
@@ -156,13 +131,9 @@ impl Error {
             // The kit's database failures get the store's codes here.
             Self::Sqlite(cw_sqlite::Error::Missing { .. }) => "store_missing",
             Self::Sqlite(cw_sqlite::Error::Locked { .. }) => "store_locked",
-            Self::Sqlite(cw_sqlite::Error::Corrupt { .. }) | Self::Corrupt { .. } => {
-                "store_corrupt"
-            }
+            Self::Sqlite(cw_sqlite::Error::Corrupt { .. }) => "store_corrupt",
             Self::Sqlite(cw_sqlite::Error::CheckFailed { .. }) => "store_check_failed",
-            Self::Sqlite(cw_sqlite::Error::Incompatible { .. }) | Self::NewerFormat { .. } => {
-                "store_too_new"
-            }
+            Self::Sqlite(cw_sqlite::Error::Incompatible { .. }) => "store_too_new",
             Self::Sqlite(cw_sqlite::Error::NotWal { .. }) => "store_not_wal",
             Self::Sqlite(cw_sqlite::Error::Migration { .. }) => "store_migration_failed",
             Self::Sqlite(cw_sqlite::Error::Sqlite { .. }) => "store_sqlite_error",
@@ -179,14 +150,13 @@ impl Error {
             Self::Fs(source) => source.kind(),
             Self::Sqlite(source) => source.kind(),
             Self::Encode { .. } | Self::Timestamp { .. } => Kind::Internal,
-            Self::Corrupt { .. } | Self::BadRecord(_) => Kind::Corrupt,
-            Self::NewerFormat { .. } => Kind::Incompatible,
+            Self::BadRecord(_) => Kind::Corrupt,
         }
     }
 }
 
 /// The store's code for each of the kit's file errors, met on the data
-/// directory, the audit log or the database's own files.
+/// directory or the database's own files.
 fn fs_code(source: &cw_fs::Error) -> &'static str {
     match source {
         cw_fs::Error::Io { .. } => "io_error",

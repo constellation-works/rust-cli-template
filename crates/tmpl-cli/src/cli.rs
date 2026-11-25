@@ -67,10 +67,14 @@ impl Cli {
     /// `conflicts_with` does not see a global flag given at a different
     /// subcommand level (`--json status --format table`), so the
     /// `--json`/`--format` conflict is checked here and reported as the same
-    /// usage error (exit 2) clap would have produced.
-    pub(crate) fn parse_args(args: &[OsString]) -> Result<Self, clap::Error> {
-        let matches = crate::help::with_groups(Self::command(), crate::output::help_width())
-            .try_get_matches_from(args)?;
+    /// usage error (exit 2) clap would have produced. `help_width` is the
+    /// width root help wraps to, `None` off a terminal.
+    pub(crate) fn parse_args(
+        args: &[OsString],
+        help_width: Option<usize>,
+    ) -> Result<Self, clap::Error> {
+        let matches =
+            crate::help::with_groups(Self::command(), help_width).try_get_matches_from(args)?;
         let cli = Self::from_arg_matches(&matches)?;
         if cli.global.json
             && cli

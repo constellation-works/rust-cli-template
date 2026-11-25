@@ -5,10 +5,6 @@
 //! about two records, reads the clock or touches a file
 //! (`scripts/check-dependency-direction.sh`).
 
-mod audit;
-
-pub use audit::{AuditEvent, AuditStatus};
-
 // example:begin
 mod note;
 

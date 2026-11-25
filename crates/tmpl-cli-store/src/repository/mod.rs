@@ -1,4 +1,4 @@
-//! One repository per record, and `audit`.
+//! One repository per record.
 //!
 //! A repository is named for the record it holds, never for a command: it
 //! gets, lists and puts records and decides nothing about them. It is one
@@ -8,10 +8,6 @@
 //! `snapshot.<record>()` in a read and `tx.<record>()` in a write, so it
 //! composes repositories in one read or one write, and no connection, path
 //! or borrowed document crosses into its hands.
-
-pub(crate) mod audit;
-
-pub use audit::Audit;
 
 // example:begin
 pub(crate) mod note;

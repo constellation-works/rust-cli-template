@@ -79,6 +79,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 
 [[package]]
+name = "cw-app"
+version = "0.1.0"
+source = "git+https://github.com/constellation-works/satellites?rev=9c9cc998720f0a75041be3451c14fbaf80f29dc8#9c9cc998720f0a75041be3451c14fbaf80f29dc8"
+dependencies = [
+ "cw-base",
+ "cw-fs",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "time",
+]
+
+[[package]]
 name = "cw-base"
 version = "0.1.0"
 source = "git+https://github.com/constellation-works/satellites?rev=9c9cc998720f0a75041be3451c14fbaf80f29dc8#9c9cc998720f0a75041be3451c14fbaf80f29dc8"
@@ -536,12 +549,12 @@ dependencies = [
 name = "tmpl-cli-core"
 version = "0.1.0"
 dependencies = [
+ "cw-app",
  "cw-base",
  "cw-testkit",
  "serde_json",
  "thiserror",
  "time",
- "tmpl-cli-core",
  "tmpl-cli-store",
  "tracing",
 ]

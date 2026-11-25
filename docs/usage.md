@@ -40,16 +40,36 @@ and outcome.
 | Output format | `--format auto\|table\|json`, `--json` | `TMPL_CLI_FORMAT` | `auto` |
 | Color | — | `NO_COLOR`, `CLICOLOR_FORCE`, `TERM` | on for a terminal |
 | Log level (stderr) | — | `TMPL_CLI_LOG` (e.g. `debug`) | `warn` |
+| Width (terminal) | — | `COLUMNS` | the terminal's |
+| Actor (audit log) | — | `USER`, else `USERNAME` | none |
+
+The environment is read once at start. An empty variable counts as unset
+(`TMPL_CLI_LOG=` logs at `warn`).
 
 Records live in a SQLite database, `store.db`, under the data directory,
 with SQLite's `store.db-wal` and `store.db-shm` beside it. A mutating
-command appends one event to `audit.jsonl` with the record ID and outcome;
-`.audit.lock` is its lock file. Every file is `0600` and the directory
-`0700` on Unix. Reading commands change no record and write no audit line;
-in a writable directory a read of an existing database may rebuild
-`store.db-shm` (SQLite's index, not your data) and creates a missing
+command appends one line with the record ID and outcome to the audit log,
+`audit.jsonl`; `.audit.lock` is its lock file. Every file is `0600` and the
+directory `0700` on Unix. Reading commands change no record and write no
+audit line; in a writable directory a read of an existing database may
+rebuild `store.db-shm` (SQLite's index, not your data) and creates a missing
 `store.db-wal` (empty) or `store.db-shm`, owner-only; in a directory you
 cannot write, a read writes nothing.
+
+## Audit log
+
+`audit.jsonl` holds one JSON line per command that changes a record: when it
+started (`at`), the surface (`cli`), the actor (`USER`, else `USERNAME`,
+written as `<invalid>` when it is not a plain identifier), the command, its
+`status`, the record it acted on (`target`), the error `code` on failure and
+`duration_ms`. It never holds an argument value or an error message. Lines are
+written in `format` 3, the cw-kit's audit format. A data directory from an
+earlier build keeps its format 1 and 2 lines; they stay readable, and new
+lines follow them in format 3. Earlier builds wrote `at` to the second;
+format 3 keeps fractions of a second. If a line cannot be written, the
+command still succeeds or fails on its own and prints
+`warning: the audit line for `<command>` was not written: <reason>` on
+stderr after its output.
 
 ## Troubleshooting
 

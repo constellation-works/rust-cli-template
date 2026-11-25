@@ -1,16 +1,31 @@
-//! Composition (STD-02 R2): the one place in the core that reads the host.
+//! Composition (STD-02 R2): what every command runs against, built once
+//! from the environment the binary's `main` captured.
 //!
-//! [`Env`] is the environment captured once by the binary's `main`, plus the
-//! `--root` flag the surface was given. From it composition picks the data
-//! directory, opens the [`Store`], names the actor and supplies the clock.
-//! Nothing else in the core reads an environment variable or discovers a
-//! path (`scripts/check-dependency-direction.sh`).
+//! [`start`] resolves the data directory from the captured [`Env`] and the
+//! `--root` the surface was given, opens the [`Store`] there, and builds the
+//! kit's [`cw_app::Runtime`] over it, which audits to the same directory and
+//! reads the system clock. The process environment is read once, by
+//! `Env::capture()` in `main`; everything here is a pure function of that
+//! value, so a test builds one with `Env::from_vars`
+//! (`scripts/check-dependency-direction.sh`).
 
+use cw_app::Env;
 use cw_base::Kind;
-use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use time::OffsetDateTime;
 use tmpl_cli_store::Store;
+
+/// The program's name. The kit derives its variables from it
+/// (`TMPL_CLI_ROOT`, `TMPL_CLI_FORMAT`, `TMPL_CLI_LOG`) and its default data
+/// directory (`$HOME/.tmpl-cli`).
+pub const APP: &str = "tmpl-cli";
+
+/// What every command runs against: the store, the data directory the
+/// audit log lives in, and the clock. A test pins the clock with
+/// `Runtime::with_clock(Clock::fixed(..))`.
+pub type Runtime = cw_app::Runtime<Store>;
+
+/// What a flow runs against: the store, the clock and the client.
+pub(crate) type Ctx<'a> = cw_app::Ctx<'a, Store>;
 
 /// Why composition could not resolve what an app runs against.
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
@@ -45,100 +60,25 @@ impl From<Error> for cw_base::Error {
     }
 }
 
-/// Environment variable naming the data directory.
-const ROOT_ENV: &str = "TMPL_CLI_ROOT";
-
-/// Directory under `$HOME` used when nothing else names one.
-const DEFAULT_DIR: &str = ".tmpl-cli";
-
-/// The configuration-relevant environment, captured once, and the data
-/// directory the command line named.
-#[derive(Clone, Debug, Default)]
-pub struct Env {
-    /// `--root`, when the command line gave it.
-    pub(crate) root_flag: Option<PathBuf>,
-    /// `TMPL_CLI_ROOT`.
-    pub(crate) root: Option<OsString>,
-    /// `HOME`.
-    pub(crate) home: Option<OsString>,
-    /// `USER`.
-    pub(crate) user: Option<OsString>,
-    /// `USERNAME` (fallback when `USER` is unset or empty).
-    pub(crate) username: Option<OsString>,
-}
-
-impl Env {
-    /// Read the variables from the real process environment.
-    #[must_use]
-    pub fn from_process() -> Self {
-        Self {
-            root_flag: None,
-            root: std::env::var_os(ROOT_ENV),
-            home: std::env::var_os("HOME"),
-            user: std::env::var_os("USER"),
-            username: std::env::var_os("USERNAME"),
-        }
-    }
-
-    /// The same environment with the data directory the command line named,
-    /// which beats every variable.
-    #[must_use]
-    pub fn with_root_flag(mut self, root: Option<PathBuf>) -> Self {
-        self.root_flag = root;
-        self
-    }
-}
-
-/// What an app runs against, resolved from an [`Env`].
-#[derive(Debug)]
-pub(crate) struct Composition {
-    /// The store at the resolved data directory.
-    pub(crate) store: Store,
-    /// The OS user name, for the audit log.
-    pub(crate) actor: Option<String>,
-}
-
-/// Resolve everything an app needs. Data directory precedence: `--root` >
-/// `TMPL_CLI_ROOT` > `$HOME/.tmpl-cli`.
-pub(crate) fn compose(env: &Env) -> Result<Composition, Error> {
-    let root = resolve_root(env.root_flag.as_deref(), env)?;
-    let actor = resolve_actor(env);
+/// Build the runtime every command of this invocation runs against.
+/// Data directory precedence: `root` (the `--root` flag) > `TMPL_CLI_ROOT` >
+/// `$HOME/.tmpl-cli`. Creates nothing: the store creates the directory on
+/// its first write, the audit log on its first line.
+///
+/// # Errors
+///
+/// `no_data_dir` when nothing names a data directory.
+pub fn start(env: &Env, root: Option<&Path>) -> Result<Runtime, cw_base::Error> {
+    let root = data_dir(env, root)?;
     tracing::debug!(root = %root.display(), "resolved data directory");
-    Ok(Composition {
-        store: Store::open(root),
-        actor,
-    })
+    Ok(Runtime::new(&root, Store::open(&root)))
 }
 
-/// The current time, whole seconds, for records created by this invocation.
-pub(crate) fn now() -> OffsetDateTime {
-    let now = OffsetDateTime::now_utc();
-    now.replace_nanosecond(0).unwrap_or(now)
-}
-
-/// The data-directory precedence, separated so tests can check it directly.
-pub(crate) fn resolve_root(root_flag: Option<&Path>, env: &Env) -> Result<PathBuf, Error> {
-    let non_empty = |value: &Option<OsString>| value.clone().filter(|os| !os.is_empty());
-    if let Some(flag) = root_flag {
-        return Ok(flag.to_path_buf());
-    }
-    if let Some(root) = non_empty(&env.root) {
-        return Ok(PathBuf::from(root));
-    }
-    non_empty(&env.home)
-        .map(|home| PathBuf::from(home).join(DEFAULT_DIR))
-        .ok_or(Error::NoDataDir)
-}
-
-/// The actor precedence (`USER`, else `USERNAME`, else `None`), separated so
-/// tests can check it directly without touching the process environment.
-pub(crate) fn resolve_actor(env: &Env) -> Option<String> {
-    let non_empty = |value: &Option<OsString>| {
-        value
-            .as_deref()
-            .and_then(std::ffi::OsStr::to_str)
-            .filter(|os| !os.is_empty())
-            .map(str::to_owned)
-    };
-    non_empty(&env.user).or_else(|| non_empty(&env.username))
+/// The data directory, resolved by the kit from the captured environment.
+pub(crate) fn data_dir(env: &Env, root: Option<&Path>) -> Result<PathBuf, Error> {
+    // The kit's resolution fails only when nothing names a directory; the
+    // template keeps its own code and message for that, naming its flag.
+    env.app(APP)
+        .data_dir(root)
+        .map_err(|_no_data_dir| Error::NoDataDir)
 }

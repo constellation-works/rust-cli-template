@@ -1,6 +1,6 @@
 ---
 type: design
-summary: "Spec: store — the notes database, its files and modes, its schema steps, transactions, the record-access seam, bad-record isolation and the audit log"
+summary: "Spec: store — the notes database, its files and modes, its schema steps, transactions, the record-access seam and bad-record isolation"
 last_validated: 2026-11-25
 ---
 
@@ -24,16 +24,11 @@ leave unreadable state.
   created by the first `add`. SQLite keeps `<root>/store.db-wal` and
   `<root>/store.db-shm` beside it, also `0600`; both stay after the last
   connection closes, so a read-only reader finds them.
-- `<root>/.audit.lock` — the audit-log lock file, mode `0600`; created once,
-  never deleted. While held it holds one JSON line naming the holder,
-  `{"pid", "start" (Linux only), "time", "label"}`, at most 4096 bytes; the
-  holder clears it on release. The record only explains a timeout; nothing
-  decides ownership from it.
-- `<root>/audit.jsonl` — the audit log, mode `0600`, created by the first
-  audited command: one line per mutating command, `{"format": 2, "at",
-  "actor", "command", "status", "target", "error_code", "duration_ms"}`.
-  `actor` is the OS user name (`USER`, else `USERNAME`, else `null`); no
-  sentinel string is used.
+- Beside the store, the same directory holds the audit log,
+  `<root>/audit.jsonl`, and its lock file, `<root>/.audit.lock`. They are
+  the kit's (`cw_app::AuditLog`), not the store's: the store holds no audit
+  code and never opens either file. Their line format and behaviour are in
+  [2_design.md §5](../2_design.md#5-the-audit-log).
 
 ## Schema
 
@@ -107,13 +102,6 @@ Version 1 is one `STRICT` table:
 - A store already holding id `NoteId::MAX` refuses `add` (`note_id_exhausted`).
 - Encoding failures fail with `encode_error` and never fabricate a filesystem
   path.
-- Audit lines are appended in one write under `.audit.lock` and `fsync`ed;
-  they are never rewritten. Read-only commands never write one. A line holds
-  no argument values or error text. A line that cannot be written is a warning
-  (written after the command's payload or JSON error object) and never changes
-  the command's result. Each line carries its own `format`; a reader upgrades
-  older lines through `UPGRADES` in `repository/audit/line.rs` (format-1 lines without
-  `actor` upgrade with `"actor": null`) and refuses newer ones.
 
 ## Record access
 
@@ -121,17 +109,16 @@ The core reaches a record only through `snapshot.<record>()` (a read) and
 `tx.<record>()` (a write); today that is `notes()`. The store's public
 surface carries no `rusqlite` or `cw_sqlite` type, no borrow from a
 connection, and no path but `Store::path()` (the note app names the database
-in its outcome and refusals) and `Store::audit_path()` (the core's audit
-guard names the log in its warning). Repository calls return owned values.
+in its outcome and refusals). Repository calls return owned values.
 
 ## Error codes
 
 | Code | Kind | When |
 |------|------|------|
-| `store_locked` | busy | another connection held the database past the lock wait, or another append held `.audit.lock` |
-| `store_corrupt` | corrupt | not a SQLite database, or damaged; an unparseable audit line |
+| `store_locked` | busy | another connection held the database past the lock wait |
+| `store_corrupt` | corrupt | not a SQLite database, or damaged |
 | `store_check_failed` | corrupt | an integrity check reported problems (no command runs one yet) |
-| `store_too_new` | incompatible | a newer schema version, or a newer audit-line format |
+| `store_too_new` | incompatible | a newer schema version |
 | `store_bad_record` | corrupt | a note row failed validation |
 | `store_symlink`, `store_foreign_owner`, `store_permissions`, `store_not_regular` | refused | a file or the data directory failed the owner-only checks |
 | `store_too_large`, `store_lock_reentrant` | as the kit classifies them | the kit's other file refusals; the store keeps a code for each, though no current path meets them |
@@ -139,4 +126,4 @@ guard names the log in its warning). Repository calls return owned values.
 | `store_not_wal` | io | the database could not be put in WAL mode |
 | `store_migration_failed` | io | a schema step failed; the schema and version are as they were |
 | `store_sqlite_error`, `io_error` | io | any other SQLite or file failure |
-| `encode_error` | internal | a note's tags or timestamp, or an audit event, could not be encoded |
+| `encode_error` | internal | a note's tags or timestamp could not be encoded |
