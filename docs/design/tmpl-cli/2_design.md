@@ -178,8 +178,8 @@ exit code.
 | `check-dependency-direction.sh` | `ci-fast` | crate and module layering (STD-02 R1–R6), file access only in the store, `rusqlite` only in the store and only through `cw_sqlite`, schema statements only in `driver/sqlite/schema/` and step lists only in its `mod.rs`, no repository path named in the core, environment reads only in the core's `composition.rs`, no clock-defaulted timestamps (R16), retired paths stay gone (R17) |
 | `check-test-modules.sh` | `ci-fast` | every sibling unit-test file is declared (STD-02 R19) |
 | `check-terminal-guard.sh` | `ci-fast` | one owner for streams, TTY and color env (STD-01 R12, R17) |
-| `check-singular-names.sh` | `ci-fast` | module, source directory and source file names are singular, apart from its allow-list (STD-12 R1) |
-| `check-source-style.sh` | `ci-fast` | what stable rustfmt cannot check: blank lines between the module doc, the use block, top-level items and impl methods (STD-12 R12), lines within `max_width` apart from one string literal or URL (R13), one module per `use` (R16), a reason before each `rustfmt::skip` (R19) |
+| `check-singular-names.sh` | `ci-fast` | module names (paths and `mod` declarations), source directories and source files are singular; `tests`, `examples` and `benches` only where Cargo and STD-02 R19 fix them (STD-12 R1) |
+| `check-source-style.sh` | `ci-fast` | what stable rustfmt cannot check: blank lines between the module doc, the use block, top-level items and impl methods (STD-12 R12), lines of at most 100 characters apart from one string literal or URL, with `rustfmt.toml` failing at any other `max_width` (R13), one module per `use` (R16), a comment before each `rustfmt::skip` (R19); both scripts run `check-source-style.py`, whose header lists the known limits |
 | `check-private-task-ids.sh` | `ci-fast` | public tree excludes private task IDs outside the vendored canon |
 | `check-readme.py` and `generate-feature-board.py --check` | `ci-fast` | README size and local links (STD-09 R2, R12), the design feature board (STD-06 R9) |
 | `docs/standards/check.sh` | `ci-fast` (`standards-check`) | vendored standards (warns until vendored; fails in CI) |

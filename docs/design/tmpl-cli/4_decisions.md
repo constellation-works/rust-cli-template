@@ -1032,6 +1032,13 @@ re-vendors. Each line names the rule and what is unmet.
     `std::env` stand where Clippy is to take them over.
 - **STD-02@8 §R7**: the binary crate reads the environment, for the
   presentation variables and the log filter, in `tmpl-cli/src/output/`.
+- **STD-02@8 §R39**: the store's top-level modules import each other in a
+  cycle: `store.rs` imports `repository::Audit`, and `repository/audit/mod.rs`
+  imports `Store` back.
+- **STD-02@8 §R44**: the format-1 audit-line upgrader (`UPGRADES` in
+  `repository/audit/line.rs`) lives in the live audit codec, which the append
+  path in `repository/audit/mod.rs` imports, rather than in a unit named for
+  upgrades.
 - **STD-02@8 §R43**: `make structure` has no unit-map gate, which would fail
   on a crate or top-level module missing from `ARCHITECTURE.md`, a mapped path
   that does not exist, or a unit with no `//!` doc.
