@@ -221,16 +221,16 @@ CLI=crates/tmpl-cli/src
 # the data directory and the audit log through the kit's cw-fs and the notes
 # database through the kit's cw-sqlite. driver/ sets each mechanism up and
 # returns its handle; repository/ holds each record's use of it (its SQL and
-# row mapping); db/ holds the audit log's file names and converts its bytes;
+# row mapping; the audit repository's line.rs converts the audit line's bytes);
 # contract/ holds shapes that know nothing of how they are stored and hold no
 # rule (R4).
 ban "$STORE"         'std::(fs|net|process)|tempfile::|rustix::'           "the store reaches files through cw_fs"
 ban_import "$STORE"  'std' 'fs|net|process'                                "the store reaches files through cw_fs"
-ban "$STORE/db/audit.rs" 'cw_fs::|cw_sqlite\b'                           "db/audit.rs converts bytes; it must not do I/O"
-ban "$STORE/contract" 'crate::(db|driver|repository|store|Store)|super::super::|cw_fs::|cw_sqlite\b|rusqlite\b' "contract/ holds record shapes; they must not import db, the driver, repository, the store, file access or SQLite"
-ban_import "$STORE/contract" 'crate' 'db|driver|repository|store|Store'    "contract/ holds record shapes; they must not import db, the driver, repository or the store"
+ban "$STORE/repository/audit/line.rs" 'cw_fs::|cw_sqlite\b'             "repository/audit/line.rs converts bytes; it must not do I/O"
+ban "$STORE/contract" 'crate::(driver|repository|store|Store)|super::super::|cw_fs::|cw_sqlite\b|rusqlite\b' "contract/ holds record shapes; they must not import the driver, repository, the store, file access or SQLite"
+ban_import "$STORE/contract" 'crate' 'driver|repository|store|Store'       "contract/ holds record shapes; they must not import the driver, repository or the store"
 ban "$STORE/contract" 'fn check_|now_utc|SystemTime'                      "contract/ holds shapes only: no checks across records and no clock"
-[[ -e "$STORE/db/fsio.rs" ]] && err "store/db/fsio.rs: file access is the kit's cw-fs"
+[[ -e "$STORE/db" || -e "$STORE/db.rs" ]] && err "store/db: each record's mapping lives in its repository (the audit line in repository/audit/line.rs)"
 [[ -e "$STORE/driver/fs" || -e "$STORE/driver/fs.rs" ]] && err "store/driver/fs: there is no file driver; a file record's repository uses cw_fs directly"
 # Module names are singular: one record's module is named for the record.
 [[ -e "$STORE/contracts" ]] && err "store/contracts: the record shapes live in contract/"

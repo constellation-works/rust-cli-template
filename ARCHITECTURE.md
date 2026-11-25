@@ -126,10 +126,9 @@ driver/
 repository/
   mod.rs             Snapshot (one reader), Tx (one write transaction)
   note.rs            notes: the SQL and row mapping; all, get, bad records; put
-  audit.rs           audit: append
-db/
-  mod.rs             the audit log's lock file name
-  audit.rs           the persisted audit line and its upgrades
+  audit/
+    mod.rs           audit: append; the audit log's lock file name (AUDIT_LOCK_FILE)
+    line.rs          the persisted audit line and its upgrades; bytes only, no I/O
 contract/
   note.rs            Note, NoteId (1 to NoteId::MAX), Title, Body, Tag, Priority, NoteError
   audit.rs           AuditEvent, AuditStatus
@@ -212,10 +211,10 @@ Checked by grep over non-test sources, except that `rusqlite` and
   table, index, view or trigger, `PRAGMA user_version`, a `Step`) appears
   only under `driver/sqlite/schema/`, and only `schema/mod.rs` declares a
   list of steps. No public item names a `rusqlite` or
-  `cw_sqlite` type. `db/audit.rs` names neither `cw_fs` nor `cw_sqlite`.
-  `contract/` imports no `db`, `driver`, `repository`, `Store`, file access
+  `cw_sqlite` type. `repository/audit/line.rs` names neither `cw_fs` nor
+  `cw_sqlite`. `contract/` imports no `driver`, `repository`, `Store`, file access
   or SQLite, and defines no `check_*` function and reads no clock. There is
-  no `db/fsio.rs` and no `driver/fs/`. The crate reads no environment
+  no `db/` and no `driver/fs/`. The crate reads no environment
   variable and discovers no path.
 - `tmpl-cli-core`: no `std::fs`, `std::net`, `std::process`, `tempfile`,
   `rustix`, `cw_fs`, `cw_sqlite` or `rusqlite` anywhere, and no

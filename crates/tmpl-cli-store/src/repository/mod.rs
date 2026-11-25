@@ -9,7 +9,7 @@
 //! composes repositories in one read or one write, and no connection, path
 //! or borrowed document crosses into its hands.
 
-mod audit;
+pub(crate) mod audit;
 
 mod note;
 

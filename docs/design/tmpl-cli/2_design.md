@@ -39,8 +39,8 @@ the data directory: the `Store` facade (one read, one write transaction)
 over `driver/sqlite/` (the notes database's file and lock wait, and in
 `schema/` one module per table and the one ordered step list, handed out as
 a `cw_sqlite::Db`; no query), one repository per record
-(`note`: the notes' SQL and row mapping; `audit`), `db/audit.rs` (the
-persisted audit line) and the record shapes in `contract/`. A driver sets
+(`note`: the notes' SQL and row mapping; `audit`: the append, and in
+`audit/line.rs` the persisted audit line) and the record shapes in `contract/`. A driver sets
 one storage mechanism up once and returns a handle; a repository is one
 record's use of it. The core reaches a record only through
 `snapshot.<record>()` and `tx.<record>()`. The foundation is the cw-kit from
@@ -164,7 +164,7 @@ Each line is `{"format": 2, "at", "actor", "command", "status", "target",
 "error_code", "duration_ms"}`: identifiers only, never argument values or
 error text (STD-05 R13). `actor` is the OS user name read once in `Env`
 from `USER`, else `USERNAME`, serialized as `null` when neither is set; older
-format-1 lines without `actor` upgrade in memory via `db/audit.rs::UPGRADES`
+format-1 lines without `actor` upgrade in memory via `repository/audit/line.rs::UPGRADES`
 with `"actor": null`. The log is a side channel, so it fails open (STD-02
 R31): a line that cannot be written is a `warn` on stderr (after the command's
 own output or JSON error object) and never changes the command's result or

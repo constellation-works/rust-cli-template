@@ -5,7 +5,7 @@
 //! (STD-01 R31). An event holds stable identifiers only: the actor, the
 //! command path, the record it acted on, the outcome and a stable error code.
 //! Never argument values or error text, which can carry note contents or
-//! paths (STD-05 R13). How a line is persisted is `db/audit.rs`.
+//! paths (STD-05 R13). How a line is persisted is `repository/audit/line.rs`.
 
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;

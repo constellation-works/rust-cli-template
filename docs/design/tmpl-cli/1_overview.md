@@ -70,7 +70,7 @@ there.
 | Store facade: read, write transaction | [crates/tmpl-cli-store/src/store.rs](../../../crates/tmpl-cli-store/src/store.rs) |
 | The notes database: file, lock wait; schema steps per table in `schema/` | [crates/tmpl-cli-store/src/driver/sqlite/](../../../crates/tmpl-cli-store/src/driver/sqlite/) |
 | Repositories: the notes' SQL and row mapping; audit | [crates/tmpl-cli-store/src/repository/](../../../crates/tmpl-cli-store/src/repository/) |
-| Audit line, its upgrades | [crates/tmpl-cli-store/src/db/audit.rs](../../../crates/tmpl-cli-store/src/db/audit.rs) |
+| Audit line, its upgrades | [crates/tmpl-cli-store/src/repository/audit/line.rs](../../../crates/tmpl-cli-store/src/repository/audit/line.rs) |
 | Private SQLite database: WAL, one write transaction, read-only reader, migrations | `cw-sqlite` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/9c9cc998720f0a75041be3451c14fbaf80f29dc8/crates/cw-sqlite) |
 | Append, lock, private state | `cw-fs` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/9c9cc998720f0a75041be3451c14fbaf80f29dc8/crates/cw-fs) |
 | Goldens of help and output | [crates/tmpl-cli/tests/golden.rs](../../../crates/tmpl-cli/tests/golden.rs) |

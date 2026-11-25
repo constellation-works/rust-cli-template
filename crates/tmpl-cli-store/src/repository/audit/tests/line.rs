@@ -1,6 +1,6 @@
 use crate::contract::{AuditEvent, AuditStatus};
-use crate::db::audit::{AUDIT_FORMAT, AuditLine, UPGRADES, decode_line, encode_line};
 use crate::error::Error;
+use crate::repository::audit::line::{AUDIT_FORMAT, AuditLine, UPGRADES, decode_line, encode_line};
 use std::path::Path;
 use time::macros::datetime;
 

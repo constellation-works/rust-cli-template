@@ -1,9 +1,20 @@
 //! The audit repository: append-only audit events in `<root>/audit.jsonl`.
+//!
+//! - `line`: the audit log's persisted line and its upgrades; bytes only,
+//!   no I/O.
+//!
+//! The append reaches the file through the kit's `cw_fs` under its own lock
+//! file, [`AUDIT_LOCK_FILE`].
+
+pub(crate) mod line;
 
 use crate::Store;
 use crate::contract::AuditEvent;
-use crate::db::audit;
 use crate::error::Result;
+
+/// The audit-log lock file's name under the data directory: an append holds
+/// it, so concurrent audit lines never interleave.
+pub(crate) const AUDIT_LOCK_FILE: &str = ".audit.lock";
 
 /// The audit log of one store.
 #[derive(Clone, Copy, Debug)]
@@ -32,7 +43,7 @@ impl<'a> Audit<'a> {
 
     fn append_line(&self, event: &AuditEvent) -> Result<()> {
         let path = self.store.audit_path();
-        let line = audit::encode_line(event)?;
+        let line = line::encode_line(event)?;
         if !cw_fs::inspect_dir(self.store.root())? {
             cw_fs::create_private_dir(self.store.root())?;
         }
@@ -41,3 +52,6 @@ impl<'a> Audit<'a> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -90,7 +90,7 @@ fn event(command: &str) -> AuditEvent {
 
 #[test]
 fn add_refuses_when_another_writer_holds_the_lock_and_writes_nothing() {
-    let dir = crate::db::tests::private_tempdir();
+    let dir = crate::tests::private_tempdir();
     let store = Store::open(dir.path()).with_lock_wait(Duration::from_millis(60));
     let held = hold_write_elsewhere(dir.path());
     let err = add(&store, new_note("blocked")).unwrap_err();
@@ -105,7 +105,7 @@ fn add_refuses_when_another_writer_holds_the_lock_and_writes_nothing() {
 
 #[test]
 fn record_audit_appends_one_line_per_event_and_creates_the_directory() {
-    let dir = crate::db::tests::private_tempdir();
+    let dir = crate::tests::private_tempdir();
     let root = dir.path().join("data");
     let store = Store::open(&root);
     store.audit().append(&event("note add")).unwrap();
@@ -123,7 +123,7 @@ fn record_audit_appends_one_line_per_event_and_creates_the_directory() {
 fn record_audit_succeeds_while_the_store_lock_is_held() {
     // Defect 1: a command that timed out on the store lock must still write
     // its failure audit line without waiting a second lock deadline.
-    let dir = crate::db::tests::private_tempdir();
+    let dir = crate::tests::private_tempdir();
     let deadline = Duration::from_millis(80);
     let store = Store::open(dir.path()).with_lock_wait(deadline);
     let _held = hold_write_elsewhere(dir.path());
@@ -142,7 +142,7 @@ fn record_audit_succeeds_while_the_store_lock_is_held() {
 
 #[test]
 fn record_audit_waits_for_the_audit_lock() {
-    let dir = crate::db::tests::private_tempdir();
+    let dir = crate::tests::private_tempdir();
     let store = Store::open(dir.path()).with_lock_wait(Duration::from_millis(60));
     let _held = hold_lock_elsewhere(&dir.path().join(".audit.lock"));
     let err = store.audit().append(&event("note add")).unwrap_err();
@@ -158,7 +158,7 @@ fn record_audit_waits_for_the_audit_lock() {
 
 #[test]
 fn record_audit_encode_failure_is_not_io_and_names_no_path() {
-    let dir = crate::db::tests::private_tempdir();
+    let dir = crate::tests::private_tempdir();
     let store = Store::open(dir.path());
     let bad_date = time::Date::from_calendar_date(-1, time::Month::January, 1).unwrap();
     let mut bad_event = event("note add");
@@ -181,7 +181,7 @@ fn record_audit_encode_failure_is_not_io_and_names_no_path() {
 fn a_write_through_a_symlinked_root_is_refused_before_any_side_effect() {
     // STD-02 R34: the public write checks the root before it creates the
     // directory or the database, as the audit append does.
-    let dir = crate::db::tests::private_tempdir();
+    let dir = crate::tests::private_tempdir();
     let target = dir.path().join("target");
     std::fs::create_dir(&target).unwrap();
     {
