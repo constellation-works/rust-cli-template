@@ -1,3 +1,10 @@
+---
+type: changelog
+summary: Notable changes to tmpl-cli by release, compiled at release time from merged work.
+created_date: 2026-09-26
+updated_date: 2026-11-25
+---
+
 # Changelog
 
 All notable changes to tmpl-cli. Compiled at release time from merged work;

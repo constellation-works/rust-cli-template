@@ -1,6 +1,8 @@
 ---
 type: design
 summary: "Spec: output contract — streams, modes, JSON fields, errors and exit codes"
+created_date: 2026-09-26
+updated_date: 2026-11-24
 last_validated: 2026-09-26
 ---
 

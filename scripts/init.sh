@@ -179,11 +179,15 @@ if [[ "$KIND" == workspace ]]; then
 else
   standards="STD-01,STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09"
 fi
+today="$(date -u +%Y-%m-%d)"
 cat >"$ROOT/about.md" <<CARD
 ---
 codebase: $NAME
 owner: daniel
+type: codebase
 summary: <One line — what $NAME does and for whom.>
+created_date: $today
+updated_date: $today
 status: active
 stack: Rust
 gate: pr

@@ -1,7 +1,8 @@
 ---
 title: tmpl-cli — Design
 owner: claude
-last_updated: 2026-11-25
+created_date: 2026-09-26
+updated_date: 2026-11-25
 last_validated: 2026-09-26
 status: Draft
 feature: tmpl-cli
@@ -233,6 +234,7 @@ and reads no environment of its own.
 | `check-source-style.sh` | `ci-fast` | what stable rustfmt cannot check: blank lines between the module doc, the use block, top-level items and impl methods (STD-12 R12), lines of at most 100 characters apart from one string literal or URL, with `rustfmt.toml` failing at any other `max_width` (R13), one module per `use` (R16), a comment before each `rustfmt::skip` (R19); both scripts run `check-source-style.py`, whose header lists the known limits |
 | `check-private-task-ids.sh` | `ci-fast` | public tree excludes private task IDs outside the vendored canon |
 | `check-readme.py` and `generate-feature-board.py --check` | `ci-fast` | README size and local links (STD-09 R2, R12), the design feature board (STD-06 R9) |
+| `check-doc-frontmatter.py` | `ci-fast` | `type` and a one-sentence `summary` on every root and `docs/` Markdown document but `README.md`, the agent files and the vendored standards (STD-09 R15), with `created_date` and `updated_date` as dates in order and no legacy date key (R29; the vendored standards are skipped, a recorded deviation); the numbered design docs' fields and a known `status` (STD-06 R4) |
 | `docs/standards/check.sh` | `ci-fast` (`standards-check`) | vendored standards (warns until vendored; fails in CI) |
 | `clippy --all-targets -D warnings` with the STD-02 lint table and its adoptable additions, plus STD-12's lints and `clippy.toml` | `ci-lint` | no unwrap/expect/print/dbg, no lock across await, no wildcard enum arms, no narrowing `as`; no one-letter binding (`min_ident_chars`, no allowed idents; STD-12 R14), no glob import (`wildcard_imports`, `enum_glob_use`; R15), every public item documented (`missing_docs`; R18); and, through `clippy.toml`'s `disallowed_methods` and `disallowed_types` (denied), no `std::fs` call or file type, no `std::env` read, no `Env::capture` outside the core's `environment.rs` and no argument read outside `main.rs`, and no spawned or ended process, aliases and tests included, each exemption a module-level `#![expect]` |
 | `cargo deny check` | `ci-lint` | advisories, licenses, sources |

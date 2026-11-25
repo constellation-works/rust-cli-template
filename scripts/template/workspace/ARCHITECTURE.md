@@ -1,3 +1,10 @@
+---
+type: architecture
+summary: The crates, their allowed and forbidden edges, each crate's modules, and the rules the structure gates hold them to.
+created_date: 2026-11-25
+updated_date: 2026-11-25
+---
+
 # Architecture
 
 The layer model that `scripts/check-dependency-direction.sh` enforces

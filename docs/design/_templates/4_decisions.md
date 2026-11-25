@@ -1,7 +1,8 @@
 ---
 title: <Feature> — Decisions
 owner: <agent family: codex | claude | grok | gemini>
-last_updated: YYYY-MM-DD
+created_date: YYYY-MM-DD
+updated_date: YYYY-MM-DD
 last_validated: YYYY-MM-DD
 status: Draft
 feature: <feature-slug>

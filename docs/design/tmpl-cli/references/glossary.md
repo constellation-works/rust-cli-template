@@ -1,6 +1,8 @@
 ---
 type: design
 summary: "Glossary: tmpl-cli"
+created_date: 2026-09-26
+updated_date: 2026-11-25
 last_validated: 2026-09-26
 ---
 

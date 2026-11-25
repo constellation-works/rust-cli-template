@@ -1,7 +1,8 @@
 ---
 title: tmpl-cli — Decisions
 owner: claude
-last_updated: 2026-11-25
+created_date: 2026-09-26
+updated_date: 2026-11-25
 last_validated: 2026-09-26
 status: Draft
 feature: tmpl-cli
@@ -1081,14 +1082,6 @@ Each rule below is a recorded deviation until the follow-up that brings the
 template into line closes it. That follow-up is not part of the change that
 re-vendors. Each line names the rule and what is unmet.
 
-- **STD-06@2 §R4**: the numbered design docs and the doc templates in
-  `docs/design/_templates/` carry `last_updated`, not `created_date` and
-  `updated_date`.
-- **STD-09@3 §R15**: some docs lack `type` and `summary` frontmatter:
-  - `ARCHITECTURE.md`, `CHANGELOG.md`, `about.md`, `docs/usage.md`,
-    `docs/development.md`;
-  - `docs/design/CONVENTIONS.md`, `docs/design/FEATURES.md` and
-    `docs/design/_templates/1_scope.md`.
 - **STD-09@3 §R16**: there is no generated `docs/INDEX.md` and no CI check
   that it is current.
 - **STD-09@3 §R17**: no link and anchor check covers the root and `docs/`
@@ -1114,6 +1107,18 @@ Closed since:
 - **STD-02@8 §R7**: the environment is captured in the core
   (`crates/tmpl-cli-core/src/environment.rs::capture_env`); the CLI crate's
   `main` reads only the arguments.
+- **STD-06@2 §R4**: the numbered design docs and the templates carry
+  `created_date` and `updated_date`, and `scripts/check-doc-frontmatter.py`
+  (in `make docs-check`) holds every R4 field, the date order and the
+  status.
+- **STD-09@3 §R15**: every root and `docs/` Markdown document but the
+  exempt ones carries `type` and a one-sentence `summary` (the feature board
+  is generated with them, and `scripts/init.sh` writes `type` into a copy's
+  `about.md`); the same check holds it. Each of them also carries
+  `created_date` and `updated_date`, which STD-09@4 §R29 (vendored since
+  the record was written) asks of every document with frontmatter, and the
+  check holds that too. The vendored `docs/standards/` is the one gap: see
+  "The vendored standards carry no project frontmatter".
 
 ### Consequences
 
@@ -1121,6 +1126,34 @@ Closed since:
   gap above already recorded rather than introduced by the change.
 - Cost: until the follow-up lands, a project made from the template inherits
   these gaps along with the record of them.
+
+## The vendored standards carry no project frontmatter
+
+**Recorded:** 2026-11-25
+**Code anchors:** `scripts/check-doc-frontmatter.py::documents`
+
+### Context
+
+STD-09@4 §R15 asks every Markdown document under `docs/` to open with
+`type` and `summary`, and §R29 asks each such document for `created_date`
+and `updated_date`. The vendored standards under `docs/standards/` are
+Markdown under `docs/`, and most of them carry no such frontmatter (the
+`STD-nn.md` files carry the canon's own). STD-09 also says an adopting repo
+never edits its vendored copy, and `docs/standards/check.sh` fails on any
+byte changed there.
+
+### Decision
+
+Deviation from STD-09@4 §R15 and §R29 for `docs/standards/` only:
+`scripts/check-doc-frontmatter.py` skips the directory, and the template
+adds no frontmatter to it. The alternative, adding frontmatter to the
+vendored files, breaks the vendoring check and the rule never to edit them.
+
+### Consequences
+
+- Every other document under `docs/` is held to both rules.
+- Cost: the vendored files stay outside the frontmatter check until the
+  canon either carries the frontmatter itself or exempts vendored copies.
 
 ## One init command makes three kinds from one marked tree
 

@@ -1,3 +1,10 @@
+---
+type: guide
+summary: How to set up a checkout of tmpl-cli and run the gates a change must pass.
+created_date: 2026-11-22
+updated_date: 2026-11-25
+---
+
 # Contributing
 
 Install Rust with rustfmt and Clippy, Git, Make, Python 3 and `jq` (the
