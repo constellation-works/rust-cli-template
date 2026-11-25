@@ -15,7 +15,7 @@ tmpl-cli  ->  tmpl-cli-core  ->  tmpl-cli-store
 `cw-base` and `cw-fs` are the cw-kit, from
 [constellation-works/satellites](https://github.com/constellation-works/satellites),
 a git dependency pinned in the root `Cargo.toml` to commit
-`b8b6809c15cafeeece299f4f2aa2a974a7491adb` (no release is published yet; moving the
+`320e07f8d41c218c57f57a9f50820a2b6c34fb98` (no release is published yet; moving the
 pin is a change of its own).
 
 | Crate | Kind | Owns | Internal and kit dependencies | Banned |

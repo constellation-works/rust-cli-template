@@ -40,7 +40,7 @@ the data directory: the `Store` facade (one read, one locked write) over
 persisted audit line), one repository per record (`notes`, `audit`) and
 the record shapes in `contracts/`. The foundation is the cw-kit from
 [constellation-works/satellites](https://github.com/constellation-works/satellites),
-pinned to commit `b8b6809c15cafeeece299f4f2aa2a974a7491adb`: `cw-base` (the
+pinned to commit `320e07f8d41c218c57f57a9f50820a2b6c34fb98`: `cw-base` (the
 one error type every unit translates its typed error into, with its `Kind`
 and stable code), which the store and the core name, and `cw-fs` (durable
 writes, appends, locking and private-state checks, mechanism only), which
@@ -190,10 +190,12 @@ the toolchain and tools. Dependabot proposes crate and action updates.
   template's.
 - Under plain `cargo test` (nextest absent) there is no per-test timeout;
   only the CI job timeout bounds a hang.
-- Holder information in `.lock` is best effort: it is written just after the
-  lock is taken, so a waiter can briefly read the previous holder's line
-  (suppressed as unknown if that pid has already exited or the record exceeds 1 KiB), and a failure to
-  write it is logged rather than failing the write.
+- Holder information in `.lock` is best effort: the kit writes it just after
+  the lock is taken and clears it on release, so a waiter can briefly find no
+  record, and a record whose process has exited or that exceeds 4096 bytes
+  names no holder. A failure to write it does not fail the lock: the kit
+  returns it from `Lock::holder_error`, and the store logs it as a warning
+  and carries on with the write.
 - The ownership and mode checks are unix-only; on Windows they are no-ops.
 - The audit log grows without bound and has no reader command; rotating or
   querying it is left to the domain. A crash mid-append can leave a torn last

@@ -167,19 +167,19 @@ impl Store {
     }
 
     pub(crate) fn lock(&self, label: &str) -> Result<Lock> {
-        Ok(Lock::acquire(
+        Ok(warn_on_holder_error(Lock::acquire(
             &self.root.join(LOCK_FILE),
             label,
             self.lock_wait,
-        )?)
+        )?))
     }
 
     pub(crate) fn audit_lock(&self, label: &str) -> Result<Lock> {
-        Ok(Lock::acquire(
+        Ok(warn_on_holder_error(Lock::acquire(
             &self.root.join(AUDIT_LOCK_FILE),
             label,
             self.lock_wait,
-        )?)
+        )?))
     }
 
     fn load(&self) -> Result<StoreDocument> {
@@ -190,4 +190,14 @@ impl Store {
         let bytes = cw_fs::read(&path, self.cap)?;
         format::decode(&path, &bytes)
     }
+}
+
+/// Fail open (STD-02 R31): the holder record only explains a timeout to the
+/// next waiter (STD-03 R7), so the kit holds the lock even when it could not
+/// write the record, and the store reports that as a warning.
+fn warn_on_holder_error(lock: Lock) -> Lock {
+    if let Some(error) = lock.holder_error() {
+        tracing::warn!(path = %lock.path().display(), %error, "could not record the lock holder");
+    }
+    lock
 }

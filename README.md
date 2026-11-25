@@ -6,7 +6,7 @@
 </div>
 
 <!-- template-only:begin -->
-> This repository is the starting point for a new constellation Rust CLI, with three crates laid out by app over the cw-kit (`cw-base` and `cw-fs` from constellation-works/satellites, pinned to commit b8b6809), an output contract, a local store, and gates and CI that meet the constellation standards. Create a copy with GitHub's Use this template or the umbrella's operations/scripts/new-rust-cli.sh.
+> This repository is the starting point for a new constellation Rust CLI, with three crates laid out by app over the cw-kit (`cw-base` and `cw-fs` from constellation-works/satellites, pinned to commit 320e07f), an output contract, a local store, and gates and CI that meet the constellation standards. Create a copy with GitHub's Use this template or the umbrella's operations/scripts/new-rust-cli.sh.
 >
 > Click **Use this template**, clone the new repository, then run
 > `scripts/rename-template.sh <name>` and `make ci`. The rename updates the
