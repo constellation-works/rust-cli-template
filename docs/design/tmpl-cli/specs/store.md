@@ -75,10 +75,14 @@ Version 1 is one `STRICT` table:
   holder.
 - A read is one read-only connection holding one read transaction
   (`Store::read`), so every query in it sees one committed version. It takes
-  no lock and writes nothing of its own. In a writable directory SQLite
-  creates a missing `-wal` or `-shm` (owner-only) to read; in a directory this
-  process cannot write, the database is read `immutable` when its `-wal` is
-  empty and refused otherwise.
+  no lock and writes no row. In a directory this process can write, the
+  reader shares the `-shm` index with a writer in the same process, so a
+  snapshot held across `Store::write` does not block that write; SQLite may
+  rebuild the `-shm` (its index, not note content) and creates a missing
+  `-wal` (empty) or `-shm`, owner-only. In a directory this process cannot
+  write, a read writes nothing: the index is opened read-only, and when the
+  WAL cannot be read that way the database is read `immutable` if its `-wal`
+  is empty and refused otherwise.
 - A missing data directory or database is an empty store: a read creates
   nothing.
 - A database at a newer schema version than this build's is refused for reads

@@ -845,7 +845,7 @@ integration test.
 The workspace depends on the kit's `cw-base` (`Error`, `Kind`, a clock) and
 `cw-fs` (atomic write, append, bounded read, listing, removal, private
 directories, owner-only checks, one advisory lock) as git dependencies
-pinned to commit `5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b`, since no release
+pinned to commit `13e8954eee4967ad1565bdea8738d36ab0d38b3e`, since no release
 is published; `deny.toml` allows that one git source. The foundation crate
 is deleted, and the template keeps three crates.
 
@@ -958,7 +958,7 @@ The notes live in `<root>/notes.db`, opened only through `cw_sqlite::Db`.
   it. A note-write timeout names no holder. A note id above `i64::MAX` is now
   a usage error (exit 2) where it was a missing note (exit 1). SQLite keeps
   `-wal` and `-shm` beside the database, and in a writable directory a read
-  creates them when they are missing.
+  may rebuild the `-shm` index and creates either when it is missing.
 
 ## Public design documents use public references
 

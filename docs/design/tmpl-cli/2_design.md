@@ -44,7 +44,7 @@ one storage mechanism up once and returns a handle; a repository is one
 record's use of it. The core reaches a record only through
 `snapshot.<record>()` and `tx.<record>()`. The foundation is the cw-kit from
 [constellation-works/satellites](https://github.com/constellation-works/satellites),
-pinned to commit `5fc33e3eb2b39dac43ee57a2fec4954cb3ddf94b`: `cw-base` (the
+pinned to commit `13e8954eee4967ad1565bdea8738d36ab0d38b3e`: `cw-base` (the
 one error type every unit translates its typed error into, with its `Kind`
 and stable code), which the store and the core name; `cw-fs` (appends,
 locking and private-state checks, mechanism only) and `cw-sqlite` (one
@@ -215,5 +215,7 @@ the toolchain and tools. Dependabot proposes crate and action updates.
 - A store holding any bad record remains readable (valid notes plus stderr
   warnings), but writes refuse until the bad record is fixed by hand with
   SQL ([4_decisions.md](./4_decisions.md#bad-note-records-are-isolated-on-read-and-block-writes)).
-- In a writable data directory a read creates a missing `notes.db-wal` or
-  `notes.db-shm` (owner-only), as SQLite needs them to read a WAL database.
+- In a writable data directory a read may rebuild `notes.db-shm` (SQLite's
+  index) and creates a missing `notes.db-wal` (empty) or `notes.db-shm`,
+  owner-only, as SQLite needs them to read a WAL database. In a read-only
+  directory a read writes nothing.

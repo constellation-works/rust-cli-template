@@ -29,8 +29,9 @@ SQLite's `notes.db-wal` and `notes.db-shm` beside it. Each `note add` appends
 one event to `audit.jsonl` with the note ID and outcome; `.audit.lock` is its
 lock file. Every file is `0600` and the directory `0700` on Unix. Reading
 commands change no note and write no audit line; in a writable directory a
-read creates a missing `notes.db-wal` or `notes.db-shm`, owner-only, as
-SQLite needs them to read.
+read may rebuild `notes.db-shm` (SQLite's index, not your notes) and
+creates a missing `notes.db-wal` (empty) or `notes.db-shm`, owner-only; in a
+directory you cannot write, a read writes nothing.
 
 ## Troubleshooting
 
