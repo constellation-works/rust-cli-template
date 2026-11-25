@@ -1,10 +1,10 @@
 //! The root of the command tree: the program, its global flags and the
 //! parse entry point. Each noun's subcommands, flags and help live beside its
-//! handlers in `commands/` (STD-01 R25: declared once). `--help` is rendered
+//! handlers in `command/` (STD-01 R25: declared once). `--help` is rendered
 //! from these doc comments, so they are user-facing text: placeholders like
 //! `<id>`, never real ids or tracker numbers (STD-01 R23).
 
-use crate::commands::Command;
+use crate::command::Command;
 use crate::output::FormatArg;
 use clap::error::ErrorKind;
 use clap::{Args, CommandFactory, FromArgMatches, Parser};

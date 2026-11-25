@@ -16,7 +16,7 @@
 //! The audit log is a side channel, so it fails open (STD-02 R31): a line that
 //! cannot be written never fails the command that already ran, and is reported
 //! as a warning through `tracing`. `scripts/check-dependency-direction.sh`
-//! rejects `crate::apps` imports in the runtime: apps depend on it, never the
+//! rejects `crate::app` imports in the runtime: apps depend on it, never the
 //! reverse.
 
 use std::time::Instant;

@@ -7,7 +7,7 @@
 //! never reach it: clap reports them and exits 2 before a command runs.
 
 use std::io;
-use tmpl_cli_core::apps::note;
+use tmpl_cli_core::app::note;
 use tmpl_cli_core::{Error, Kind};
 
 /// Writing the result to stdout failed for a reason other than a closed pipe.

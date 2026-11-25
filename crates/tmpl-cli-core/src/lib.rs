@@ -1,6 +1,6 @@
 //! The tmpl-cli apps as a library.
 //!
-//! - [`apps`]: one module per subject a user names on the command line
+//! - [`app`]: one module per subject a user names on the command line
 //!   (today `note`), each with its `Command`, `Outcome`, `Error`, one `exec`,
 //!   its flows and its pure rules;
 //! - `runtime`: the context an app runs against, the one chokepoint every
@@ -27,7 +27,7 @@
     )
 )]
 
-pub mod apps;
+pub mod app;
 mod composition;
 mod runtime;
 #[cfg(feature = "test-support")]

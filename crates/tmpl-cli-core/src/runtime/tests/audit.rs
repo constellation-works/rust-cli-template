@@ -1,4 +1,4 @@
-use crate::apps::note::{self, Command, NewNote};
+use crate::app::note::{self, Command, NewNote};
 use crate::composition::Error;
 use crate::runtime::{AuditGuard, AuditMeta, Ctx};
 use std::path::PathBuf;

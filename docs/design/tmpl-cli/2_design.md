@@ -29,8 +29,8 @@ Three crates laid out by app over the cw-kit (why:
 `tmpl-cli` is the surface: `cli` (the root flags), `commands` (one module
 per noun, holding its subcommands, flags and help, and mapping its arguments
 to an app's `Command` and the `Outcome` to a payload) and `output`.
-`tmpl-cli-core` holds the apps (`apps/note/`: `Command`, `Outcome`, `Error`,
-`exec`, one flow per command and the pure `rules`: the next id and list
+`tmpl-cli-core` holds the apps (`app/note/`: `Command`, `Outcome`, `Error`,
+`exec`, one flow per command and the pure `rule`: the next id and list
 selection), the `runtime` they share (the context, the one chokepoint every
 app's `exec` forwards to, the audit guard) and `composition` (the only code
 that reads the environment or picks the data directory, the store and the
@@ -65,7 +65,7 @@ alone, so it runs in `make ci-fast` without compiling.
    (`COLUMNS`, terminals only). Nothing else in the program asks these
    questions; `scripts/check-terminal-guard.sh` rejects any attempt.
 3. The noun's handler maps the parsed arguments to the app's `Command` and
-   calls `apps::note::exec` with the environment `main` captured (`Env`, plus
+   calls `app::note::exec` with the environment `main` captured (`Env`, plus
    `--root`). The app's `exec` forwards to the runtime's `exec`
    (`runtime/exec.rs`), which starts the runtime: composition picks the data
    directory, resolves the OS actor (`USER`, else `USERNAME`, else `None`),
@@ -138,7 +138,7 @@ store leaves nothing behind, and closes that read. It then calls
 database (creating it `0600` and running any schema step it lacks), begins
 one `IMMEDIATE` transaction (waiting up to 10 seconds for another writer,
 then `store_locked`), refuses a store with bad records, and runs the flow:
-it assigns the next id (`rules::next_id`: checked max id + 1, refusing with
+it assigns the next id (`rule::next_id`: checked max id + 1, refusing with
 `note_id_exhausted` at `NoteId::MAX`, SQLite's largest integer) and puts the
 note. The transaction commits when the flow succeeds and rolls back when it
 fails. A database at a newer schema version is refused for reads and writes

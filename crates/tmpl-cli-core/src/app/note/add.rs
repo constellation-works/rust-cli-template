@@ -1,6 +1,6 @@
 //! `note add`: assign the next id and store the note.
 
-use super::rules::{self, NewNote};
+use super::rule::{self, NewNote};
 use super::{Error, Outcome};
 use crate::runtime::Ctx;
 
@@ -20,7 +20,7 @@ pub(super) fn add(ctx: &Ctx<'_>, new: NewNote) -> Result<Outcome, Error> {
         if let Some(bad) = notes.bad_records()?.first() {
             return Err(bad.refusal().into());
         }
-        if rules::next_id(&notes.all()?).is_none() {
+        if rule::next_id(&notes.all()?).is_none() {
             return Err(Error::IdExhausted { path: store.path() });
         }
     }
@@ -30,7 +30,7 @@ pub(super) fn add(ctx: &Ctx<'_>, new: NewNote) -> Result<Outcome, Error> {
     // workspace's error type, which is what the store's write returns; its
     // code and its typed form (by `downcast_ref`) are kept.
     let note = store.write(|tx| {
-        let id = rules::next_id(&tx.notes().all()?)
+        let id = rule::next_id(&tx.notes().all()?)
             .ok_or_else(|| cw_base::Error::from(Error::IdExhausted { path: store.path() }))?;
         let note = new.into_note(id, now);
         tx.notes().put(note.clone())?;

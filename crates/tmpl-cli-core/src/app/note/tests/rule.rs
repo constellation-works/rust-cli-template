@@ -1,4 +1,4 @@
-use crate::apps::note::rules::{ListFilter, NewNote, next_id, select};
+use crate::app::note::rule::{ListFilter, NewNote, next_id, select};
 use std::num::NonZeroUsize;
 use time::OffsetDateTime;
 use tmpl_cli_store::contract::{Note, NoteId, Priority, Tag};

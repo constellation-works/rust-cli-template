@@ -90,7 +90,7 @@ dependencies the rules should not compile against), `store/` moves out whole.
 ## Commands are one module per noun
 
 **Recorded:** 2026-09-26
-**Code anchors:** `crates/tmpl-cli/src/commands/mod.rs`, `crates/tmpl-cli/src/commands/note.rs`
+**Code anchors:** `crates/tmpl-cli/src/command/mod.rs`, `crates/tmpl-cli/src/command/note.rs`
 
 ### Context
 
@@ -100,12 +100,12 @@ files, and the flags sit far from the handlers that use them.
 
 ### Decision
 
-`commands/mod.rs` holds the `Command` enum of nouns, the audited-command
+`command/mod.rs` holds the `Command` enum of nouns, the audited-command
 table and `run_with`, the one chokepoint. Each noun is a module holding its
 subcommand enum, its `Args` structs, help examples and handlers
-(`commands/note.rs`); `cli.rs` keeps only the program root and the global
+(`command/note.rs`); `cli.rs` keeps only the program root and the global
 flags. A noun that outgrows one file becomes a directory split along its
-verbs, `commands/note/{mod,add,list,show,support}.rs` with `tests/` beside
+verbs, `command/note/{mod,add,list,show,support}.rs` with `tests/` beside
 them, as Orbit's `command/` tree does. The split follows responsibilities, not
 length (STD-02@3 §R18).
 
@@ -117,14 +117,14 @@ length (STD-02@3 §R18).
   surface for it.
 - Update (2026-11-24): the audited-command table and the chokepoint moved
   into the app (`Command::audit` and `exec` in
-  `crates/tmpl-cli-core/src/apps/note/mod.rs`); a noun's module now maps its
+  `crates/tmpl-cli-core/src/app/note/mod.rs`); a noun's module now maps its
   arguments to the app's `Command` and its `Outcome` to a payload. See
   [The template is laid out by app in three crates](#the-template-is-laid-out-by-app-in-three-crates).
 
 ## Mutating commands are audited through one guard
 
 **Recorded:** 2026-09-26
-**Code anchors:** `crates/tmpl-cli-core/src/runtime/audit.rs::AuditGuard`; `crates/tmpl-cli-core/src/runtime/exec.rs::exec`; `crates/tmpl-cli-core/src/apps/note/mod.rs::Command::audit`
+**Code anchors:** `crates/tmpl-cli-core/src/runtime/audit.rs::AuditGuard`; `crates/tmpl-cli-core/src/runtime/exec.rs::exec`; `crates/tmpl-cli-core/src/app/note/mod.rs::Command::audit`
 
 ### Context
 
@@ -325,7 +325,7 @@ sets, and then it fails.
 ## A list's JSON is an envelope with total and truncated
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli/src/output/payload.rs::ListPayload`; `crates/tmpl-cli-core/src/apps/note/rules.rs::NoteList`; `crates/tmpl-cli/src/commands/note.rs::list_notice`
+**Code anchors:** `crates/tmpl-cli/src/output/payload.rs::ListPayload`; `crates/tmpl-cli-core/src/app/note/rule.rs::NoteList`; `crates/tmpl-cli/src/command/note.rs::list_notice`
 
 ### Context
 
@@ -353,7 +353,7 @@ matching notes` on stderr in every mode. `--limit` must be at least 1.
 ## add names what it wrote on stderr
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli/src/commands/note.rs::output`; `crates/tmpl-cli-core/src/apps/note/add.rs::add`
+**Code anchors:** `crates/tmpl-cli/src/command/note.rs::output`; `crates/tmpl-cli-core/src/app/note/add.rs::add`
 
 ### Context
 
@@ -637,7 +637,7 @@ govern. Each binds as soon as it does, and this entry is edited then:
 ## The template is laid out by app in three crates
 
 **Recorded:** 2026-11-24
-**Code anchors:** `Cargo.toml` `[workspace] members`; `scripts/check-dependency-direction.sh::policy`; `crates/tmpl-cli-core/src/runtime/exec.rs::App`, `::exec`; `crates/tmpl-cli-core/src/apps/note/mod.rs::exec`; `crates/tmpl-cli-store/src/store.rs::Store`
+**Code anchors:** `Cargo.toml` `[workspace] members`; `scripts/check-dependency-direction.sh::policy`; `crates/tmpl-cli-core/src/runtime/exec.rs::App`, `::exec`; `crates/tmpl-cli-core/src/app/note/mod.rs::exec`; `crates/tmpl-cli-store/src/store.rs::Store`
 
 ### Context
 
@@ -663,10 +663,10 @@ Three crates, `tmpl-cli -> tmpl-cli-core -> tmpl-cli-store`
 ([ARCHITECTURE.md](../../../ARCHITECTURE.md)):
 
 - `tmpl-cli` declares arguments, maps them to an app's `Command`, calls
-  `apps::<app>::exec` and renders the `Outcome`; `main` captures the
+  `app::<app>::exec` and renders the `Outcome`; `main` captures the
   environment into the core's `Env` once. It names only the core.
-- `tmpl-cli-core` holds `apps/<app>/` (`Command`, `Outcome`, `Error`,
-  `exec`, `run`, one flow per command and the app's pure `rules`),
+- `tmpl-cli-core` holds `app/<app>/` (`Command`, `Outcome`, `Error`,
+  `exec`, `run`, one flow per command and the app's pure `rule`),
   `runtime/` (the context a flow receives, the one chokepoint, the audit
   guard, the errors every app shares) and `composition.rs` (the only code that reads the
   environment or picks the data directory, the store and the clock). A flow
@@ -728,7 +728,7 @@ the crate this decision made is deleted, and its two folders are the kit's
 replaced the deleted files.
 
 **Recorded:** 2026-11-24
-**Code anchors:** the kit's `cw_base::Error`, `cw_base::Kind` and `cw_fs::Error`; `crates/tmpl-cli-store/src/error.rs` (`impl From<Error> for cw_base::Error`); `crates/tmpl-cli-core/src/apps/note/mod.rs::Error`; `crates/tmpl-cli/src/error.rs::exit_code`; `scripts/check-dependency-direction.sh::policy`
+**Code anchors:** the kit's `cw_base::Error`, `cw_base::Kind` and `cw_fs::Error`; `crates/tmpl-cli-store/src/error.rs` (`impl From<Error> for cw_base::Error`); `crates/tmpl-cli-core/src/app/note/mod.rs::Error`; `crates/tmpl-cli/src/error.rs::exit_code`; `scripts/check-dependency-direction.sh::policy`
 
 ### Context
 
