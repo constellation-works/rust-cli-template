@@ -9,6 +9,11 @@
         reason = "integration tests assert fixture setup"
     )
 )]
+#![expect(
+    clippy::disallowed_methods,
+    clippy::disallowed_types,
+    reason = "a test sets up fixture files and runs the built binary; production code may not"
+)]
 
 use cw_base::Clock;
 use std::path::Path;

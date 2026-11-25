@@ -7,7 +7,11 @@
 //! only `HOME`, `PATH`, `TMPL_CLI_ROOT` and `GIT_CEILING_DIRECTORIES`
 //! pointing into the fixture, so no test can read or write the real home or
 //! inherit the developer's `TMPL_CLI_*`, `NO_COLOR` or `TERM` (STD-03 R20).
-
+#![expect(
+    clippy::disallowed_methods,
+    clippy::disallowed_types,
+    reason = "a test sets up fixture files and runs the built binary; production code may not"
+)]
 // Each integration-test binary compiles this module and uses a different
 // subset of it.
 #![allow(

@@ -8,6 +8,11 @@
     )
 )]
 #![cfg(unix)]
+#![expect(
+    clippy::disallowed_methods,
+    clippy::disallowed_types,
+    reason = "a test sets up fixture files and runs the built binary; production code may not"
+)]
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -289,5 +294,43 @@ fn check_architecture_map_fails_on_a_unit_without_a_first_line_doc() {
         "crates/demo/src/main.rs: `demo: crate root main.rs` does not begin with a `//!` doc line",
     ] {
         assert!(stderr.contains(expected), "{expected}: {stderr}");
+    }
+}
+
+#[test]
+fn clippy_refuses_an_aliased_env_read_and_a_direct_file_read() {
+    // A scratch crate under the repository's clippy.toml, with the two lints
+    // denied as the workspace denies them.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::copy(repo_root().join("clippy.toml"), root.join("clippy.toml")).unwrap();
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"evasion\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n\
+         [lints.clippy]\ndisallowed_methods = \"deny\"\ndisallowed_types = \"deny\"\n\n\
+         [workspace]\n",
+    )
+    .unwrap();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(
+        root.join("src/main.rs"),
+        "use std::env;\n\nfn main() {\n    let _value = env::var(\"X\");\n    \
+         let _bytes = std::fs::read(\"f\");\n}\n",
+    )
+    .unwrap();
+
+    let out = Command::new(env!("CARGO"))
+        .args(["clippy", "--quiet", "--offline"])
+        .env("CARGO_TARGET_DIR", root.join("target"))
+        .current_dir(root)
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_ne!(out.status.code(), Some(0), "clippy passed: {stderr}");
+    for refused in [
+        "use of a disallowed method `std::env::var`",
+        "use of a disallowed method `std::fs::read`",
+    ] {
+        assert!(stderr.contains(refused), "{refused}: {stderr}");
     }
 }

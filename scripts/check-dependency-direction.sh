@@ -17,6 +17,13 @@
 #   2. Module edges inside a crate, as grep and grouped-import bans over
 #      non-test sources.
 #
+# File access, the process environment and spawning a process are refused
+# by clippy, not here: `clippy.toml` lists the std paths (and
+# cw_app::Env::capture) and the workspace denies `clippy::disallowed_methods`
+# and `clippy::disallowed_types`, which see through `use std::env;` and every
+# alias. What clippy cannot state stays here: crate edges, `crate::` imports,
+# module-to-module rules, `std::net` and names that are not paths.
+#
 # The layer order is written down in ARCHITECTURE.md; change it and this
 # script in the same commit (STD-02 R6).
 set -euo pipefail
@@ -52,8 +59,9 @@ policy() {
       # Persistence never parses arguments, draws on a terminal or installs a
       # log subscriber: those belong to surfaces. It reaches files only
       # through cw-fs and the database only through cw-sqlite, which
-      # re-exports rusqlite, so it names no file or SQLite crate itself.
-      BANNED="clap tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored tempfile rustix rusqlite libsqlite3-sys"
+      # re-exports rusqlite, so it names no file or SQLite crate itself. It
+      # receives a resolved root, so it takes no path-finding crate either.
+      BANNED="clap tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored tempfile rustix rusqlite libsqlite3-sys dirs dirs-next directories home"
       ;;
     tmpl-cli-core)
       ALLOWED="tmpl-cli-store"
@@ -64,8 +72,9 @@ policy() {
       # Test isolation, for its tests' private temp roots.
       KIT_DEV="cw-testkit"
       # The apps reach files only through the store, so they need no file or
-      # process crate either.
-      BANNED="clap tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored tempfile rustix rusqlite libsqlite3-sys"
+      # process crate either, and the data directory is the kit's, so no
+      # path-finding crate.
+      BANNED="clap tracing-subscriber anstream anstyle termcolor terminal_size crossterm owo-colors colored tempfile rustix rusqlite libsqlite3-sys dirs dirs-next directories home"
       ;;
     tmpl-cli)
       # The binary names only the core; the core re-exports the record shapes
@@ -236,8 +245,8 @@ CLI=crates/tmpl-cli/src
 # repository/ holds each record's use of it (its SQL and row mapping);
 # contract/ holds shapes that know nothing of how they are stored and hold no
 # rule (R4). The audit log is cw-app's: the store holds no audit code.
-ban "$STORE"         'std::(fs|net|process)|tempfile::|rustix::'           "the store reaches files through cw_fs"
-ban_import "$STORE"  'std' 'fs|net|process'                                "the store reaches files through cw_fs"
+ban "$STORE"         'std::net|tempfile::|rustix::'                        "the store reaches files through cw_fs and opens no socket"
+ban_import "$STORE"  'std' 'net'                                           "the store opens no socket"
 ban "$STORE"         'audit\.jsonl|\.audit\.lock|Audit(Event|Status|Line|Guard)|cw_app\b' "the store holds no audit code or file: the audit log is cw-app's"
 ban "$STORE/contract" 'crate::(driver|repository|store|Store)|super::super::|cw_fs::|cw_sqlite\b|rusqlite\b' "contract/ holds record shapes; they must not import the driver, repository, the store, file access or SQLite"
 ban_import "$STORE/contract" 'crate' 'driver|repository|store|Store'       "contract/ holds record shapes; they must not import the driver, repository or the store"
@@ -277,34 +286,15 @@ fi
 # No mechanism in the store's public surface: a public item names no
 # rusqlite or cw_sqlite type. (A pub(crate) item may.)
 ban "$STORE"         '^[[:space:]]*pub[[:space:]]+(fn|struct|enum|type|use|const|static|trait)[^;{]*(rusqlite|cw_sqlite|Connection|Transaction|Reader|\bDb\b)' "the store's public surface names no rusqlite or cw_sqlite type"
-# The store receives a resolved root (R3).
-ban "$STORE"         'std::env\b|home_dir|current_dir'                      "the store crate must not read the environment or discover paths"
-ban_import "$STORE"  'std' 'env'                                           "the store crate must not read the environment or discover paths"
 
 # Core: apps and composition. Nothing in the core touches a file or
 # a process; it reaches the data directory through the store (R5).
-ban "$CORE"          'std::(fs|net|process)|tempfile::|rustix::|cw_fs\b|cw_sqlite\b|rusqlite\b'  "the core reaches files only through tmpl-cli-store"
+ban "$CORE"          'std::net|tempfile::|rustix::|cw_fs\b|cw_sqlite\b|rusqlite\b'  "the core reaches files only through tmpl-cli-store"
 # The record-access seam: the core reaches a record only through
 # snapshot.<record>() and tx.<record>(), never a repository by its path.
 ban "$CORE"          'tmpl_cli_store::repository\b'                       "the core reaches a record through snapshot.<record>() or tx.<record>(), never tmpl_cli_store::repository"
 ban_import "$CORE"   'tmpl_cli_store' 'repository'                         "the core reaches a record through snapshot.<record>() or tx.<record>(), never tmpl_cli_store::repository"
-ban_import "$CORE"   'std' 'fs|net|process'                                "the core reaches files only through tmpl-cli-store"
-# Nothing in the core discovers a path (R3): the data directory is the kit's
-# pure function of the captured environment (composition.rs).
-ban "$CORE"          'home_dir|current_dir'                                 "the core discovers no path: the data directory comes from the captured Env"
-# The process environment is read once, by the kit's Env::capture() in the
-# binary's main (R3). No other source file under any crate's src/ names
-# std::env, tests included; main.rs names it only to read the arguments.
-env_hits=$(grep -rnHE --include='*.rs' 'std::env\b|use[[:space:]]+(::)?std::\{[^}]*\benv\b' crates/*/src 2>/dev/null \
-    | grep -v '^crates/tmpl-cli/src/main.rs:' | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)
-main_hits=$(sed -E 's/std::env::args_os\(\)//g' crates/tmpl-cli/src/main.rs 2>/dev/null \
-    | grep -nE 'std::env\b' | grep -vE '^[0-9]+:[[:space:]]*//' | sed 's|^|crates/tmpl-cli/src/main.rs:|' || true)
-capture_hits=$(grep -rnHE --include='*.rs' 'Env::capture\b' crates/*/src 2>/dev/null \
-    | grep -v '^crates/tmpl-cli/src/main.rs:' | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)
-if [[ -n "$env_hits$main_hits$capture_hits" ]]; then
-  printf '%s\n' "$env_hits" "$main_hits" "$capture_hits" | grep -v '^$' >&2
-  err "only crates/tmpl-cli/src/main.rs reads the process: Env::capture() for the environment, std::env::args_os() for the arguments"
-fi
+ban_import "$CORE"   'std' 'net'                                           "the core opens no socket"
 # One chokepoint (R24): the kit's cw_app::exec. An app's exec forwards to it
 # and supplies its parts by implementing cw_app::App; nothing calls an app's
 # run itself, and there is no runtime of the template's own.
@@ -327,8 +317,7 @@ done
 # Binary: argument declarations, the mapping to an app, rendering (R2). It
 # names only the core, and its handlers open no store and read no environment.
 ban "crates/tmpl-cli" 'tmpl_cli_store|cw_(base|fs|sqlite|app)\b|rusqlite\b' "the binary names only tmpl-cli-core"
-ban "$CLI/command"  'std::(env|fs)|Store\b|Runtime::|start\(|Ctx\b|\bEnv\b' "a command handler maps arguments to an app command; it reads no environment, opens no store and starts no runtime"
-ban_import "$CLI/command" 'std' 'env|fs'                                  "a command handler maps arguments to an app command; it reads no environment and opens no store"
+ban "$CLI/command"  'Store\b|Runtime::|start\(|Ctx\b|\bEnv\b'            "a command handler maps arguments to an app command; it receives no environment, opens no store and starts no runtime"
 # Rendering is derived from payloads only; it never reaches back up (R1).
 ban "$CLI/output"    'crate::(cli|command)'                                "output must not import cli or command"
 ban_import "$CLI/output" 'crate' 'cli|command'                             "output must not import cli or command"

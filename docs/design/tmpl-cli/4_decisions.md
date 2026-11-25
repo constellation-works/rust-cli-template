@@ -1001,7 +1001,8 @@ at the workspace's one satellites rev.
   then settles the record, and prints an `AuditWarning` as `warning: …` on
   stderr without changing the exit code.
 - `main` captures the environment once with `Env::capture()`; it is the only
-  file that names `std::env`, and only to read the arguments. The data
+  file that reads the process, and only the arguments besides (clippy
+  refuses both reads elsewhere). The data
   directory is `env.app("tmpl-cli").data_dir(--root)`; the output module
   reads its variables from the captured `Env`, declaring `CLICOLOR_FORCE`
   and `COLUMNS` as `EnvVar`s.
@@ -1083,19 +1084,14 @@ re-vendors. Each line names the rule and what is unmet.
     `USERNAME` are read as bare literals;
   - `docs/usage.md`'s table is written by hand rather than generated;
   - the help text types `$TMPL_CLI_ROOT` and `$TMPL_CLI_FORMAT` by hand.
-- **STD-02@8 §R6**:
-  - `scripts/check-dependency-direction.sh` has no module import-cycle check;
-  - `clippy.toml` carries none of the `disallowed-types` or
-    `disallowed-methods` baseline;
-  - the script's grep bans on `std::fs`, `std::net`, `std::process` and
-    `std::env` stand where Clippy is to take them over.
+- **STD-02@8 §R6**: `scripts/check-dependency-direction.sh` has no module
+  import-cycle check. (The `clippy.toml` baseline and the removal of the
+  grep bans it covers are met: see "Clippy holds the file, environment and
+  process boundaries".)
 - **STD-02@8 §R7**: the binary crate reads the environment: its `main`
   captures it once with the kit's `Env::capture()`, as the kit asks, and
   `tmpl-cli/src/output/` interprets the presentation variables and the log
   filter from that captured value.
-- **STD-02@8 §R43**: `make structure` has no unit-map gate, which would fail
-  on a crate or top-level module missing from `ARCHITECTURE.md`, a mapped path
-  that does not exist, or a unit with no `//!` doc.
 - **STD-06@2 §R4**: the numbered design docs and the doc templates in
   `docs/design/_templates/` carry `last_updated`, not `created_date` and
   `updated_date`.
@@ -1180,3 +1176,49 @@ workspace.
   copy's `make ci`, so a region that breaks a kind fails the pull request.
 - Cost: a change to the example must keep it inside its files and regions,
   and a change to a shipped file raises the version.
+
+## Clippy holds the file, environment and process boundaries
+
+**Recorded:** 2026-11-25
+**Code anchors:** `clippy.toml` (`disallowed-types`, `disallowed-methods`); `Cargo.toml` (`[workspace.lints.clippy]`); `crates/tmpl-cli/src/main.rs`; `scripts/check-dependency-direction.sh`
+
+### Context
+
+The direction script refused `std::fs`, `std::process` and `std::env` by
+grep, with an awk parser for grouped imports. A grep sees spellings, not
+paths: each alias it missed (`use std::env;` then `env::var(..)`) needed a
+new pattern, and the parser grew with them. STD-02 v8 R6 puts these
+boundaries on Clippy, which resolves every call to its path.
+
+### Decision
+
+- `clippy.toml` bans every `std::fs` function and file type, every
+  `std::env` read or change (including `args` and `args_os`),
+  `Command::{output, status, spawn}`, `CommandExt::exec`,
+  `std::process::{Child, exit, abort}`, and `cw_app::Env::capture`. Each
+  entry's reason names what to use instead: `cw_fs` in the store, the
+  `Env` that `main` captured, `cw_supervise` for a process. The workspace
+  denies `clippy::disallowed_methods` and `clippy::disallowed_types`. The
+  list is a superset of STD-02's baseline in `checks.md`.
+- Production code has one exemption: `main.rs` expects
+  `disallowed_methods` for its two reads of the process. A test file that
+  sets up fixtures or runs the built binary expects the file and process
+  bans for its module; a unit-test module keeps them in a `fixture`
+  submodule, so the tests beside it still cannot read the environment, as
+  the grep held before. No `allow` exists for either lint.
+- The direction script keeps what Clippy cannot state: crate edges,
+  `crate::` imports and module rules, `std::net`, and names that are not
+  resolvable paths. `home_dir` and `current_dir` from a crate other than
+  `std` became banned crate edges (`dirs`, `dirs-next`, `directories`,
+  `home`) for the store and the core.
+
+### Consequences
+
+- An alias, a grouped import or a re-export cannot slip past the boundary,
+  and a stale exemption fails the build (`expect` is unfulfilled).
+- Clippy runs in `ci-lint`, which compiles; `ci-fast` no longer catches
+  these three boundaries before a build.
+- Cost: naming `std::process::ExitCode`, `Stdio` or `std::env::consts` is no
+  longer refused in the store or the core; none of them reaches a file, the
+  environment or a process on its own.
+

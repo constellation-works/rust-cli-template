@@ -75,7 +75,7 @@ fn lock_timeout_audited_command_waits_one_deadline_and_records_one_failure_line(
         "expected roughly one deadline ({deadline:?}), took {elapsed:?}"
     );
 
-    let audit_raw = std::fs::read_to_string(&audit_path).unwrap();
+    let audit_raw = fixture::read(&audit_path);
     let lines: Vec<serde_json::Value> = audit_raw
         .lines()
         .map(|line| serde_json::from_str(line).unwrap())
@@ -87,4 +87,20 @@ fn lock_timeout_audited_command_waits_one_deadline_and_records_one_failure_line(
     assert_eq!(lines[0]["actor"], "alice");
     assert_eq!(lines[0]["surface"], "cli");
     assert_eq!(lines[0]["at"], "1970-01-01T00:00:00Z");
+}
+
+/// Files the tests inspect after a command, outside the code under test.
+/// Only this module is exempt from the file bans in `clippy.toml`.
+mod fixture {
+    #![expect(
+        clippy::disallowed_methods,
+        reason = "fixture files beside the code under test; only this module is exempt"
+    )]
+
+    use std::path::Path;
+
+    /// The text of the file `path`.
+    pub(super) fn read(path: &Path) -> String {
+        std::fs::read_to_string(path).unwrap()
+    }
 }

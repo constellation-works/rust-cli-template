@@ -1,3 +1,62 @@
 # STD-12 R14: no identifier is exempt from `clippy::min_ident_chars`, so the
 # lint's default list (`i`, `j`, `x`, `y`, `z`, `w`, `n`) is emptied.
 allowed-idents-below-min-chars = []
+
+# File, environment and process boundaries (STD-02 R3, R5): the template
+# reaches files through the kit's cw_fs (in the store), reads the process
+# environment once through cw_app::Env::capture() (in main), and spawns no
+# process (a template that must spawn one uses cw_supervise). The two lints
+# are denied in the workspace lint table; an exemption is a module-level
+# `#![expect(..., reason = "...")]`, never an allow.
+disallowed-types = [
+  { path = "std::fs::File", reason = "file access goes through cw_fs in the store" },
+  { path = "std::fs::OpenOptions", reason = "file access goes through cw_fs in the store" },
+  { path = "std::fs::ReadDir", reason = "list a directory with cw_fs in the store" },
+  { path = "std::fs::DirEntry", reason = "list a directory with cw_fs in the store" },
+  { path = "std::fs::DirBuilder", reason = "create a directory with cw_fs in the store" },
+  { path = "std::fs::Metadata", reason = "file metadata goes through cw_fs in the store" },
+  { path = "std::fs::Permissions", reason = "owner-only checks are cw_fs's, in the store" },
+  { path = "std::fs::FileType", reason = "file metadata goes through cw_fs in the store" },
+  { path = "std::process::Child", reason = "the template spawns no process; use cw_supervise if one must" },
+]
+disallowed-methods = [
+  { path = "std::fs::canonicalize", reason = "file access goes through cw_fs in the store" },
+  { path = "std::fs::copy", reason = "file access goes through cw_fs in the store" },
+  { path = "std::fs::create_dir", reason = "create a directory with cw_fs in the store" },
+  { path = "std::fs::create_dir_all", reason = "create a directory with cw_fs in the store" },
+  { path = "std::fs::exists", reason = "file access goes through cw_fs in the store" },
+  { path = "std::fs::hard_link", reason = "file access goes through cw_fs in the store" },
+  { path = "std::fs::metadata", reason = "file metadata goes through cw_fs in the store" },
+  { path = "std::fs::read", reason = "read a file with cw_fs in the store" },
+  { path = "std::fs::read_dir", reason = "list a directory with cw_fs in the store" },
+  { path = "std::fs::read_link", reason = "file access goes through cw_fs in the store" },
+  { path = "std::fs::read_to_string", reason = "read a file with cw_fs in the store" },
+  { path = "std::fs::remove_dir", reason = "remove with cw_fs in the store" },
+  { path = "std::fs::remove_dir_all", reason = "remove with cw_fs in the store" },
+  { path = "std::fs::remove_file", reason = "remove with cw_fs in the store" },
+  { path = "std::fs::rename", reason = "write atomically with cw_fs in the store" },
+  { path = "std::fs::set_permissions", reason = "owner-only files are cw_fs's, in the store" },
+  { path = "std::fs::soft_link", reason = "file access goes through cw_fs in the store" },
+  { path = "std::fs::symlink_metadata", reason = "file metadata goes through cw_fs in the store" },
+  { path = "std::fs::write", reason = "write atomically with cw_fs in the store" },
+  { path = "std::env::var", reason = "read a variable from the cw_app::Env that main captured" },
+  { path = "std::env::var_os", reason = "read a variable from the cw_app::Env that main captured" },
+  { path = "std::env::vars", reason = "read variables from the cw_app::Env that main captured" },
+  { path = "std::env::vars_os", reason = "read variables from the cw_app::Env that main captured" },
+  { path = "std::env::set_var", reason = "the process environment is read once, by cw_app::Env::capture() in main, and never changed" },
+  { path = "std::env::remove_var", reason = "the process environment is read once, by cw_app::Env::capture() in main, and never changed" },
+  { path = "std::env::current_dir", reason = "discover no path: the data directory comes from cw_app::Env (env.app(..).data_dir)" },
+  { path = "std::env::set_current_dir", reason = "discover no path: the data directory comes from cw_app::Env (env.app(..).data_dir)" },
+  { path = "std::env::home_dir", reason = "discover no path: the data directory comes from cw_app::Env (env.app(..).data_dir)" },
+  { path = "std::env::temp_dir", reason = "discover no path; a test takes cw_testkit::TempRoot" },
+  { path = "std::env::current_exe", reason = "discover no path: the data directory comes from cw_app::Env" },
+  { path = "std::env::args", reason = "main reads the arguments once, with std::env::args_os(), and passes them down" },
+  { path = "std::env::args_os", reason = "main reads the arguments once and passes them down" },
+  { path = "cw_app::Env::capture", reason = "main captures the environment once and passes the cw_app::Env down" },
+  { path = "std::process::Command::output", reason = "the template spawns no process; use cw_supervise if one must" },
+  { path = "std::process::Command::status", reason = "the template spawns no process; use cw_supervise if one must" },
+  { path = "std::process::Command::spawn", reason = "the template spawns no process; use cw_supervise if one must" },
+  { path = "std::os::unix::process::CommandExt::exec", reason = "the template spawns no process; use cw_supervise if one must" },
+  { path = "std::process::exit", reason = "return an ExitCode from main; exit skips destructors and the audit record" },
+  { path = "std::process::abort", reason = "return an error; abort skips destructors and the audit record" },
+]
