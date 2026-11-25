@@ -1,4 +1,4 @@
-.PHONY: help build test goldens fmt fmt-check clippy deny structure standards-check docs-check feature-board doc-index ci-fast ci-lint ci install clean
+.PHONY: help build test goldens fmt fmt-check clippy deny msrv msrv-version structure standards-check docs-check feature-board doc-index ci-fast ci-lint ci install clean
 
 CARGO ?= cargo
 # Every build uses the committed Cargo.lock as is; a stale lock fails instead
@@ -17,13 +17,22 @@ CI ?=
 # target says so and passes, so the gates hold from the first commit.
 CRATES := $(wildcard crates/*/Cargo.toml)
 
-# $(call missing_tool,<tool>,<what it provides>): fail under CI, else warn.
+# The oldest Rust the code supports: `rust-version` in Cargo.toml, its one
+# statement. The pinned toolchain is rust-toolchain.toml's.
+MSRV := $(shell sed -n 's/^rust-version = "\(.*\)"$$/\1/p' Cargo.toml)
+# The gates a run went without, one line per missing tool, for the closing
+# line of `make ci`.
+SKIPPED_GATES := target/skipped-gates
+
+# $(call missing_tool,<tool>,<what it provides>): fail under CI, else warn
+# and record the gate as skipped.
 define missing_tool
 	if [ "$(CI)" = "true" ]; then \
 		echo "error: $(1) is not installed; CI requires it for $(2)." >&2; exit 1; \
 	fi; \
 	echo "warning: $(1) not installed; continuing without $(2) (CI requires it)." >&2; \
-	echo "         install: cargo install $(1) --locked" >&2
+	echo "         install: cargo install $(1) --locked" >&2; \
+	mkdir -p target; echo "$(1) ($(2))" >>$(SKIPPED_GATES)
 endef
 
 help:
@@ -37,7 +46,9 @@ help:
 	@echo "  make standards-check  Run the vendored standards check (docs/standards/check.sh)"
 	@echo "  make feature-board    Regenerate the design feature board"
 	@echo "  make doc-index        Regenerate docs/INDEX.md from each document's summary"
-	@echo "  make ci               Everything above; what CI runs"
+	@echo "  make ci               Everything above; what CI runs. Its last line names any gate"
+	@echo "                       skipped for a missing tool"
+	@echo "  make msrv             Check every target with the oldest supported Rust (CI's msrv job)"
 	@echo "  make build | fmt | install | clean"
 
 # ---------------------------------------------------------------------------
@@ -46,7 +57,7 @@ help:
 
 ifeq ($(strip $(CRATES)),)
 
-build fmt fmt-check clippy deny test goldens install clean:
+build fmt fmt-check clippy deny msrv test goldens install clean:
 	@echo "$@: no crates/*/Cargo.toml yet; skipping" >&2
 
 else
@@ -72,6 +83,12 @@ fmt-check:
 
 clippy:
 	$(CARGO) clippy --workspace --all-targets $(LOCKED) -- -D warnings
+
+# The oldest supported Rust builds every target. It needs that toolchain
+# (`rustup toolchain install $(MSRV)`), so it runs in CI's msrv job rather
+# than in `make ci`.
+msrv:
+	$(CARGO) +$(MSRV) check --workspace --all-targets $(LOCKED)
 
 # Supply chain (STD-02 R23, STD-05 R23/R24): advisories, licenses, sources.
 deny:
@@ -182,5 +199,16 @@ ci-fast: fmt-check structure standards-check docs-check
 
 ci-lint: clippy deny
 
-# Full pass. Keep aligned with .github/workflows/ci.yml.
-ci: ci-fast ci-lint test goldens
+msrv-version:
+	@echo $(MSRV)
+
+# Full pass. Keep aligned with .github/workflows/ci.yml. The gates run in
+# order in a sub-make, so the closing line sees every skip they recorded.
+ci:
+	@mkdir -p target; : >$(SKIPPED_GATES)
+	@$(MAKE) --no-print-directory ci-fast ci-lint test goldens
+	@if [ -s $(SKIPPED_GATES) ]; then \
+		echo "ci: passed, but skipped for a missing tool: $$(sort -u $(SKIPPED_GATES) | paste -sd ';' - | sed 's/;/; /g')" >&2; \
+	else \
+		echo "ci: passed; no gate skipped for a missing tool" >&2; \
+	fi

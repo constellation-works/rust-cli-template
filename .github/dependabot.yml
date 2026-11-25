@@ -1,13 +1,26 @@
 # Advisory monitoring and pin updates for every dependency ecosystem in the
 # repository (STD-05 R23, R24): crates through Cargo.lock, and the CI actions
 # pinned by SHA in .github/workflows/. Updates target the integration branch.
+# Each ecosystem's updates come as one grouped pull request, and a release
+# waits seven days before Dependabot proposes it, so a yanked or compromised
+# release has time to be caught first.
 version: 2
 updates:
   - package-ecosystem: cargo
     directory: /
     target-branch: agent-main
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+    groups:
+      cargo: { patterns: ["*"] }
   - package-ecosystem: github-actions
     directory: /
     target-branch: agent-main
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+    groups:
+      github-actions: { patterns: ["*"] }
+    ignore:
+      # Its branch moves on every upstream commit and the toolchain it
+      # installs is pinned in rust-toolchain.toml, so a bump buys nothing.
+      - dependency-name: dtolnay/rust-toolchain

@@ -1,0 +1,9 @@
+# The Rust toolchain every build uses, locally and in CI, pinned by version
+# (STD-05 R23). The workflows in .github/workflows/ read the channel from
+# here, so this is its one pin; Dependabot does not raise it, so a toolchain
+# bump is a deliberate change. `rust-version` in Cargo.toml is the oldest
+# Rust the code supports, which CI's msrv job builds with.
+[toolchain]
+channel = "1.96.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
