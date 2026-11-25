@@ -7,20 +7,11 @@
 //! [`Sink`] once and every renderer reads its answers from it.
 
 use super::color::Color;
+use super::env::{CLICOLOR_FORCE, COLUMNS};
 use clap::ValueEnum;
 use std::ffi::{OsStr, OsString};
 use std::io::IsTerminal;
-use tmpl_cli_core::{APP, Env, EnvVar};
-
-/// Forces color on a terminal even under `TERM=dumb`. The kit declares the
-/// other output variables (`TMPL_CLI_FORMAT`, `NO_COLOR`, `TERM`).
-const CLICOLOR_FORCE: EnvVar = EnvVar::global(
-    "CLICOLOR_FORCE",
-    "Any non-empty value turns color on at a terminal, even for `TERM=dumb`.",
-);
-
-/// The width tables and root help fit on a terminal.
-const COLUMNS: EnvVar = EnvVar::global("COLUMNS", "The terminal width to fit tables to.");
+use tmpl_cli_core::{APP, Env};
 
 /// A captured value as text: `None` when unset, empty or not UTF-8.
 fn text(value: Option<&OsStr>) -> Option<String> {

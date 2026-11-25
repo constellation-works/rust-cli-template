@@ -13,10 +13,15 @@
         reason = "integration tests assert fixture setup"
     )
 )]
+#![expect(
+    clippy::disallowed_methods,
+    reason = "the test reads and, when updating, rewrites the usage document's generated table"
+)]
 
 mod support;
 
 use cw_testkit::Goldens;
+use std::fs;
 // example:begin
 use cw_testkit::redact_timestamps;
 // example:end
@@ -50,6 +55,15 @@ const OUTPUT: &[(&str, &[&str])] = &[
     ("note-show.json", &["note", "show", "3", "--json"]),
 ];
 // example:end
+
+/// The usage document, whose variables table is generated.
+const USAGE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/usage.md");
+
+/// The marker line that opens the generated table in [`USAGE`].
+const TABLE_BEGIN: &str = "<!-- generated: environment table -->\n";
+
+/// The marker that closes it.
+const TABLE_END: &str = "<!-- end generated -->";
 
 /// The goldens folder. `Goldens` rewrites a file instead of comparing it
 /// when `UPDATE_GOLDENS=1`, which `make goldens UPDATE=1` sets.
@@ -172,3 +186,29 @@ fn output_matches_goldens() {
     report(&failures);
 }
 // example:end
+
+#[test]
+fn usage_environment_table_matches_the_declarations() {
+    let doc = fs::read_to_string(USAGE).unwrap();
+    let start = doc
+        .find(TABLE_BEGIN)
+        .map(|at| at + TABLE_BEGIN.len())
+        .expect("docs/usage.md has no generated environment table marker");
+    let end = doc[start..]
+        .find(TABLE_END)
+        .map(|len| start + len)
+        .expect("docs/usage.md has no end marker after the environment table");
+    let table = tmpl_cli::env_table();
+    if doc[start..end] == table {
+        return;
+    }
+    if goldens().is_updating() {
+        fs::write(USAGE, format!("{}{table}{}", &doc[..start], &doc[end..])).unwrap();
+        return;
+    }
+    report(&[format!(
+        "docs/usage.md: the environment table differs from the declarations.\n\
+         --- in docs/usage.md\n{}--- rendered\n{table}",
+        &doc[start..end]
+    )]);
+}
