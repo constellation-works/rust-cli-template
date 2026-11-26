@@ -11,8 +11,6 @@
 
 mod common;
 
-mod env;
-
 // example:begin
 mod note;
 
@@ -23,7 +21,6 @@ pub(crate) use common::payload::{Output, Payload, StatusPayload};
 // example:begin
 pub(crate) use note::{NotePayload, SkippedRecord};
 // example:end
-pub(crate) use env::VARS;
 
 use crate::error::{hint, output_error, usage_error};
 use cw_cli::{Exit, Format, Mode, Probe, Sink, Terminal};

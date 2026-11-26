@@ -90,8 +90,6 @@ kit's, then the CLI's own); `make goldens UPDATE=1` rewrites it:
 | `HOME` | The home directory; the default data directory is under it. | — | — |
 | `USER` | The user the environment claims, recorded as the actor; a claim, not an identity. | — | — |
 | `USERNAME` | The claimed user when the one above is unset, empty or not UTF-8, on every platform. | — | — |
-| `CLICOLOR_FORCE` | Any non-empty value turns color on at a terminal, even for `TERM=dumb`. | — | — |
-| `COLUMNS` | The terminal width to fit tables to. | — | — |
 <!-- end generated -->
 
 Unset, the output format is `auto` (`--format auto|table|json`, `--json`),
