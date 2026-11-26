@@ -3,7 +3,7 @@ type: design
 summary: "Spec: output contract — streams, modes, JSON fields, errors and exit codes"
 created_date: 2026-09-26
 updated_date: 2026-11-25
-last_validated: 2026-09-26
+last_validated: 2026-11-25
 ---
 
 # Spec: Output contract
@@ -77,10 +77,10 @@ are carried in an additive `warnings` array on the tool result:
 | Exit | Meaning | stderr |
 |------|---------|--------|
 | 0 | success, including an empty result and a closed stdout | warnings for any isolated bad store records, plus one notice at most: nothing matched, the list was cut, or `added note <id> to <file>` |
-| 1 | the command failed | `error: <message>` or `{"error": "...", "code": "..."}` |
-| 2 | usage error | clap's rendering, or `{"error": "...", "code": "usage_error"}` |
+| 1 | the command failed | `error: <message>` or `{"error": "...", "code": "...", "hint": null}`; `hint` contains a string when a fix is known |
+| 2 | usage error | clap's rendering, or `{"error": "...", "code": "usage_error", "hint": null}` |
 
 Stable codes: `note_not_found`, `io_error`, `encode_error`, `store_corrupt`,
-`store_bad_record`, `store_duplicate_id`, `note_id_exhausted`, `store_too_new`,
+`store_bad_record`, `note_id_exhausted`, `store_too_new`,
 `store_locked`, `store_symlink`, `store_foreign_owner`, `store_permissions`,
 `store_not_regular`, `store_too_large`, `store_lock_reentrant`, `no_data_dir`, `output_error`, `usage_error`.

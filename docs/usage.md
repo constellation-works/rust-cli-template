@@ -17,7 +17,7 @@ tmpl-cli status --json
 
 `status` shows the data directory and the store's format (`-` in a pipe and
 `null` with `--json` until a command has created the database). It reads
-only and creates nothing.
+only: it does not create the database or change records.
 
 The command line's behaviour is the cw-kit's (`cw-cli`), shared by every
 constellation CLI. A command displays a table on a terminal and
@@ -43,9 +43,9 @@ tmpl-cli note show <id>
 ```
 
 Use an ID from `note list` with `note show`. With `--json`, a list is
-`{"notes": [...], "total": N, "truncated": false}` and one note is an
-object. Each `note add` appends one event to `audit.jsonl` with the note ID
-and outcome.
+`{"notes": [...], "total": N, "truncated": false, "warnings": [...]}` and
+one note is an object. Each `note add` appends one event to `audit.jsonl`
+with the note ID and outcome.
 <!-- example:end -->
 
 ## MCP server

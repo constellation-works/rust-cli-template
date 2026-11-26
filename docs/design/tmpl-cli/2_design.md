@@ -3,7 +3,7 @@ title: tmpl-cli — Design
 owner: claude
 created_date: 2026-09-26
 updated_date: 2026-11-25
-last_validated: 2026-09-26
+last_validated: 2026-11-25
 status: Draft
 feature: tmpl-cli
 doc_role: design
@@ -121,8 +121,8 @@ On a terminal with a known width the TITLE column shrinks and ends in `…`;
 `note show` and `--json` always carry the full title. `plain` (auto in a
 pipe) is one tab-separated line per record without a header. `json` is one
 document on one line; for a list it is always the envelope `{"notes",
-"total", "truncated"}`. A single-record list is still a table; an empty list
-prints nothing (or the envelope with no notes) plus one stderr line naming
+"total", "truncated", "warnings"}`. A single-record list is still a table;
+an empty list prints nothing (or the envelope with no notes) plus one stderr line naming
 the filters. Filters apply before `--limit`, and a cut list says so on stderr
 in every mode.
 
