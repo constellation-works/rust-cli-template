@@ -2,7 +2,7 @@
 title: tmpl-cli — Decisions
 owner: claude
 created_date: 2026-09-26
-updated_date: 2026-11-25
+updated_date: 2026-11-26
 last_validated: 2026-09-26
 status: Draft
 feature: tmpl-cli
@@ -1187,8 +1187,9 @@ workspace.
   in one, a line marked `copy` becomes the copy's text (the README summary line
   and starting point, the first line of `AGENTS.md`, the first changelog
   entry). `scripts/template-manifest.txt` lists the files, the regions, the
-  template's own files and the per-kind overlays (the bare root help golden,
-  the workspace `ARCHITECTURE.md`), and `make structure` runs
+  template's own files and the per-kind overlays (the bare root help and MCP
+  goldens, the workspace `ARCHITECTURE.md` and `README.md`), and
+  `make structure` runs
   `check-template.py`, which fails on a note reference outside them.
 - **`status`** is the command a bare copy keeps, so every layer keeps a
   caller: the store read and `Snapshot::format`, an app, the runtime, a
@@ -1205,7 +1206,7 @@ workspace.
 - **No registry, no guessed URL.** `[workspace.package]` sets
   `publish = false`; `repository` comes only from `--repository`.
 - **The workspace kind keeps STD-01 vendored.** Its card adopts STD-02 to
-  06, 08 and 09, but `docs/standards/` stays as vendored: removing STD-01
+  06, 08, 09 and 12, but `docs/standards/` stays as vendored: removing STD-01
   would break `SHA256SUMS`, which only the umbrella's sync script writes.
 - The Makefile's Cargo targets say they skip while no `crates/*/Cargo.toml`
   exists, and the gate scripts that read `crates/` pass when it is missing.

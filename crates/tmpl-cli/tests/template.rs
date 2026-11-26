@@ -12,10 +12,12 @@
 )]
 #![expect(
     clippy::disallowed_methods,
+    clippy::disallowed_types,
     reason = "a test sets up fixture files and runs the built binary; production code may not"
 )]
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Output;
 
@@ -257,7 +259,11 @@ fn the_cli_kind_keeps_the_example_and_names_the_given_repository() {
             "{name}"
         );
     }
-    assert!(copy.read("about.md").contains("standards: STD-01,"));
+    assert!(
+        copy.read("about.md").contains(
+            "standards: STD-01,STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09,STD-12\n"
+        )
+    );
     copy.check_architecture_map();
 }
 
@@ -313,6 +319,11 @@ fn the_bare_kind_drops_the_example_leaves_the_repository_out_and_protected_trees
     for manifest in manifests {
         assert!(!manifest.contains("repository"), "{manifest}");
     }
+    assert!(
+        copy.read("about.md").contains(
+            "standards: STD-01,STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09,STD-12\n"
+        )
+    );
     copy.check_architecture_map();
 }
 
@@ -334,7 +345,15 @@ fn the_workspace_kind_keeps_no_crate_and_its_gates_pass() {
         copy.read("ARCHITECTURE.md")
             .contains("The workspace has no crate yet.")
     );
-    assert!(copy.read("about.md").contains("standards: STD-02,"));
+    assert!(
+        copy.read("about.md")
+            .contains("standards: STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09,STD-12\n")
+    );
+    let readme = copy.read("README.md");
+    assert!(
+        readme.contains("## Quick start") && readme.contains("make ci"),
+        "{readme}"
+    );
     assert!(!copy.read("Cargo.toml").contains("repository"));
 
     // `make ci` passes with no crate: the Cargo targets say they skip.
@@ -365,6 +384,66 @@ fn init_refuses_a_kit_crate_name_an_unknown_kind_and_a_bad_url_and_changes_nothi
     assert!(copy.path("scripts/init.sh").exists());
     assert!(copy.path("crates/tmpl-cli").exists());
     assert_eq!(copy.read("Cargo.toml"), before);
+}
+
+#[test]
+fn init_refuses_rust_keywords_without_changing_files() {
+    let copy = Copy::new();
+    let before = copy.read("Cargo.toml");
+    let keywords = [
+        "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum",
+        "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move",
+        "mut", "pub", "ref", "return", "self", "static", "struct", "super", "trait", "true",
+        "type", "unsafe", "use", "where", "while", "abstract", "become", "box", "do", "final",
+        "gen", "macro", "override", "priv", "try", "typeof", "unsized", "virtual", "yield",
+    ];
+    for keyword in keywords {
+        let out = copy.run("scripts/init.sh", &[keyword]);
+        assert_eq!(out.status.code(), Some(1), "{keyword}: {}", stderr(&out));
+        assert!(
+            stderr(&out).contains("Rust keyword"),
+            "{keyword}: {}",
+            stderr(&out)
+        );
+    }
+    assert!(copy.path("scripts/init.sh").exists());
+    assert!(copy.path("crates/tmpl-cli").exists());
+    assert_eq!(copy.read("Cargo.toml"), before);
+}
+
+fn install_stub_cargo(copy: &Copy, script: &str) {
+    let cargo = copy.temp.bin().join("cargo");
+    fs::write(&cargo, script).unwrap();
+    fs::set_permissions(&cargo, fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+#[test]
+fn init_fails_when_cargo_metadata_or_fmt_fails() {
+    let metadata_copy = Copy::new();
+    install_stub_cargo(
+        &metadata_copy,
+        "#!/bin/sh\nif [ \"$1\" = metadata ]; then exit 1; fi\nexit 0\n",
+    );
+    let out = metadata_copy.run("scripts/init.sh", &["demo-cli", "--kind", "cli-bare"]);
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("cargo metadata failed"),
+        "{}",
+        stderr(&out)
+    );
+
+    let fmt_copy = Copy::new();
+    install_stub_cargo(
+        &fmt_copy,
+        "#!/bin/sh\nif [ \"$1\" = fmt ]; then exit 1; fi\nexit 0\n",
+    );
+    let out = fmt_copy.run("scripts/init.sh", &["demo-cli", "--kind", "cli-bare"]);
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("cargo fmt failed"),
+        "{}",
+        stderr(&out)
+    );
 }
 
 #[test]

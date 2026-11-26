@@ -4,11 +4,11 @@ owner: daniel
 type: codebase
 summary: This repository is the starting point for a new constellation Rust CLI, with three crates laid out by app, an output contract, a local store, and gates and CI that meet the constellation standards; create a copy with GitHub's Use this template, then run scripts/init.sh with a kind (cli, cli-bare or workspace).
 created_date: 2026-09-26
-updated_date: 2026-11-25
+updated_date: 2026-11-26
 status: active
 stack: Rust
 gate: pr
-standards: STD-01,STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09
+standards: STD-01,STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09,STD-12
 agents: "—"
 ---
 

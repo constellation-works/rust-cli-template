@@ -68,6 +68,7 @@ generated template.toml
 overlay cli-bare crates/tmpl-cli/tests/goldens/help/root.txt scripts/template/cli-bare/crates/tmpl-cli/tests/goldens/help/root.txt
 overlay cli-bare crates/tmpl-cli/tests/goldens/mcp/tools-list.json scripts/template/cli-bare/crates/tmpl-cli/tests/goldens/mcp/tools-list.json
 overlay workspace ARCHITECTURE.md scripts/template/workspace/ARCHITECTURE.md
+overlay workspace README.md scripts/template/workspace/README.md
 
 # Files with regions.
 regions AGENTS.md

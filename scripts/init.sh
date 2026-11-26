@@ -57,6 +57,12 @@ done
 case "$NAME" in
   core | std | alloc | test | proc-macro | build | src | target)
     die "'$NAME' collides with a Rust crate or Cargo directory name; pick another" ;;
+  as | async | await | break | const | continue | crate | dyn | else | enum | extern | \
+    false | fn | for | if | impl | in | let | loop | match | mod | move | mut | pub | \
+    ref | return | self | static | struct | super | trait | true | type | unsafe | use | \
+    where | while | abstract | become | box | do | final | gen | macro | override | priv | \
+    try | typeof | unsized | virtual | yield)
+    die "'$NAME' is a Rust keyword; pick another" ;;
   *tmpl-cli* | *tmpl_cli*) die "'$NAME' contains the template placeholder; pick another" ;;
 esac
 case "$KIND" in
@@ -175,9 +181,9 @@ fi
 # about.md describes the template. A copy gets the placeholder card every new
 # codebase starts with, naming the standards its kind adopts.
 if [[ "$KIND" == workspace ]]; then
-  standards="STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09"
+  standards="STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09,STD-12"
 else
-  standards="STD-01,STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09"
+  standards="STD-01,STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09,STD-12"
 fi
 today="$(date -u +%Y-%m-%d)"
 cat >"$ROOT/about.md" <<CARD
@@ -261,10 +267,10 @@ if ! compgen -G "$ROOT/crates/*/Cargo.toml" >/dev/null; then
   :
 elif command -v cargo >/dev/null 2>&1; then
   (cd "$ROOT" && { cargo metadata --format-version 1 --offline >/dev/null 2>&1 \
-    || cargo metadata --format-version 1 >/dev/null 2>&1 \
-    || echo "init: warning: cargo metadata failed; Cargo.lock refreshes on first build" >&2; })
+    || cargo metadata --format-version 1 >/dev/null; }) \
+    || die "cargo metadata failed; Cargo.lock could not be refreshed"
   (cd "$ROOT" && cargo fmt --all) \
-    || echo "init: warning: cargo fmt failed; run it before make ci" >&2
+    || die "cargo fmt failed"
 else
   echo "init: warning: cargo not found; run cargo fmt --all before make ci" >&2
 fi
