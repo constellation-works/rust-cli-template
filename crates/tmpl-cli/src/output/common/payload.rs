@@ -9,7 +9,7 @@
 use serde::Serialize;
 // example:begin
 
-use super::note::{ListPayload, NotePayload, SkippedRecord};
+use crate::output::note::{ListPayload, NotePayload, SkippedRecord};
 // example:end
 
 /// The store's status as every output mode sees it.

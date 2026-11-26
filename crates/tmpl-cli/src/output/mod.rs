@@ -9,17 +9,17 @@
 //! the program's own: its payloads, each command's human view (a table, or
 //! the detail text of one record), and the colour role of each value.
 
+mod common;
+
 mod env;
 
 // example:begin
 mod note;
 
 // example:end
-mod payload;
-
 mod status;
 
-pub(crate) use payload::{Output, Payload, StatusPayload};
+pub(crate) use common::payload::{Output, Payload, StatusPayload};
 // example:begin
 pub(crate) use note::{NotePayload, SkippedRecord};
 // example:end
