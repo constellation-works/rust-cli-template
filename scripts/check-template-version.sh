@@ -26,16 +26,35 @@ new="$(version_of <template.toml)"
   || { echo "template-version: cannot run: version is not an integer (base: '$old', HEAD: '$new')" >&2; exit 2; }
 
 template_paths="$(awk '$1 == "template" { print $2 }' scripts/template-manifest.txt)"
+overlay_sources="$(
+  {
+    awk '$1 == "overlay" { print $4 }' scripts/template-manifest.txt
+    git show "$base:scripts/template-manifest.txt" 2>/dev/null | awk '$1 == "overlay" { print $4 }' || true
+  } | sort -u
+)"
+if ! diff_output="$(git diff --name-only --no-renames "$base"...HEAD)"; then
+  echo "template-version: cannot run: git diff $base...HEAD failed" >&2
+  exit 2
+fi
 shipped=()
 while IFS= read -r path; do
   [[ -n "$path" ]] || continue
+  is_overlay=0
+  while IFS= read -r overlay; do
+    [[ -n "$overlay" ]] || continue
+    if [[ "$path" == "$overlay" || "$path" == "$overlay"/* ]]; then is_overlay=1; break; fi
+  done <<<"$overlay_sources"
+  if [[ "$is_overlay" -eq 1 ]]; then
+    shipped+=("$path")
+    continue
+  fi
   own=0
   while IFS= read -r prefix; do
     [[ -n "$prefix" ]] || continue
     if [[ "$path" == "$prefix" || "$path" == "$prefix"/* ]]; then own=1; break; fi
   done <<<"$template_paths"
   [[ "$own" -eq 1 ]] || shipped+=("$path")
-done < <(git diff --name-only --no-renames "$base"...HEAD)
+done <<<"$diff_output"
 
 if [[ ${#shipped[@]} -eq 0 ]]; then
   echo "template-version: ok (no shipped file changed)"

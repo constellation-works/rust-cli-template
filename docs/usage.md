@@ -1,6 +1,6 @@
 ---
 type: guide
-summary: How to run tmpl-cli: its commands, output modes, data directory, environment variables and exit status.
+summary: "How to run tmpl-cli: its commands, output modes, data directory, environment variables and exit status."
 created_date: 2026-11-22
 updated_date: 2026-11-25
 ---

@@ -287,16 +287,16 @@ Three mechanisms hold these rules, each where it is exact:
   `crate::` imports (grouped ones too), `std::net`, and names that are not
   paths clippy can resolve. `rusqlite` and `cw_sqlite` are refused outside
   `tmpl-cli-store` in tests too. The same script runs
-  `scripts/check-module-cycles.sh`, which reads the `crate::` and `super::`
-  paths into an import graph and fails on a cycle between a crate's
-  top-level modules or between the modules of one layer, such as the
-  core's `app/` (STD-02 R6, R39); code both ends need moves to the lower
-  module.
+  `scripts/check-module-cycles.sh`, which reads the `crate::`, `super::`
+  and `self::` paths (including grouped `use` trees) into an import graph
+  and fails on a cycle at any module level (STD-02 R6, R39); code both ends
+  need moves to the lower module.
 
 By clippy, in every crate:
 
-- No `std::fs` function and no `std::fs` file, directory, metadata or
-  permission type: file access is `cw_fs`'s, named only by the store.
+- No `std::fs` function, no `std::path::Path` I/O method and no `std::fs`
+  file, directory, metadata or permission type: file access is `cw_fs`'s,
+  named only by the store.
 - No `std::env` function (`var`, `var_os`, `vars`, `vars_os`, `set_var`,
   `remove_var`, `current_dir`, `set_current_dir`, `home_dir`, `temp_dir`,
   `current_exe`, `args`, `args_os`) and no `Env::capture`: the environment

@@ -16,8 +16,8 @@ formatting exists (`scripts/check-architecture-map.sh`, STD-02 R43).
 ## Crates
 
 The workspace has no crate yet. `make ci` runs the gates that need no build
-and says it skips the Cargo targets until the first `crates/*/Cargo.toml`
-exists.
+and says it skips the Cargo targets until `cargo metadata` reports the
+workspace's first package.
 
 A new crate goes under `crates/` and gets:
 

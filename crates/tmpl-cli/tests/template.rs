@@ -63,14 +63,20 @@ impl Copy {
         out
     }
 
-    /// The copy's architecture map still matches its renamed crates. The
-    /// script reads them through `cargo metadata`, so the cargo that builds
-    /// these tests goes on the isolated `PATH`.
-    fn check_architecture_map(&self) {
+    /// Place the cargo that builds these tests on the isolated `PATH`, so
+    /// gates that read `cargo metadata` can run.
+    fn install_cargo(&self) {
         let cargo = self.temp.bin().join("cargo");
         if !cargo.exists() {
             std::os::unix::fs::symlink(env!("CARGO"), &cargo).unwrap();
         }
+    }
+
+    /// The copy's architecture map still matches its renamed crates. The
+    /// script reads them through `cargo metadata`, so the cargo that builds
+    /// these tests goes on the isolated `PATH`.
+    fn check_architecture_map(&self) {
+        self.install_cargo();
         let out = self.run("scripts/check-architecture-map.sh", &[]);
         assert!(out.status.success(), "architecture map: {}", stderr(&out));
     }
@@ -333,9 +339,10 @@ fn the_workspace_kind_keeps_no_crate_and_its_gates_pass() {
 
     // `make ci` passes with no crate: the Cargo targets say they skip.
     copy.commit("init");
+    copy.install_cargo();
     let out = copy.run("make", &["ci"]);
     assert!(out.status.success(), "make ci: {}", stderr(&out));
-    assert!(stderr(&out).contains("test: no crates/*/Cargo.toml yet; skipping"));
+    assert!(stderr(&out).contains("test: workspace has no packages yet; skipping"));
 }
 
 #[test]
@@ -439,4 +446,35 @@ fn the_version_check_requires_a_raise_for_a_shipped_change_only() {
     copy.commit("raise");
     let out = check(&copy);
     assert!(out.status.success(), "{}", stderr(&out));
+}
+
+#[test]
+fn the_version_check_counts_overlays_and_fails_when_git_diff_fails() {
+    let copy = Copy::new();
+    copy.commit("base");
+    let base = String::from_utf8(copy.run("git", &["rev-parse", "HEAD"]).stdout).unwrap();
+    let base = base.trim();
+    let check = |copy: &Copy| copy.run("scripts/check-template-version.sh", &[base]);
+
+    // An overlay source under scripts/template/ ships into generated copies and
+    // must require a version bump.
+    let overlay_path = "scripts/template/workspace/ARCHITECTURE.md";
+    let overlay = copy.read(overlay_path);
+    copy.write(overlay_path, &format!("{overlay}\nMore.\n"));
+    copy.commit("overlay change");
+    let out = check(&copy);
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains(&format!("  {overlay_path}\n")),
+        "{}",
+        stderr(&out)
+    );
+
+    // When `git diff $base...HEAD` fails (for example, unrelated history with
+    // no merge base), the gate must fail with exit 2 instead of reading empty.
+    let out = copy.run("git", &["checkout", "--orphan", "unrelated"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    copy.commit("unrelated");
+    let out = check(&copy);
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
 }

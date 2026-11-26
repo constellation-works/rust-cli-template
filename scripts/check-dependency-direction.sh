@@ -41,9 +41,24 @@ KIT_PREFIX="cw"
 fail=0
 err() { echo "dependency-direction: $*" >&2; fail=1; }
 
-# A workspace with no crate yet has no edge to check.
-if ! compgen -G 'crates/*/Cargo.toml' >/dev/null; then
-  echo "dependency-direction: no crates/*/Cargo.toml yet; nothing to check"
+# Decide emptiness from Cargo (not a path glob): a workspace with no packages
+# yet has no crate or module edge to check.
+for tool in cargo jq; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "dependency-direction: cannot run: $tool is not installed" >&2
+    exit 2
+  fi
+done
+if ! metadata=$(cargo metadata --format-version 1 --no-deps --locked 2>/dev/null); then
+  echo "dependency-direction: cannot run: cargo metadata failed" >&2
+  exit 2
+fi
+package_count=$(jq -er '.packages | length' <<<"$metadata") || {
+  echo "dependency-direction: cannot run: cargo metadata gave no package list" >&2
+  exit 2
+}
+if [[ "$package_count" -eq 0 ]]; then
+  echo "dependency-direction: workspace has no packages yet; nothing to check"
   exit 0
 fi
 
@@ -111,20 +126,9 @@ contains() { # contains <word> <space-separated list>
   return 1
 }
 
-# check_crate_edges: layer 1, on Cargo's package graph. Exits 2 when the
-# graph cannot be read, so a broken manifest never passes as "no edges".
+# check_crate_edges: layer 1, on Cargo's package graph.
 check_crate_edges() {
-  local tool metadata members edges crate kind dep
-  for tool in cargo jq; do
-    if ! command -v "$tool" >/dev/null 2>&1; then
-      echo "dependency-direction: cannot run: $tool is not installed" >&2
-      exit 2
-    fi
-  done
-  if ! metadata=$(cargo metadata --format-version 1 --no-deps --locked 2>/dev/null); then
-    echo "dependency-direction: cannot run: cargo metadata failed" >&2
-    exit 2
-  fi
+  local members edges crate kind dep
   # One line per workspace package: its name.
   members=$(jq -er '.packages[].name' <<<"$metadata") || {
     echo "dependency-direction: cannot run: cargo metadata gave no package list" >&2
@@ -412,8 +416,12 @@ check_crate_edges
 
 # No deny(warnings) in source, tests included (STD-02 R35): warnings are
 # denied by CI's `-D warnings`, never by the code.
-if compgen -G 'crates/*' >/dev/null; then
-  deny_hits=$(grep -rnHE --include='*.rs' 'deny\([[:space:]]*warnings[[:space:]]*\)' crates 2>/dev/null || true)
+pkg_dirs=()
+while IFS= read -r manifest; do
+  [[ -n "$manifest" ]] && pkg_dirs+=("$(dirname "$manifest")")
+done < <(jq -r '.packages[].manifest_path' <<<"$metadata")
+if [[ ${#pkg_dirs[@]} -gt 0 ]]; then
+  deny_hits=$(grep -rnHE --include='*.rs' 'deny\([[:space:]]*warnings[[:space:]]*\)' "${pkg_dirs[@]}" 2>/dev/null || true)
   if [[ -n "$deny_hits" ]]; then
     echo "$deny_hits" >&2
     err "deny(warnings) in source: CI denies warnings with -D warnings (STD-02 R35)"

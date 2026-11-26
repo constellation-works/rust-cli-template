@@ -61,6 +61,15 @@ def local_links(text):
             yield link, unquote(target.path), unquote(target.fragment)
 
 
+def resolve_local(root, base, target, default):
+    """Resolve a local link target (relative or root-relative) after symlinks."""
+    if not target:
+        return default.resolve()
+    if target.startswith("/"):
+        return (root / target.lstrip("/")).resolve()
+    return (base / target).resolve()
+
+
 def main():
     text = README.read_text(encoding="utf-8")
     lines, words = len(text.splitlines()), len(text.split())
@@ -71,10 +80,12 @@ def main():
     if not links:
         errors.append("README.md has no local links")
     for link, path, fragment in links:
-        target = ROOT / path if path else README
-        if not target.exists():
+        target = resolve_local(ROOT, ROOT, path, README)
+        if target != ROOT and ROOT not in target.parents:
+            errors.append(f"README.md link leaves the repository: {link}")
+        elif not target.exists():
             errors.append(f"README.md link has no target: {link}")
-        elif fragment and target.suffix.lower() == ".md" and fragment not in anchors(target):
+        elif fragment and target.is_file() and target.suffix.lower() == ".md" and fragment not in anchors(target):
             errors.append(f"README.md link has no heading or anchor: {link}")
 
     manifest = (ROOT / "Cargo.toml").read_text(encoding="utf-8")

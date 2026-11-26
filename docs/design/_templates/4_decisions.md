@@ -1,6 +1,6 @@
 ---
 title: <Feature> — Decisions
-owner: <agent family: codex | claude | grok | gemini>
+owner: "<agent family: codex | claude | grok | gemini>"
 created_date: YYYY-MM-DD
 updated_date: YYYY-MM-DD
 last_validated: YYYY-MM-DD
