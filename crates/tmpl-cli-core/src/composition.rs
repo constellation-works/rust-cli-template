@@ -79,7 +79,7 @@ impl From<Error> for cw_base::Error {
 /// `no_data_dir` when nothing names a data directory.
 pub fn start(env: &Env, root: Option<&Path>) -> Result<Runtime, cw_base::Error> {
     let root = data_dir(env, root)?;
-    tracing::debug!(root = %root.display(), "resolved data directory");
+    tracing::debug!(root = ?root, "resolved data directory");
     Ok(Runtime::new(&root, Store::open(&root)))
 }
 

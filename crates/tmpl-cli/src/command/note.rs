@@ -121,7 +121,7 @@ pub(crate) struct ListArgs {
 pub(crate) struct ShowArgs {
     /// The note's id, as printed by `note list`
     #[arg(value_name = "ID")]
-    #[schemars(with = "u64")]
+    #[schemars(with = "NoteIdSchema")]
     pub(crate) id: NoteId,
 }
 
@@ -143,6 +143,30 @@ impl JsonSchema for PriorityName {
 
     fn json_schema(_generator: &mut SchemaGenerator) -> Schema {
         json_schema!({ "type": "string", "enum": Priority::NAMES })
+    }
+}
+
+/// A note id's schema for a tool's input: an integer in
+/// [`NoteId::FIRST`]..=[`NoteId::MAX`] (1 to `i64::MAX`), derived from the
+/// domain type so the advertised range matches what [`NoteId`] accepts
+/// (STD-01 R25, R36).
+pub(crate) struct NoteIdSchema;
+
+impl JsonSchema for NoteIdSchema {
+    fn inline_schema() -> bool {
+        true
+    }
+
+    fn schema_name() -> Cow<'static, str> {
+        Cow::Borrowed("NoteId")
+    }
+
+    fn json_schema(_generator: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "type": "integer",
+            "minimum": NoteId::FIRST.get(),
+            "maximum": NoteId::MAX.get(),
+        })
     }
 }
 
@@ -206,9 +230,17 @@ fn output(outcome: Outcome) -> Output {
             },
             notice: list_notice(&filter, &list),
             warnings: bad_records.iter().map(ToString::to_string).collect(),
+            skipped: Vec::new(),
         },
         Outcome::Shown { note, bad_records } => Output {
             warnings: bad_records.iter().map(ToString::to_string).collect(),
+            skipped: bad_records
+                .iter()
+                .map(|bad| SkippedRecord {
+                    record: bad.locator.to_string(),
+                    reason: bad.reason.to_string(),
+                })
+                .collect(),
             ..Output::new(Payload::Note(NotePayload::from(&note)))
         },
     }

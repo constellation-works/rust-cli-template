@@ -156,6 +156,9 @@ fn emit<O: Write, E: Write>(sink: &mut Sink<O, E>, output: &Output) -> Result<()
         payload,
         notice,
         warnings,
+        // example:begin
+        skipped: _,
+        // example:end
     } = output;
     for warning in warnings {
         sink.warn(warning);

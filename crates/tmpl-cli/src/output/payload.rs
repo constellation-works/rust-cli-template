@@ -35,6 +35,11 @@ pub(crate) struct Output {
     pub(crate) notice: Option<String>,
     /// One stderr warning per bad record isolated while reading the store.
     pub(crate) warnings: Vec<String>,
+    // example:begin
+    /// Structured skipped records not already carried by a list payload,
+    /// surfaced in MCP tool results alongside the payload.
+    pub(crate) skipped: Vec<SkippedRecord>,
+    // example:end
 }
 
 impl Output {
@@ -44,6 +49,9 @@ impl Output {
             payload,
             notice: None,
             warnings: Vec::new(),
+            // example:begin
+            skipped: Vec::new(),
+            // example:end
         }
     }
 }

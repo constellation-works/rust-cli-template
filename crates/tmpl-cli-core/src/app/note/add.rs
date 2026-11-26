@@ -40,7 +40,7 @@ pub(super) fn add(ctx: &Ctx<'_>, new: NewNote) -> Result<Outcome, Error> {
         Ok(note)
     })?;
     let path = store.path();
-    tracing::debug!(id = %note.id, path = %path.display(), "added note");
+    tracing::debug!(id = %note.id, path = ?path, "added note");
     tracing::info!(id = %note.id, "note added");
     Ok(Outcome::Added { note, path })
 }

@@ -56,6 +56,22 @@ matching notes` in every mode.
 Adding a field is compatible. Renaming, removing or retyping one is a
 breaking change and shows up as a golden diff.
 
+## MCP tool results
+
+Each MCP tool returns the same JSON object as `--json`. Because an MCP
+client has no stderr channel on a tool call, warnings from a successful call
+are carried in an additive `warnings` array on the tool result:
+
+- `note_list` always carries `"warnings": [<skipped>, ...]` from the list
+  envelope above.
+- `note_show` adds `"warnings": [<skipped>, ...]` with the same
+  `{"record": "note <id>" | "row <id>", "reason": <string>}` entries when
+  other rows in the store were skipped, and omits `warnings` when none was
+  skipped.
+- A mutating tool whose audit line could not be written (`note_add`) adds
+  `"warnings": ["the audit line for `<command>` was not written: <reason>"]`
+  and omits `warnings` when the audit line was written.
+
 ## Errors and exit codes
 
 | Exit | Meaning | stderr |

@@ -9,6 +9,7 @@
 
 use crate::contract::{Note, NoteId, Priority, Tag, Title};
 use crate::error::{BadRecord, BadRecordReason, Error, RecordLocator, Result};
+use cw_sqlite::rusqlite::types::ValueRef;
 use cw_sqlite::rusqlite::{Connection, OptionalExtension as _, Params, Row, params};
 use std::path::Path;
 use std::str::FromStr;
@@ -229,32 +230,33 @@ fn sqlite(action: &'static str, path: &Path, err: cw_sqlite::rusqlite::Error) ->
     Error::Sqlite(cw_sqlite::Error::sqlite(action, path, err))
 }
 
-/// One row as SQLite holds it, before the contract types check it. The
-/// table is `STRICT`, so each column has its declared type.
+/// One row as SQLite holds it, before UTF-8 decoding and the contract types
+/// check it. Text columns are read as raw bytes so malformed UTF-8 in one row
+/// becomes a [`BadRecord`] rather than aborting the query (STD-02 R32).
 struct StoredRow {
     id: i64,
-    title: String,
-    body: Option<String>,
-    tags: String,
-    priority: String,
-    created_at: String,
+    title: Vec<u8>,
+    body: Option<Vec<u8>>,
+    tags: Vec<u8>,
+    priority: Vec<u8>,
+    created_at: Vec<u8>,
 }
 
 impl StoredRow {
     fn read(row: &Row<'_>) -> cw_sqlite::rusqlite::Result<Self> {
         Ok(Self {
             id: row.get(0)?,
-            title: row.get(1)?,
-            body: row.get(2)?,
-            tags: row.get(3)?,
-            priority: row.get(4)?,
-            created_at: row.get(5)?,
+            title: raw_text(row, 1, "title")?,
+            body: raw_opt_text(row, 2, "body")?,
+            tags: raw_text(row, 3, "tags")?,
+            priority: raw_text(row, 4, "priority")?,
+            created_at: raw_text(row, 5, "created_at")?,
         })
     }
 
     /// The note this row holds, or the bad record it is isolated as: each
-    /// field is validated at the construction boundary, with no default
-    /// (STD-02 R32).
+    /// field is decoded and validated at the construction boundary, with no
+    /// default (STD-02 R32).
     fn into_note(self, path: &Path) -> std::result::Result<Note, BadRecord> {
         let id = u64::try_from(self.id)
             .map_err(|_| crate::contract::NoteError::InvalidId(self.id.to_string()))
@@ -274,12 +276,21 @@ impl StoredRow {
             locator: RecordLocator::Id(id),
             reason,
         };
+        let title_text = decode_utf8("title", self.title).map_err(&bad)?;
         let title =
-            Title::try_from(self.title).map_err(|err| bad(BadRecordReason::Validation(err)))?;
-        let tags = parse_tags(&self.tags).map_err(bad)?;
-        let priority = Priority::from_str(&self.priority)
+            Title::try_from(title_text).map_err(|err| bad(BadRecordReason::Validation(err)))?;
+        let body = self
+            .body
+            .map(|bytes| decode_utf8("body", bytes))
+            .transpose()
+            .map_err(&bad)?;
+        let tags_text = decode_utf8("tags", self.tags).map_err(&bad)?;
+        let tags = parse_tags(&tags_text).map_err(&bad)?;
+        let priority_text = decode_utf8("priority", self.priority).map_err(&bad)?;
+        let priority = Priority::from_str(&priority_text)
             .map_err(|err| bad(BadRecordReason::Validation(err)))?;
-        let created_at = OffsetDateTime::parse(&self.created_at, &Rfc3339).map_err(|err| {
+        let created_at_text = decode_utf8("created_at", self.created_at).map_err(&bad)?;
+        let created_at = OffsetDateTime::parse(&created_at_text, &Rfc3339).map_err(|err| {
             bad(BadRecordReason::InvalidField {
                 field: "created_at",
                 detail: err.to_string(),
@@ -288,12 +299,53 @@ impl StoredRow {
         Ok(Note {
             id,
             title,
-            body: self.body,
+            body,
             tags,
             priority,
             created_at,
         })
     }
+}
+
+fn raw_text(row: &Row<'_>, index: usize, name: &str) -> cw_sqlite::rusqlite::Result<Vec<u8>> {
+    match row.get_ref(index)? {
+        ValueRef::Text(bytes) => Ok(bytes.to_vec()),
+        other @ (ValueRef::Null | ValueRef::Integer(_) | ValueRef::Real(_) | ValueRef::Blob(_)) => {
+            Err(cw_sqlite::rusqlite::Error::InvalidColumnType(
+                index,
+                name.to_owned(),
+                other.data_type(),
+            ))
+        }
+    }
+}
+
+fn raw_opt_text(
+    row: &Row<'_>,
+    index: usize,
+    name: &str,
+) -> cw_sqlite::rusqlite::Result<Option<Vec<u8>>> {
+    match row.get_ref(index)? {
+        ValueRef::Null => Ok(None),
+        ValueRef::Text(bytes) => Ok(Some(bytes.to_vec())),
+        other @ (ValueRef::Integer(_) | ValueRef::Real(_) | ValueRef::Blob(_)) => {
+            Err(cw_sqlite::rusqlite::Error::InvalidColumnType(
+                index,
+                name.to_owned(),
+                other.data_type(),
+            ))
+        }
+    }
+}
+
+fn decode_utf8(
+    field: &'static str,
+    bytes: Vec<u8>,
+) -> std::result::Result<String, BadRecordReason> {
+    String::from_utf8(bytes).map_err(|err| BadRecordReason::InvalidField {
+        field,
+        detail: format!("invalid UTF-8: {}", err.utf8_error()),
+    })
 }
 
 fn parse_tags(text: &str) -> std::result::Result<Vec<Tag>, BadRecordReason> {

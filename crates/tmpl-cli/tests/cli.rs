@@ -158,6 +158,10 @@ fn a_usage_error_is_reported_in_the_format_its_command_line_asked_for() {
         ),
         (&["--format", "nonsense", "status"][..], false),
         (&["bogus", "--", "--json"][..], false),
+        (&["--format", "--", "--json"][..], false),
+        (&["--format", "--json"][..], true),
+        (&["--format", "--format", "json", "bogus"][..], true),
+        (&["--format", "-x", "--json"][..], true),
     ] {
         let out = fx.run(args);
         assert_eq!(out.status.code(), Some(2), "{args:?}");

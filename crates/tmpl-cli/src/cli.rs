@@ -192,17 +192,25 @@ fn root(help_width: Option<usize>) -> clap::Command {
 /// The format a command line that failed to parse asked for, so the usage
 /// error can be reported in it (STD-01 R19). Parsing failed, so this reads
 /// the raw arguments up to `--`: `--json`, `--format <value>` or
-/// `--format=<value>`, the last one winning. A value that names no format
+/// `--format=<value>`, the last one winning. A bare `--format` does not
+/// consume `--` or another flag as its value. A value that names no format
 /// asks for text; `None` defers to `TMPL_CLI_FORMAT`.
 pub(crate) fn raw_requested_format(args: &[OsString]) -> Option<Format> {
     let named = |value: &str| Format::parse(value).unwrap_or(Format::Auto);
     let mut requested = None;
-    let mut iter = args.iter().skip(1).map(|os_arg| os_arg.to_string_lossy());
+    let mut iter = args
+        .iter()
+        .skip(1)
+        .map(|os_arg| os_arg.to_string_lossy())
+        .peekable();
     while let Some(arg) = iter.next() {
         match arg.as_ref() {
             "--" => break,
             "--json" => requested = Some(Format::Json),
-            "--format" => requested = Some(iter.next().map_or(Format::Auto, |value| named(&value))),
+            "--format" => {
+                let value = iter.next_if(|next| !is_flag(next));
+                requested = Some(value.map_or(Format::Auto, |value| named(&value)));
+            }
             other => {
                 if let Some(value) = other.strip_prefix("--format=") {
                     requested = Some(named(value));
@@ -211,6 +219,12 @@ pub(crate) fn raw_requested_format(args: &[OsString]) -> Option<Format> {
         }
     }
     requested
+}
+
+/// Whether `token` looks like `--` or a flag (`-x`, `--json`) rather than a
+/// value for `--format`.
+fn is_flag(token: &str) -> bool {
+    token.starts_with('-') && token.len() > 1
 }
 
 /// Every command path in the CLI tree, starting with the root (`"tmpl-cli"`),
