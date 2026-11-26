@@ -20,6 +20,7 @@ mod support;
 use std::io::{BufRead, BufReader};
 use std::process::Stdio;
 use support::{ChildGuard, Fixture, text};
+use tmpl_cli_store::STORE_FILE;
 
 fn json(bytes: &[u8]) -> serde_json::Value {
     serde_json::from_slice(bytes).expect("one JSON document")
@@ -210,6 +211,59 @@ fn a_missing_note_fails_with_exit_one_an_error_line_and_a_hint_on_stderr() {
         lines[1].starts_with("hint: ") && lines[1].contains("note list"),
         "says how to find ids: {stderr:?}"
     );
+}
+
+#[test]
+fn a_missing_note_is_reported_with_its_hint() {
+    // STD-01 R19, R20, R21; STD-02 R26: the error names the store searched,
+    // and the hint names the same --root to search again.
+    let fx = Fixture::new();
+    let out = fx.run(&["note", "show", "7"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(out.stdout.is_empty());
+    assert_eq!(
+        text(&out.stderr),
+        format!(
+            "error: no note with id 7 in {}\n\
+             hint: run 'tmpl-cli note list' with the same --root to see existing ids\n",
+            fx.root().join(STORE_FILE).display()
+        )
+    );
+
+    // A root whose name holds an escape, a carriage return and a line feed:
+    // the error stays on one diagnostic line and shows its path escaped.
+    let root = fx.elsewhere("root\x1b[31m\r\ninjected");
+    let root_arg = root.to_str().unwrap();
+    let out = fx.run(&["--root", root_arg, "note", "show", "7"]);
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = text(&out.stderr);
+    assert!(
+        !stderr.contains('\x1b') && !stderr.contains('\r'),
+        "raw control characters on stderr: {stderr:?}"
+    );
+    let lines: Vec<&str> = stderr.lines().collect();
+    assert_eq!(lines.len(), 2, "{stderr:?}");
+    assert!(
+        lines[0].starts_with("error: no note with id 7 in ")
+            && lines[0].ends_with(&format!(r"root\u{{1b}}[31m\r\ninjected/{STORE_FILE}")),
+        "{stderr:?}"
+    );
+    assert_eq!(
+        lines[1],
+        "hint: run 'tmpl-cli note list' with the same --root to see existing ids"
+    );
+}
+
+#[test]
+fn json_carries_null_for_absent_values_rather_than_omitting_them() {
+    // STD-01 R11: an absent value is a key holding null, and an empty list is
+    // an empty array; neither key is left out of the document.
+    let fx = Fixture::new();
+    fx.ok(&["note", "add", "bare"]);
+    let doc = json(&fx.ok(&["note", "show", "1", "--json"]).stdout);
+    let record = doc.as_object().expect("one record is a JSON object");
+    assert_eq!(record.get("body"), Some(&serde_json::Value::Null));
+    assert_eq!(record.get("tags"), Some(&serde_json::json!([])));
 }
 
 #[test]

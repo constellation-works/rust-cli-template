@@ -68,6 +68,22 @@ fn status_reports_a_new_data_directory_in_every_mode_and_creates_nothing() {
 }
 
 #[test]
+fn global_flags_parse_before_and_after_the_subcommand() {
+    // STD-01 R4: --root and --format are accepted on either side of the
+    // subcommand, and each takes effect wherever it is written.
+    let fx = Fixture::new();
+    let root = fx.elsewhere("data");
+    let root_arg = root.to_str().unwrap();
+    for args in [
+        &["--format", "json", "status", "--root", root_arg][..],
+        &["--root", root_arg, "status", "--format", "json"][..],
+    ] {
+        let doc = json(&fx.ok(args).stdout);
+        assert_eq!(doc["root"], root_arg, "{args:?}");
+    }
+}
+
+#[test]
 fn the_format_environment_variable_applies_and_a_bad_value_falls_back() {
     // STD-01 R8.
     let fx = Fixture::new();

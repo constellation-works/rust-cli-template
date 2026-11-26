@@ -253,6 +253,75 @@ fn list_filters_before_the_limit_and_reports_the_total() {
     );
 }
 
+/// The ids of a listing's rows, in the order the listing returns them.
+fn ids(list: &NoteList) -> Vec<u64> {
+    list.notes.iter().map(|note| note.id.get()).collect()
+}
+
+#[test]
+fn filters_combine_and_keep_the_stored_order() {
+    // Both filters hold at once, and the matches keep the stored order (the
+    // ascending id), not the order of their titles.
+    let dir = tempdir();
+    let store = Store::open(dir.path());
+    store
+        .add(new_note("zeta", &["home"], Priority::High), NOW)
+        .unwrap();
+    store
+        .add(new_note("beta", &["work"], Priority::High), NOW)
+        .unwrap();
+    store
+        .add(new_note("mid", &["home"], Priority::Low), NOW)
+        .unwrap();
+    store
+        .add(new_note("alpha", &["home"], Priority::High), NOW)
+        .unwrap();
+
+    let listed = store
+        .list(&ListFilter {
+            tag: Some("home".parse().unwrap()),
+            priority: Some(Priority::High),
+            limit: None,
+        })
+        .unwrap()
+        .value;
+    assert_eq!(ids(&listed), [1, 4]);
+    assert_eq!(listed.total, 2);
+    assert!(!listed.truncated());
+}
+
+#[test]
+fn the_limit_applies_after_the_filters_and_the_total_counts_every_match() {
+    // STD-01 R33, R34: the filter narrows the rows before the limit cuts
+    // them, and the total and the truncation count every filtered match.
+    let dir = tempdir();
+    let store = Store::open(dir.path());
+    store
+        .add(new_note("a", &["home"], Priority::High), NOW)
+        .unwrap();
+    store
+        .add(new_note("b", &["work"], Priority::High), NOW)
+        .unwrap();
+    store
+        .add(new_note("c", &["home"], Priority::Low), NOW)
+        .unwrap();
+    store
+        .add(new_note("d", &["home"], Priority::High), NOW)
+        .unwrap();
+
+    let listed = store
+        .list(&ListFilter {
+            tag: Some("home".parse().unwrap()),
+            priority: None,
+            limit: limit(2),
+        })
+        .unwrap()
+        .value;
+    assert_eq!(ids(&listed), [1, 3]);
+    assert_eq!(listed.total, 3);
+    assert!(listed.truncated());
+}
+
 #[test]
 fn concurrent_writers_never_lose_a_note_or_reuse_an_id() {
     let dir = tempdir();
