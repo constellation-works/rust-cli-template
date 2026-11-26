@@ -17,7 +17,7 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -333,4 +333,102 @@ fn clippy_refuses_an_aliased_env_read_and_a_direct_file_read() {
     ] {
         assert!(stderr.contains(refused), "{refused}: {stderr}");
     }
+}
+
+/// A task id, built at run time so that this file names none: the gate scans
+/// every tracked file, this one included.
+const TASK_ID: &str = concat!("ORB-", "26767");
+
+/// Run `git` in `root`, which must succeed.
+fn git(root: &Path, args: &[&str]) {
+    let out = Command::new("git")
+        .args(args)
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// Copy the private-id gate into `root` and run it there. Git's search for a
+/// repository stops at `root`'s parent, so an enclosing checkout cannot make
+/// `root` look like a work tree.
+fn private_task_ids(root: &Path) -> Output {
+    let script = copy_script("check-private-task-ids.sh", root);
+    Command::new(&script)
+        .env("GIT_CEILING_DIRECTORIES", root.parent().unwrap())
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn private_task_ids_gate_passes_a_copy_outside_a_work_tree() {
+    // Git sees none of this copy's files, so the gate scans them. The vendored
+    // canon and target/ may name task ids; nothing else may.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src/lib.rs"), "//! Clean.\n").unwrap();
+    fs::create_dir_all(root.join("docs/standards/STD-01")).unwrap();
+    fs::write(
+        root.join("docs/standards/STD-01/STD-01.md"),
+        format!("Cites {TASK_ID}.\n"),
+    )
+    .unwrap();
+    fs::create_dir_all(root.join("target")).unwrap();
+    fs::write(root.join("target/build.log"), format!("{TASK_ID}\n")).unwrap();
+
+    let out = private_task_ids(root);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn private_task_ids_gate_names_a_file_outside_a_work_tree_with_an_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::create_dir_all(root.join("crates/demo/src")).unwrap();
+    fs::write(
+        root.join("crates/demo/src/lib.rs"),
+        format!("//! Tracked in {TASK_ID}.\n"),
+    )
+    .unwrap();
+
+    let out = private_task_ids(root);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("crates/demo/src/lib.rs"), "{stdout}");
+    assert!(stderr.contains("replace private task IDs"), "{stderr}");
+}
+
+#[test]
+fn private_task_ids_gate_inside_a_work_tree_scans_tracked_files_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    git(root, &["init", "-q"]);
+    fs::create_dir_all(root.join("crates/demo/src")).unwrap();
+    fs::write(
+        root.join("crates/demo/src/lib.rs"),
+        format!("//! Tracked in {TASK_ID}.\n"),
+    )
+    .unwrap();
+    git(root, &["add", "crates/demo/src/lib.rs"]);
+    // Untracked, so git grep does not see it.
+    fs::write(root.join("untracked.md"), format!("{TASK_ID}\n")).unwrap();
+
+    let out = private_task_ids(root);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("crates/demo/src/lib.rs"), "{stdout}");
+    assert!(!stdout.contains("untracked.md"), "{stdout}");
 }
