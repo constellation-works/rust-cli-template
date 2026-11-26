@@ -14,7 +14,9 @@
 //!
 //! The server runs against the runtime `run` started from the environment
 //! `main` captured; this module reads no environment and never writes to
-//! standard output, which carries the protocol. Warnings go to the log.
+//! standard output, which carries the protocol. Warnings are logged and also
+//! carried in the tool result's `warnings` field so callers see them whatever
+//! the log level.
 //!
 //! To add a tool for a new command: give its `Args` the same derives as
 //! `StatusArgs`, and add one line to [`tools`].
@@ -95,17 +97,48 @@ fn summary(path: &[&str]) -> String {
 }
 
 /// Run `command` through the same handler the command line uses, settle its
-/// audit record, and return what `--json` prints.
+/// audit record, and return what `--json` prints, carrying any skipped-record
+/// or audit-write warnings in `warnings` so the log level cannot hide them
+/// (STD-02 R31, R32).
 fn call(runtime: &Runtime, origin: &Origin, command: Command) -> Result<Value, Error> {
-    let (outcome, warning) = command::run(command, runtime, origin, |outcome| outcome);
-    if let Some(warning) = warning {
-        tracing::warn!("{warning}");
-    }
+    let (outcome, audit_warning) = command::run(command, runtime, origin, |outcome| outcome);
+    let audit_warning = audit_warning.map(|warning| {
+        let text = warning.to_string();
+        tracing::warn!(warning = ?text, "audit line not written");
+        text
+    });
     let output = outcome?;
     for warning in &output.warnings {
-        tracing::warn!("{warning}");
+        tracing::warn!(warning = ?warning, "store warning");
     }
-    json(&output.payload)
+    let mut extra_warnings = Vec::new();
+    // example:begin
+    for skipped in &output.skipped {
+        extra_warnings.push(serde_json::to_value(skipped).map_err(encode_error)?);
+    }
+    // example:end
+    if let Some(warning) = audit_warning {
+        extra_warnings.push(Value::String(warning));
+    }
+    let mut value = json(&output.payload)?;
+    attach_warnings(&mut value, extra_warnings);
+    Ok(value)
+}
+
+/// Append `extra` to `value["warnings"]` when non-empty, adding the field if
+/// the payload does not already carry one.
+fn attach_warnings(value: &mut Value, extra: Vec<Value>) {
+    if extra.is_empty() {
+        return;
+    }
+    if let Some(object) = value.as_object_mut() {
+        match object.get_mut("warnings").and_then(Value::as_array_mut) {
+            Some(existing) => existing.extend(extra),
+            None => {
+                object.insert(String::from("warnings"), Value::Array(extra));
+            }
+        }
+    }
 }
 
 /// The payload as the tool's JSON: the same value `--json` prints.

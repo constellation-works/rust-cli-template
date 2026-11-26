@@ -39,8 +39,9 @@ impl fmt::Display for RecordLocator {
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum BadRecordReason {
-    /// A field held a value that does not parse: a timestamp that is not
-    /// RFC 3339, or tags that are not a JSON array of strings.
+    /// A field held a value that does not decode or parse: invalid UTF-8
+    /// bytes, a timestamp that is not RFC 3339, or tags that are not a JSON
+    /// array of strings.
     #[error("invalid field '{field}': {detail}")]
     InvalidField {
         /// The offending field name.

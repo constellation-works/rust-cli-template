@@ -263,6 +263,7 @@ fn a_tool_reads_each_text_field_through_its_types_rules() {
         ("note_add", json!({"title": "x", "tags": ["ok", "Bad"]})),
         ("note_add", json!({"title": 7})),
         ("note_show", json!({"id": 0})),
+        ("note_show", json!({"id": i64::MAX.unsigned_abs() + 1})),
     ] {
         let refused = session.call(tool, &arguments);
         assert_eq!(refused["error"]["code"], -32602, "{arguments}: {refused}");
@@ -277,5 +278,70 @@ fn a_tool_reads_each_text_field_through_its_types_rules() {
     assert_eq!(note["body"], Value::Null);
     assert_eq!(note["tags"], json!(["a", "b"]));
     session.close();
+}
+
+#[test]
+fn note_show_schema_advertises_accepted_id_range() {
+    // STD-01 R36: the advertised range matches NoteId (1..=i64::MAX).
+    let fx = Fixture::new();
+    let mut session = Session::start(&fx);
+    let tools = session.tools();
+    session.close();
+    let show = tools
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "note_show")
+        .expect("note_show tool");
+    let id = &show["inputSchema"]["properties"]["id"];
+    assert_eq!(id["type"], "integer", "{id}");
+    assert_eq!(id["minimum"], 1, "{id}");
+    assert_eq!(id["maximum"], i64::MAX, "{id}");
+}
+
+#[test]
+fn note_add_reports_audit_write_failure_in_tool_result() {
+    // STD-02 R31: audit failure fails open, and the tool result reports it.
+    let fx = Fixture::new();
+    fx.ok(&["note", "add", "seed"]);
+    let audit = fx.root().join("audit.jsonl");
+    std::fs::remove_file(&audit).unwrap();
+    std::fs::create_dir(&audit).unwrap();
+    let mut session = Session::start(&fx);
+    let added = session.call("note_add", &json!({"title": "Audit fails"}));
+    session.close();
+    let result = structured(&added);
+    assert_eq!(result["id"], 2, "{result}");
+    assert_eq!(result["title"], "Audit fails", "{result}");
+    let warnings = result["warnings"]
+        .as_array()
+        .expect("audit failure reported in warnings");
+    assert_eq!(warnings.len(), 1, "{result}");
+    assert!(
+        warnings[0]
+            .as_str()
+            .unwrap()
+            .contains("the audit line for `note add` was not written"),
+        "{result}"
+    );
+}
+
+#[test]
+fn note_show_reports_skipped_records_in_tool_result() {
+    // STD-02 R32: skipped rows appear in note_show's warnings as in note_list.
+    let fx = Fixture::new();
+    support::execute(
+        &fx.root(),
+        "INSERT INTO note (id, title, body, tags, priority, created_at) VALUES
+            (1, 'Good', NULL, '[]', 'normal', '2026-01-02T03:04:05Z'),
+            (2, 'Bad', NULL, '[]', 'urgent', '2026-01-02T03:04:05Z');",
+    );
+    let mut session = Session::start(&fx);
+    let listed = structured(&session.call("note_list", &json!({})));
+    let shown = structured(&session.call("note_show", &json!({"id": 1})));
+    session.close();
+    assert_eq!(shown["id"], 1, "{shown}");
+    assert_eq!(shown["warnings"], listed["warnings"], "{shown}");
+    assert_eq!(shown["warnings"][0]["record"], "note 2", "{shown}");
 }
 // example:end

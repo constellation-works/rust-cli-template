@@ -60,9 +60,12 @@ tmpl-cli --root <DIR> mcp
 
 Each tool is named after its command, with `_` between the words
 (`status`), takes the command's arguments as JSON fields, and returns what
-the command prints with `--json`. A failure is a tool error carrying the
-same `code` the command line reports. A change made through a tool is
-audited with the surface `mcp` and the client's name as the actor.
+the command prints with `--json`. When a successful call has warnings (an
+audit line that could not be written, or unreadable store records skipped on
+a read), the tool result carries them in a `warnings` field. A failure is a
+tool error carrying the same `code` the command line reports. A change made
+through a tool is audited with the surface `mcp` and the client's name as
+the actor.
 <!-- example:begin -->
 The note tools are `note_add`, `note_list` and `note_show`.
 <!-- example:end -->

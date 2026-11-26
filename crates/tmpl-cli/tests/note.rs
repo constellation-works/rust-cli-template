@@ -739,6 +739,93 @@ fn bad_records_warn_on_reads_fail_on_show_and_refuse_writes_without_touching_sto
 }
 
 #[test]
+fn non_utf8_rows_are_isolated_as_bad_records_and_named_in_warnings() {
+    let fx = Fixture::new();
+    support::execute(
+        &fx.root(),
+        "INSERT INTO note (id, title, body, tags, priority, created_at) VALUES
+            (1, 'Good note', NULL, '[]', 'normal', '2026-01-02T03:04:05Z'),
+            (2, CAST(X'626164ff' AS TEXT), NULL, '[]', 'normal', '2026-01-02T03:04:05Z'),
+            (3, 'Bad body', CAST(X'fffe' AS TEXT), '[]', 'normal', '2026-01-02T03:04:05Z');",
+    );
+
+    let list = fx.ok(&["note", "list", "--json"]);
+    let doc = json(&list.stdout);
+    assert_eq!(doc["total"], 1);
+    assert_eq!(doc["notes"].as_array().map(Vec::len), Some(1));
+    assert_eq!(doc["notes"][0]["id"], 1);
+    let warnings = doc["warnings"].as_array().unwrap();
+    assert_eq!(warnings.len(), 2, "{doc}");
+    assert_eq!(warnings[0]["record"], "note 2");
+    assert!(
+        warnings[0]["reason"].as_str().unwrap().contains("UTF-8"),
+        "{doc}"
+    );
+    assert_eq!(warnings[1]["record"], "note 3");
+    assert!(
+        warnings[1]["reason"].as_str().unwrap().contains("UTF-8"),
+        "{doc}"
+    );
+    assert_eq!(text(&list.stderr).lines().count(), 2);
+
+    let show_good = fx.ok(&["note", "show", "1", "--json"]);
+    assert_eq!(json(&show_good.stdout)["id"], 1);
+    assert_eq!(text(&show_good.stderr).lines().count(), 2);
+
+    let show_bad = fx.run(&["note", "show", "2", "--json"]);
+    assert_eq!(show_bad.status.code(), Some(1));
+    assert_eq!(json(&show_bad.stderr)["code"], "store_bad_record");
+
+    let add_out = fx.run(&["note", "add", "Should not write", "--json"]);
+    assert_eq!(add_out.status.code(), Some(1));
+    assert_eq!(json(&add_out.stderr)["code"], "store_bad_record");
+}
+
+#[cfg(unix)]
+#[test]
+fn debug_logs_escape_control_characters_in_root_paths() {
+    let fx = Fixture::new();
+    let root = fx.elsewhere("root\x1b[31m\r\ninjected");
+    let root_arg = root.to_str().unwrap();
+
+    for (args, expected_lines) in [
+        (
+            &["--root", root_arg, "status", "--json"][..],
+            &["resolved data directory"][..],
+        ),
+        (
+            &["--root", root_arg, "note", "add", "x", "--json"][..],
+            &["resolved data directory", "added note"][..],
+        ),
+    ] {
+        let mut cmd = fx.cmd(args);
+        cmd.env("TMPL_CLI_LOG", "debug");
+        let out = cmd.output().unwrap();
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "{args:?}: {}",
+            text(&out.stderr)
+        );
+        let stderr = text(&out.stderr);
+        assert!(
+            !stderr.contains('\x1b') && !stderr.contains('\r'),
+            "{args:?} emitted raw control characters on stderr: {stderr:?}"
+        );
+        for marker in expected_lines {
+            let line = stderr
+                .lines()
+                .find(|line| line.contains(marker))
+                .unwrap_or_else(|| panic!("{args:?} missing debug line `{marker}`: {stderr:?}"));
+            assert!(
+                line.contains(r"root\u{1b}[31m\r\ninjected"),
+                "{args:?} did not escape path in `{marker}` line: {line:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn help_states_defaults_for_tag_and_json() {
     let fx = Fixture::new();
     let root_help = text(&fx.ok(&["--help"]).stdout);

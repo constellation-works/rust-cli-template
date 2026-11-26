@@ -146,7 +146,8 @@ every query in one command sees one committed version; it takes no lock,
 changes no note, and works on a read-only data directory. A missing data
 directory or database reads as an empty store and creates nothing. Each row
 is mapped to the contract types at the construction boundary with no
-default: a row whose title, tag, priority or timestamp fails validation is
+default: a row whose text is not valid UTF-8 or whose title, tag, priority
+or timestamp fails validation is
 isolated as a `BadRecord` (`store_bad_record`) naming its id and reason;
 reads return the valid notes plus per-record warnings, `show <bad id>` fails
 with that record's error, and `add` refuses while any bad record exists, so
@@ -216,8 +217,10 @@ and reads no environment of its own.
   `cw_app::exec` and settles the audit record. Its result is the value
   `--json` prints; a failure is the command's own error, answered as a
   tool error with the template's code and `isError: true`. Bad-record and
-  audit warnings go to the log on stderr; nothing in the surface writes to
-  stdout, which carries the protocol.
+  audit warnings are logged to stderr and also carried in the tool result's
+  `warnings` field (skipped records as `{record, reason}` on `note_list` and
+  `note_show`, and an audit-write failure message on mutating tools); nothing
+  in the surface writes to stdout, which carries the protocol.
 - Each call's `Origin` is the `mcp` surface and the client's name, so the
   audit log tells the surfaces apart.
 
