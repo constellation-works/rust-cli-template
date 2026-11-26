@@ -83,7 +83,6 @@ output/              payloads and each command's human view, written through the
 <!-- example:begin -->
   note.rs            the note payloads, the list table, the detail text, the priority's colour role
 <!-- example:end -->
-  env.rs             the variables the kit reads but does not declare yet, for the usage table
 error.rs             the remedy for an error; the surfaces' own failures (output, usage, the MCP server)
 ```
 

@@ -1301,9 +1301,9 @@ crate names it.
   `cw_cli::help::grouped`, and the golden tests hold every summary to one
   short line.
 - `output/` keeps the payloads, each command's view and the priority's
-  colour role. `output/env.rs` still declares `CLICOLOR_FORCE` and
-  `COLUMNS`, which the kit reads but `cw_app` does not declare yet, so the
-  usage table keeps listing them; it goes when the kit declares them.
+  colour role. The usage table's variables are the kit's: `cw_app` declares
+  `CLICOLOR_FORCE` and `COLUMNS` and lists them in `KIT_VARS`, so the CLI
+  declares neither itself.
 
 ### Consequences
 
@@ -1314,9 +1314,8 @@ crate names it.
   is unset; and stderr text is escaped by the kit.
 - Gaps recorded against the kit rather than re-created here: `Sink::warn`
   and `Sink::notice` keep line feeds and tabs raw, so record text in a
-  warning can still break a stderr line; the note detail view cannot colour
-  its priority, since `emit_text` escapes the whole text; and the two
-  variables above are undeclared in the kit.
+  warning can still break a stderr line; and the note detail view cannot
+  colour its priority, since `emit_text` escapes the whole text.
 - Cost: the surface's bytes change only by moving the satellites pin.
 
 ## The MCP surface is a second mapping onto the same commands

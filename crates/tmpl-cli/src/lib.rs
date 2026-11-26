@@ -41,11 +41,13 @@ use std::process::ExitCode;
 use tmpl_cli_core::{APP, Env, Origin, Surface};
 
 /// The Markdown table of every environment variable the CLI reads: the
-/// kit's first, then the CLI's own (`output::VARS`). `docs/usage.md` holds
-/// it, and a golden test keeps the two equal.
+/// kit's, which the kit declares and lists (`KIT_VARS`), then the CLI's own,
+/// which go in the slice passed to `table`. The CLI declares none today, so
+/// the slice is empty. `docs/usage.md` holds this table, and a golden test
+/// keeps the two equal.
 #[must_use]
 pub fn env_table() -> String {
-    tmpl_cli_core::env::table(tmpl_cli_core::APP, output::VARS)
+    tmpl_cli_core::env::table(tmpl_cli_core::APP, &[])
 }
 
 /// Run the CLI against `args`, the process arguments, and `env`, the
