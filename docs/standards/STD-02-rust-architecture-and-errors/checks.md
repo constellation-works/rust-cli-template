@@ -17,11 +17,13 @@ The gate that enforces each rule in [STD-02](STD-02.md), or `review-only`. Ship 
 | R40 | Dependency-direction check: the persistence unit imports no application unit, port or feature-rule unit (a crate edge once persistence is its own crate, R7). The naming of its API is review-only. |
 | R41 | review-only |
 | R42 | Dependency-direction check: the unit that defines a port does not import its implementation. Where the shapes live is review-only. |
-| R43 | Architecture-map check in the structure gate: fails when a workspace crate is absent from the architecture doc, when a top-level module (`src/<name>.rs` or `src/<name>/`, `tests` excluded) is absent from its crate's section, when a path the doc writes in code formatting does not exist, or when a crate root or top-level module lacks a first-line `//!` doc. The crate list is read from `cargo metadata`. Whether a unit's sentence matches its `//!` sentence, where new code is placed, and the naming clauses are review-only. |
+| R43 | Architecture-map check in the structure gate, a copyable script ([below](#architecture-map-check-r43)): fails when a workspace crate is absent from the architecture doc, when a top-level module (`src/<name>.rs` or `src/<name>/`, `tests` excluded) is absent from its crate's section, when a path the doc writes in code formatting does not exist, or when a crate root or top-level module lacks a first-line `//!` doc. The crate list is read from `cargo metadata`. Whether a unit's sentence matches its `//!` sentence, where new code is placed, and the naming clauses are review-only. |
 | R44 | Dependency-direction check: only the open and upgrade entry points import the legacy unit. Otherwise review-only. |
 | R45 | review-only; the unit map R43 requires lists one application unit per subject, and the dependency-direction check (R6) holds their order |
 | R46 | review-only; a project MAY add provider program and SDK crate names to its dependency-direction check |
 | R47 | review-only |
+| R48 | review-only |
+| R49 | review-only |
 | R8 | review-only (optionally `unreachable_pub = "warn"`, not in Orbit's baseline) |
 | R9 | review-only (Orbit does not gate it; see *Deviations* in [`STD-02.md`](STD-02.md#deviations)) |
 | R10 | review-only; an optional grep for `.contains(` on `stderr`, error `to_string()` or message values in classification code is a useful review aid |
@@ -32,6 +34,8 @@ The gate that enforces each rule in [STD-02](STD-02.md), or `review-only`. Ship 
 | R36 | Adoptable lint `clippy::fn_params_excessive_bools` with `max-fn-params-bools = 1` catches two or more `bool`s on one function; a single mode `bool` is review-only (at `0` the lint also fires on setters and other data `bool`s) |
 | R37 | Default-on `clippy::wrong_self_convention`, `clippy::len_without_is_empty` and `clippy::should_implement_trait` (+ `-D warnings`) catch part of it; the rest is review-only |
 | R38 | Default-on `clippy::ptr_arg` and `clippy::from_over_into`; adoptable `clippy::clone_on_ref_ptr`, `clippy::rc_buffer`, `clippy::needless_pass_by_value`; clones that only end a borrow are review-only |
+| R51 | `clippy::too_many_arguments` at warn, with `too-many-arguments-threshold = 7` in `clippy.toml` |
+| R52 | review-only |
 | R26 | review-only; a unit test per error constructor can assert that the resolved inputs appear in the message |
 | R27 | Adoptable lints `clippy::wildcard_enum_match_arm` and `clippy::match_wildcard_for_single_variants` (see [Adoptable additions](#adoptable-additions-beyond-orbits-baseline)); not in Orbit's baseline |
 | R28 | A load-time test per bounded key (an out-of-range value is refused at load, naming the key); adoptable lints `clippy::cast_possible_truncation`, `clippy::cast_sign_loss`, `clippy::cast_possible_wrap` for the `as` ban; not in Orbit's baseline |
@@ -45,6 +49,7 @@ The gate that enforces each rule in [STD-02](STD-02.md), or `review-only`. Ship 
 | R16 | Round-trip tests on persisted fixtures (old document deserializes; removed key warns; write → read → write is byte-stable); grep ban on `serde(default = "…now")` |
 | R17 | Retired-path guard in the dependency-direction check; otherwise review-only |
 | R18 | review-only |
+| R50 | review-only |
 | R19 | Orphan-module check (every `src/**/tests/*.rs` declared in its `tests/mod.rs`) |
 | R20 | review-only |
 | R21 | review-only |
@@ -185,6 +190,26 @@ if [[ -n "$hits" ]]; then echo "$hits" >&2; echo "std streams belong to $OUTPUT_
 ```
 
 The constellation Rust CLI template (`constellation-works/rust-cli-template`, checked out at `codebases/rust-cli-template`) ships the full version as `scripts/check-terminal-guard.sh`. List any justified exception (R15) as an extra `grep -v` with a comment giving its reason.
+
+## Architecture-map check (R43)
+
+The gate is one script, run in the structure gate beside the dependency-direction check. Copy `scripts/check-architecture-map.sh` from the constellation Rust CLI template (`constellation-works/rust-cli-template`, checked out at `codebases/rust-cli-template`; landed in constellation-works/rust-cli-template#37, `7a018d7`). It names no crate and reads the crate list from `cargo metadata`, so the copy needs no edit and a new crate or module fails the gate until the doc names it. It needs `cargo` and `python3`.
+
+It fails, naming the file and the unit, when:
+
+| Failure | What the script reads |
+|---|---|
+| A workspace crate has no section | A `##` heading in `ARCHITECTURE.md` whose first code span is the crate's name |
+| A top-level module is not in its crate's section | `src/<name>.rs` or `src/<name>/` (`tests`, `bin` and the crate roots excluded) must appear as a top-level entry of the section's file tree, or as a code span `<name>.rs` or `<name>/` |
+| A documented path does not exist | Every code span that looks like a path (it has a `/` or a file extension) and every entry of a crate section's fenced file tree. A span resolves from the repository root, from the section's crate, or as a path suffix inside it |
+| A unit has no doc comment | Each crate root (lib or bin target) and each top-level module file (`<name>.rs`, else `<name>/mod.rs`) begins with a `//!` line |
+
+Write the architecture doc for it:
+
+- A path in code formatting is read as a claim that the path exists. Write a path that does not exist (a module the project chose not to have, a planned file) in plain prose, not in backticks. Placeholders (`<..>`, `$`, `*`, `…`) are skipped.
+- A crate section's fenced block is its file tree under `src/`; indentation gives the nesting.
+
+Exit status: 0 when the map matches, 1 with one line per problem, 2 when `cargo` or `python3` is missing or `cargo metadata` fails. A repository with no `crates/*/Cargo.toml` passes with nothing checked, so a single-crate project (*Scaling* in [STD-02](STD-02.md)) adapts the crate discovery before it relies on the gate. The template's tests for the script (`crates/tmpl-cli/tests/script.rs`) cover the four failures.
 
 ## Dependency-direction check (R1–R7, R17)
 
