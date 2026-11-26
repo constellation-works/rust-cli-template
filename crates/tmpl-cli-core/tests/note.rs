@@ -33,22 +33,6 @@ use tmpl_cli_store::{
 
 const NOW: OffsetDateTime = datetime!(2026-01-02 03:04:05 UTC);
 
-/// The store failure behind an error, when there is one.
-fn store_error(err: &Error) -> Option<&StoreError> {
-    err.downcast_ref::<StoreError>()
-}
-
-/// Run `command` through the chokepoint against `store`, its data directory
-/// the store's, with the clock pinned at `now`; the audit record is settled
-/// after the result is taken, as a surface does.
-fn run(store: &Store, now: OffsetDateTime, command: Command) -> Result<Outcome, Error> {
-    let root = store.path().parent().unwrap().to_path_buf();
-    let runtime = Runtime::new(root, store.clone()).with_clock(Clock::fixed(now));
-    let origin = Origin::new(Surface::CLI, None);
-    let (result, _warning) = note::exec(&runtime, &origin, command).settle();
-    result
-}
-
 /// A read's value together with the bad records it isolated.
 #[derive(Debug)]
 struct Loaded<T> {
@@ -94,6 +78,22 @@ impl NoteApp for Store {
             bad_records,
         })
     }
+}
+
+/// The store failure behind an error, when there is one.
+fn store_error(err: &Error) -> Option<&StoreError> {
+    err.downcast_ref::<StoreError>()
+}
+
+/// Run `command` through the chokepoint against `store`, its data directory
+/// the store's, with the clock pinned at `now`; the audit record is settled
+/// after the result is taken, as a surface does.
+fn run(store: &Store, now: OffsetDateTime, command: Command) -> Result<Outcome, Error> {
+    let root = store.path().parent().unwrap().to_path_buf();
+    let runtime = Runtime::new(root, store.clone()).with_clock(Clock::fixed(now));
+    let origin = Origin::new(Surface::CLI, None);
+    let (result, _warning) = note::exec(&runtime, &origin, command).settle();
+    result
 }
 
 /// A temporary directory that is owner-only whatever the umask, as a store

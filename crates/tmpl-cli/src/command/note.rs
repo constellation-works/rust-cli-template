@@ -125,12 +125,6 @@ pub(crate) struct ShowArgs {
     pub(crate) id: NoteId,
 }
 
-/// Allowed priorities come from the domain type, so help and parsing cannot
-/// drift from it (STD-01 R25).
-fn priority_parser() -> impl TypedValueParser<Value = Priority> {
-    PossibleValuesParser::new(Priority::NAMES).try_map(|value| value.parse::<Priority>())
-}
-
 /// A priority's schema for a tool's input: a string, one of the same names
 /// the parser accepts (STD-01 R25). `Priority` deserializes itself from
 /// those names.
@@ -168,6 +162,12 @@ impl JsonSchema for NoteIdSchema {
             "maximum": NoteId::MAX.get(),
         })
     }
+}
+
+/// Allowed priorities come from the domain type, so help and parsing cannot
+/// drift from it (STD-01 R25).
+fn priority_parser() -> impl TypedValueParser<Value = Priority> {
+    PossibleValuesParser::new(Priority::NAMES).try_map(|value| value.parse::<Priority>())
 }
 
 /// Run one `note` verb through the `note` app, pass the payload to

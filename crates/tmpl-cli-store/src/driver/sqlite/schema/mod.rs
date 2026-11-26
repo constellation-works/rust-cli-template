@@ -7,11 +7,11 @@
 //! RFC 3339 UTC text, a list as JSON in a text column checked by
 //! `json_valid`.
 
-use cw_sqlite::Step;
-
 // example:begin
 mod note;
 // example:end
+
+use cw_sqlite::Step;
 
 /// Every schema step, append-only (STD-03 R23): step `n` takes the database
 /// from version `n - 1` to `n` (`PRAGMA user_version`). A shipped step is

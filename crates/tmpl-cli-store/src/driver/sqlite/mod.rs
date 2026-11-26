@@ -8,14 +8,14 @@
 //! row mapping live in its repository under `crate::repository`; the one read
 //! it makes is the damage probe in `damage`.
 
+mod damage;
+
+mod schema;
+
 use cw_sqlite::Db;
 pub(crate) use damage::find as find_damage;
 use std::path::Path;
 use std::time::Duration;
-
-mod damage;
-
-mod schema;
 
 /// The database's file name under the data directory. SQLite keeps
 /// its `-wal` and `-shm` files beside it.

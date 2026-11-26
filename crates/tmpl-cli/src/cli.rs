@@ -53,6 +53,13 @@ const GROUPS: &[Group<'_>] = &[
     },
 ];
 
+const MCP_EXAMPLES: &str = "\
+Examples:
+  tmpl-cli mcp
+  tmpl-cli --root ~/data mcp
+
+Point an MCP client at the command. It serves until its input closes.";
+
 /// A command-line tool with a private local store.
 #[derive(Debug, Parser)]
 #[command(
@@ -70,17 +77,23 @@ pub(crate) struct Cli {
     pub(crate) command: Invocation,
 }
 
+impl Cli {
+    /// Parse a command line as clap declares it. `help_width` is the width
+    /// root help wraps to, `None` off a terminal. The checks clap cannot
+    /// express are [`GlobalArgs::check`]'s.
+    pub(crate) fn parse_args(
+        args: &[OsString],
+        help_width: Option<usize>,
+    ) -> Result<Self, clap::Error> {
+        let matches = root(help_width).try_get_matches_from(args)?;
+        Self::from_arg_matches(&matches)
+    }
+}
+
 /// Arguments to `mcp`: none of its own; `--root` picks the data directory
 /// every tool runs against. The server itself is `crate::mcp`.
 #[derive(Debug, Args)]
 pub(crate) struct McpArgs {}
-
-const MCP_EXAMPLES: &str = "\
-Examples:
-  tmpl-cli mcp
-  tmpl-cli --root ~/data mcp
-
-Point an MCP client at the command. It serves until its input closes.";
 
 /// What an invocation does: run one command, or serve every command as a
 /// tool.
@@ -122,19 +135,6 @@ pub(crate) struct GlobalArgs {
     /// Shorthand for --format json [default: false]
     #[arg(long, global = true, help_heading = GLOBAL)]
     pub(crate) json: bool,
-}
-
-impl Cli {
-    /// Parse a command line as clap declares it. `help_width` is the width
-    /// root help wraps to, `None` off a terminal. The checks clap cannot
-    /// express are [`GlobalArgs::check`]'s.
-    pub(crate) fn parse_args(
-        args: &[OsString],
-        help_width: Option<usize>,
-    ) -> Result<Self, clap::Error> {
-        let matches = root(help_width).try_get_matches_from(args)?;
-        Self::from_arg_matches(&matches)
-    }
 }
 
 impl GlobalArgs {

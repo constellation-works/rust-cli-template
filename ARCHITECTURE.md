@@ -349,4 +349,4 @@ By grep:
 - Every crate: module, source directory and source file names are singular
   (`scripts/check-singular-names.sh`, STD-12 R1), and the source style that
   stable rustfmt cannot check holds (`scripts/check-source-style.sh`, STD-12
-  R12, R13, R16, R19).
+  R12, R13, R16, R19, R21, R22, R26).

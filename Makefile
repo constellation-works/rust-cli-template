@@ -153,7 +153,7 @@ endif
 # Source-only structure checks: the architecture map (STD-02 R43), dependency
 # direction and no import cycle (STD-02 R1-R6, R39), unit-test module reachability (STD-02 R19), terminal/stream ownership (STD-01 R17),
 # singular names (STD-12 R1) and the source style rustfmt cannot check
-# (STD-12 R12, R13, R16, R19).
+# (STD-12 R12, R13, R16, R19, R21, R22, R26).
 structure:
 	./scripts/check-architecture-map.sh
 	./scripts/check-dependency-direction.sh

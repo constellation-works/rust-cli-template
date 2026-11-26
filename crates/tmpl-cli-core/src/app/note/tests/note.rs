@@ -1,3 +1,24 @@
+/// Files the tests inspect after a command, outside the code under test.
+/// Only this module is exempt from the file bans in `clippy.toml`.
+mod fixture {
+    #![expect(
+        clippy::disallowed_methods,
+        reason = "fixture files beside the code under test; only this module is exempt"
+    )]
+
+    use std::path::Path;
+
+    /// Whether `path` exists.
+    pub(super) fn exists(path: &Path) -> bool {
+        path.exists()
+    }
+
+    /// The text of the file `path`.
+    pub(super) fn read(path: &Path) -> String {
+        std::fs::read_to_string(path).unwrap()
+    }
+}
+
 use crate::app::note::{Command, NewNote};
 use time::OffsetDateTime;
 use tmpl_cli_store::contract::Priority;
@@ -80,25 +101,4 @@ fn lock_timeout_audited_command_waits_for_its_deadline_and_records_one_failure_l
     assert_eq!(lines[0]["actor"], "alice");
     assert_eq!(lines[0]["surface"], "cli");
     assert_eq!(lines[0]["at"], "1970-01-01T00:00:00Z");
-}
-
-/// Files the tests inspect after a command, outside the code under test.
-/// Only this module is exempt from the file bans in `clippy.toml`.
-mod fixture {
-    #![expect(
-        clippy::disallowed_methods,
-        reason = "fixture files beside the code under test; only this module is exempt"
-    )]
-
-    use std::path::Path;
-
-    /// Whether `path` exists.
-    pub(super) fn exists(path: &Path) -> bool {
-        path.exists()
-    }
-
-    /// The text of the file `path`.
-    pub(super) fn read(path: &Path) -> String {
-        std::fs::read_to_string(path).unwrap()
-    }
 }
