@@ -3,9 +3,12 @@
 //!
 //! The records live in one SQLite database, `<root>/store.db`, with its `-wal`
 //! and `-shm` beside it, set up by the driver (`crate::driver::sqlite`) and
-//! reached through the kit's `cw_sqlite`. A read opens a read-only
-//! connection that takes no lock and writes nothing of its own (STD-01 R31)
-//! and sees one committed version. A write runs in one `IMMEDIATE`
+//! reached through the kit's `cw_sqlite`. An observation reads strictly
+//! ([`Store::read`]): a read-only connection whose index is read-only too, so
+//! it creates, rebuilds and changes no file (STD-01 R31) and sees one
+//! committed version; a database whose `-wal` or `-shm` is missing is refused
+//! (`store_wal_unavailable`) rather than read around, and the next write
+//! creates them. A write runs in one `IMMEDIATE`
 //! transaction, so two concurrent writers never lose each other's records
 //! (STD-03 R5, R6); a writer waits for another up to the lock wait. The
 //! audit log in the same directory is the kit's (`cw_app`), not the
@@ -64,10 +67,22 @@ impl Store {
         &self.root
     }
 
-    /// Everything the store holds, as one read-only connection sees it. A
+    /// Everything the store holds, as one strict read-only connection sees
+    /// it: for a command that observes and writes nothing (STD-01 R31). A
     /// missing data directory or database reads as an empty store. Takes no
-    /// lock and creates nothing but what SQLite needs to read the database
-    /// (a missing `-wal` or `-shm`, owner-only, in a writable directory).
+    /// lock and creates, rebuilds or changes no file, not even a `-wal` or
+    /// `-shm`.
+    ///
+    /// A database whose `-wal` or `-shm` is missing is refused with
+    /// `store_wal_unavailable`: in a writable directory a writer may exist, so
+    /// the main file alone is not trusted. The next write
+    /// creates the files, after which this read works. The kit's writers keep
+    /// both files after their last close, so a store this template wrote is
+    /// readable until another tool removes them.
+    ///
+    /// Drop the snapshot before writing in the same process: SQLite maps the
+    /// index once per process, so a write while a strict reader of the same
+    /// database is open fails with `store_sqlite_error`.
     ///
     /// # Errors
     ///
@@ -83,7 +98,21 @@ impl Store {
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn read(&self) -> std::result::Result<Snapshot, cw_base::Error> {
-        Ok(self.snapshot()?)
+        Ok(self.snapshot(Mode::Strict)?)
+    }
+
+    /// The same view as [`Store::read`], for the checks a write makes
+    /// before it begins (STD-02 R34). It is an ordinary read: in a writable
+    /// directory SQLite may create a missing `-wal` or `-shm` or rebuild the
+    /// `-shm`, and it never refuses a database for lacking them, so a write
+    /// can repair a store whose observation is refused. Only a command that
+    /// writes may use it.
+    ///
+    /// # Errors
+    ///
+    /// As [`Store::read`], except `store_wal_unavailable`.
+    pub fn read_before_write(&self) -> std::result::Result<Snapshot, cw_base::Error> {
+        Ok(self.snapshot(Mode::Ordinary)?)
     }
 
     /// Change the store in one transaction: check the data directory and
@@ -135,18 +164,37 @@ impl Store {
         Ok(())
     }
 
-    fn snapshot(&self) -> Result<Snapshot> {
+    fn snapshot(&self, mode: Mode) -> Result<Snapshot> {
         let db = sqlite::open(&self.root, self.lock_wait);
         let path = db.path().to_path_buf();
         if !cw_fs::inspect_dir(&self.root)? {
             return Ok(Snapshot::new(None, path));
         }
-        match db.read() {
+        let reader = match mode {
+            Mode::Strict => db.read_strict(),
+            Mode::Ordinary => db.read(),
+        };
+        match reader {
             Ok(reader) => Ok(Snapshot::new(Some(reader), path)),
             Err(cw_sqlite::Error::Missing { .. }) => Ok(Snapshot::new(None, path)),
+            // The kit asks for the log files before it reads a page, so a file
+            // that is not a database is reported as lacking them: say which.
+            Err(err @ cw_sqlite::Error::WalUnavailable { .. }) => {
+                Err(sqlite::find_damage(&path).unwrap_or(err).into())
+            }
             Err(err) => Err(err.into()),
         }
     }
+}
+
+/// How a snapshot is opened.
+#[derive(Clone, Copy)]
+enum Mode {
+    /// Creates and changes no file; refuses a database lacking its `-wal` or
+    /// `-shm`.
+    Strict,
+    /// May create or rebuild the `-wal` and `-shm`; for a write's own checks.
+    Ordinary,
 }
 
 /// A write's failure, whichever side it came from: the kit's database

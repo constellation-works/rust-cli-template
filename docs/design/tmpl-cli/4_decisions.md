@@ -973,6 +973,8 @@ The notes live in `<root>/notes.db`, opened only through `cw_sqlite::Db`.
   a usage error (exit 2) where it was a missing note (exit 1). SQLite keeps
   `-wal` and `-shm` beside the database, and in a writable directory a read
   may rebuild the `-shm` index and creates either when it is missing.
+- Update (2026-11-26): an observation no longer does either; see
+  [An observation reads strictly and creates no file](#an-observation-reads-strictly-and-creates-no-file).
 - Update (2026-11-25): `db/` is gone. It held only the audit line's
   encoding, its upgrades and `AUDIT_LOCK_FILE`, which are the audit record's
   mapping, so they live with the audit repository as the note's SQL lives in
@@ -1361,3 +1363,52 @@ with two surfaces stops being review-only.
   parameter descriptions keep the command line's phrasing (`--json`,
   `[default: …]`); the global flags are not tool parameters, since the
   server's data directory is fixed when it starts.
+
+## An observation reads strictly and creates no file
+
+**Recorded:** 2026-11-26
+**Code anchors:** `crates/tmpl-cli-store/src/store.rs::Store::read`, `Store::read_before_write`; `crates/tmpl-cli-store/src/error.rs::Error::code`; `crates/tmpl-cli/src/error.rs::HINTS`; `crates/tmpl-cli/tests/note.rs`; `crates/tmpl-cli/tests/mcp.rs`
+
+### Context
+
+STD-01 R31 says an observation command writes nothing. `status`, `note list`
+and `note show` read through the kit's `cw_sqlite::Db::read`, which in a
+writable directory shares SQLite's `-shm` index: a first read can create a
+missing `-wal` or `-shm`, rebuild the `-shm` and briefly take SQLite's
+recovery and write locks. No row is written, but files are. The kit's
+`Db::read_strict` opens the index read-only instead and refuses, with
+`Error::WalUnavailable`, a database whose `-wal` or `-shm` is missing.
+
+### Decision
+
+Every observation path of the store (`Store::read`, which `status`, `note
+list` and `note show` reach from the command line and from MCP) uses
+`Db::read_strict`. It creates, rebuilds and changes no file, and the files
+stay byte-identical with unchanged modification times. The kit's refusal is
+the store's `store_wal_unavailable` (kind `refused`, hint: the next write
+creates the files), documented in the output contract. Writes are
+unchanged, and the checks `note add` makes before its write use
+`Store::read_before_write`, an ordinary read that never refuses for a
+missing file, so a write repairs a store the observations refuse.
+
+Alternatives: keep the ordinary read and document that it may create files
+(rejected: R31 is a MUST for an observation, and a doctor-style command must
+be safe on a store it does not own); read a database without sidecars
+`immutable` (rejected by the kit: in a writable directory a writer may
+exist, so the main file alone may lack committed records).
+
+### Consequences
+
+- A read of a store whose `-wal` or `-shm` is missing fails, including a
+  database copied without them and a read-only mount of such a copy, where
+  the ordinary read served the main file `immutable`. The kit's writers keep
+  both files after their last close, so a store this CLI wrote is readable
+  until another tool removes them.
+- SQLite maps the index once per process, so a strict reader open while the
+  same process writes would make the write fail. Every flow closes its
+  snapshot before a write begins (`note add` reads, closes, then writes), so
+  one `tmpl-cli mcp` process can read and write in turn; a test holds it.
+- Cost: an observation can now fail where it used to succeed, and the
+  remedy is a write. Moving the satellites pin to the commit that adds
+  `Db::read_strict` also moved the kit's environment table (`CLICOLOR_FORCE`
+  and `COLUMNS` are now declared by `cw-app`), which `docs/usage.md` renders.

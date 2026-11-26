@@ -159,7 +159,7 @@ dependencies = [
 [[package]]
 name = "cw-app"
 version = "0.1.0"
-source = "git+https://github.com/constellation-works/satellites?rev=9c9cc998720f0a75041be3451c14fbaf80f29dc8#9c9cc998720f0a75041be3451c14fbaf80f29dc8"
+source = "git+https://github.com/constellation-works/satellites?rev=493a18f618e6bb11e2b01e430a648c246245562a#493a18f618e6bb11e2b01e430a648c246245562a"
 dependencies = [
  "cw-base",
  "cw-fs",
@@ -172,7 +172,7 @@ dependencies = [
 [[package]]
 name = "cw-base"
 version = "0.1.0"
-source = "git+https://github.com/constellation-works/satellites?rev=9c9cc998720f0a75041be3451c14fbaf80f29dc8#9c9cc998720f0a75041be3451c14fbaf80f29dc8"
+source = "git+https://github.com/constellation-works/satellites?rev=493a18f618e6bb11e2b01e430a648c246245562a#493a18f618e6bb11e2b01e430a648c246245562a"
 dependencies = [
  "thiserror",
  "time",
@@ -181,7 +181,7 @@ dependencies = [
 [[package]]
 name = "cw-cli"
 version = "0.1.0"
-source = "git+https://github.com/constellation-works/satellites?rev=9c9cc998720f0a75041be3451c14fbaf80f29dc8#9c9cc998720f0a75041be3451c14fbaf80f29dc8"
+source = "git+https://github.com/constellation-works/satellites?rev=493a18f618e6bb11e2b01e430a648c246245562a#493a18f618e6bb11e2b01e430a648c246245562a"
 dependencies = [
  "clap",
  "cw-app",
@@ -198,7 +198,7 @@ dependencies = [
 [[package]]
 name = "cw-fs"
 version = "0.1.0"
-source = "git+https://github.com/constellation-works/satellites?rev=9c9cc998720f0a75041be3451c14fbaf80f29dc8#9c9cc998720f0a75041be3451c14fbaf80f29dc8"
+source = "git+https://github.com/constellation-works/satellites?rev=493a18f618e6bb11e2b01e430a648c246245562a#493a18f618e6bb11e2b01e430a648c246245562a"
 dependencies = [
  "cw-base",
  "rustix",
@@ -209,7 +209,7 @@ dependencies = [
 [[package]]
 name = "cw-mcp"
 version = "0.1.0"
-source = "git+https://github.com/constellation-works/satellites?rev=9c9cc998720f0a75041be3451c14fbaf80f29dc8#9c9cc998720f0a75041be3451c14fbaf80f29dc8"
+source = "git+https://github.com/constellation-works/satellites?rev=493a18f618e6bb11e2b01e430a648c246245562a#493a18f618e6bb11e2b01e430a648c246245562a"
 dependencies = [
  "cw-app",
  "cw-base",
@@ -224,7 +224,7 @@ dependencies = [
 [[package]]
 name = "cw-sqlite"
 version = "0.1.0"
-source = "git+https://github.com/constellation-works/satellites?rev=9c9cc998720f0a75041be3451c14fbaf80f29dc8#9c9cc998720f0a75041be3451c14fbaf80f29dc8"
+source = "git+https://github.com/constellation-works/satellites?rev=493a18f618e6bb11e2b01e430a648c246245562a#493a18f618e6bb11e2b01e430a648c246245562a"
 dependencies = [
  "cw-base",
  "cw-fs",
@@ -236,7 +236,7 @@ dependencies = [
 [[package]]
 name = "cw-testkit"
 version = "0.1.0"
-source = "git+https://github.com/constellation-works/satellites?rev=9c9cc998720f0a75041be3451c14fbaf80f29dc8#9c9cc998720f0a75041be3451c14fbaf80f29dc8"
+source = "git+https://github.com/constellation-works/satellites?rev=493a18f618e6bb11e2b01e430a648c246245562a#493a18f618e6bb11e2b01e430a648c246245562a"
 dependencies = [
  "rustix",
  "tempfile",

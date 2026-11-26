@@ -216,6 +216,65 @@ fn note_list_and_show_return_what_json_prints() {
 }
 
 #[test]
+fn reading_tools_change_no_file_and_a_write_follows_in_the_same_session() {
+    // STD-01 R31 through the tools: one server process reads, then writes.
+    let fx = Fixture::new();
+    fx.seed();
+    let before = support::state_of(&fx.root());
+    let mut session = Session::start(&fx);
+    for (tool, arguments) in [
+        ("status", json!({})),
+        ("note_list", json!({})),
+        ("note_show", json!({"id": 1})),
+    ] {
+        structured(&session.call(tool, &arguments));
+        assert_eq!(
+            support::state_of(&fx.root()),
+            before,
+            "{tool} changed the data directory"
+        );
+    }
+    // SQLite maps the index once per process, so a read that left its
+    // mapping read-only would make this write fail.
+    let added = session.call("note_add", &json!({"title": "After the reads"}));
+    assert_eq!(structured(&added)["id"], 4);
+    assert_eq!(
+        structured(&session.call("note_list", &json!({})))["total"],
+        4
+    );
+    session.close();
+}
+
+#[test]
+fn a_reading_tool_refuses_a_store_without_its_wal_or_shm_and_a_write_repairs_it() {
+    let fx = Fixture::new();
+    fx.seed();
+    support::drop_sidecars(&fx.root());
+    let before = support::state_of(&fx.root());
+    let mut session = Session::start(&fx);
+    for (tool, arguments) in [
+        ("status", json!({})),
+        ("note_list", json!({})),
+        ("note_show", json!({"id": 1})),
+    ] {
+        let refused = session.call(tool, &arguments);
+        assert_eq!(refused["isError"], json!(true), "{tool}: {refused}");
+        assert_eq!(
+            refused["structuredContent"]["code"],
+            "store_wal_unavailable"
+        );
+        assert_eq!(refused["structuredContent"]["kind"], "refused");
+        assert_eq!(support::state_of(&fx.root()), before, "{tool} wrote");
+    }
+    structured(&session.call("note_add", &json!({"title": "Repairs the store"})));
+    assert_eq!(
+        structured(&session.call("note_list", &json!({})))["total"],
+        4
+    );
+    session.close();
+}
+
+#[test]
 fn note_add_returns_the_note_json_prints_and_is_audited_as_mcp() {
     let fx = Fixture::new();
     let mut session = Session::start(&fx);

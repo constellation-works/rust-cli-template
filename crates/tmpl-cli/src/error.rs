@@ -103,6 +103,10 @@ const HINTS: &[(&str, &str)] = &[
         "run 'tmpl-cli note list' with the same --root to see existing ids",
     ),
     // example:end
+    (
+        "store_wal_unavailable",
+        "the next write creates the missing files: run a command that writes to this store, with the same --root, then read again",
+    ),
 ];
 
 /// The fix, where it is known and not already in the message (STD-01 R21).
