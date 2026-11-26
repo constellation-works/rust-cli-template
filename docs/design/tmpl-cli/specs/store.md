@@ -74,16 +74,21 @@ Version 1 is one `STRICT` table:
 - A writer waits up to 10 seconds for another connection, then refuses with
   `store_locked`. SQLite's locks record no owner, so the refusal names no
   holder.
-- A read is one read-only connection holding one read transaction
-  (`Store::read`), so every query in it sees one committed version. It takes
-  no lock and writes no row. In a directory this process can write, the
-  reader shares the `-shm` index with a writer in the same process, so a
-  snapshot held across `Store::write` does not block that write; SQLite may
-  rebuild the `-shm` (its index, not note content) and creates a missing
-  `-wal` (empty) or `-shm`, owner-only. In a directory this process cannot
-  write, a read writes nothing: the index is opened read-only, and when the
-  WAL cannot be read that way the database is read `immutable` if its `-wal`
-  is empty and refused otherwise.
+- An observation is one strict read-only connection holding one read
+  transaction (`Store::read`, the kit's `Db::read_strict`), so every query in
+  it sees one committed version. It takes no lock, writes no row and creates,
+  rebuilds and changes no file, in a writable directory too (STD-01 R31): the
+  `-shm` index is opened read-only. The price is a refusal: a database whose
+  `-wal` or `-shm` is missing, or whose `-shm` needs recovery, is refused with
+  `store_wal_unavailable` (hint: the next write creates them) and nothing is
+  created or read, because a writer may exist and the main file alone may
+  lack committed records. A write creates the files, the kit keeps them after
+  its last close, and the read then works. SQLite maps the index once per
+  process, so a snapshot must be dropped before a write in the same process
+  (the flows close theirs). The checks a write makes before it begins use
+  `Store::read_before_write`, an ordinary read that may create the files and
+  never refuses for lacking them, so `add` repairs a store its observations
+  refuse.
 - A missing data directory or database is an empty store: a read creates
   nothing.
 - A database at a newer schema version than this build's is refused for reads

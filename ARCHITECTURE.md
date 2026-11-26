@@ -29,7 +29,7 @@ tmpl-cli  ->  tmpl-cli-core  ->  tmpl-cli-store
 dev-dependency only), all from
 [constellation-works/satellites](https://github.com/constellation-works/satellites),
 a git dependency pinned in the root `Cargo.toml` to commit
-`9c9cc998720f0a75041be3451c14fbaf80f29dc8` (no release is published yet; moving the
+`493a18f618e6bb11e2b01e430a648c246245562a` (no release is published yet; moving the
 pin is a change of its own). Every kit crate is pinned to that one rev.
 
 | Crate | Kind | Owns | Internal and kit dependencies | Banned |
@@ -175,10 +175,11 @@ composition.rs       start: the data directory (the kit's, from Env), the Store,
 
 ```
 lib.rs               re-exports: Store, Snapshot, Tx, Error, contract, repository, STORE_FILE
-store.rs             Store::open, read() -> Snapshot, write(|tx| …)
+store.rs             Store::open, read() -> Snapshot (strict: creates no file), read_before_write() -> Snapshot, write(|tx| …)
 driver/
   mod.rs             one module per storage mechanism
-  sqlite/mod.rs      the database: STORE_FILE (store.db), open() -> cw_sqlite::Db; no query, no schema statement
+  sqlite/mod.rs      the database: STORE_FILE (store.db), open() -> cw_sqlite::Db; no record query, no schema statement
+  sqlite/damage.rs   the one probe: is a main file without its -wal and -shm a damaged database (immutable, read-only)
   sqlite/schema/
     mod.rs           MIGRATIONS: the one append-only ordered list of every table's steps, each named
 <!-- example:begin -->
@@ -255,7 +256,8 @@ at the pinned commit. Each crate's README there is its contract.
   `Kind` and no code: the store wraps it as `Error::Fs` and names a code for
   every variant.
 - `cw-sqlite`: one private SQLite database: WAL, owner-only files, a
-  read-only reader per read, one `IMMEDIATE` write transaction per write, and
+  read-only reader per read (opt-in strict, which creates and changes no file),
+  one `IMMEDIATE` write transaction per write, and
   an append-only list of migrations keyed on `PRAGMA user_version`;
   mechanism only, knowing no table. It bundles SQLite and re-exports
   `rusqlite`. Its `Error` has a `Kind` and no code: the store wraps it as

@@ -43,6 +43,63 @@ fn status_reports_the_format_once_a_note_created_the_database() {
 }
 
 #[test]
+fn observation_commands_create_rebuild_and_change_no_file() {
+    // STD-01 R31: status, list and show read a store that already exists
+    // without creating, rebuilding or touching any file in it.
+    let fx = Fixture::new();
+    fx.seed();
+    let before = support::state_of(&fx.root());
+    assert!(
+        before.iter().any(|(name, ..)| name == "store.db-shm"),
+        "the writes left their index beside the database"
+    );
+    for args in [
+        &["status"][..],
+        &["status", "--json"],
+        &["note", "list"],
+        &["note", "list", "--json", "--tag", "work"],
+        &["note", "show", "1"],
+        &["note", "show", "3", "--json"],
+    ] {
+        fx.ok(args);
+        assert_eq!(
+            support::state_of(&fx.root()),
+            before,
+            "{args:?} changed the data directory"
+        );
+    }
+}
+
+#[test]
+fn a_read_of_a_store_without_its_wal_or_shm_is_refused_with_a_hint_and_the_next_add_repairs_it() {
+    // STD-01 R31: the read neither creates the files nor reads around them.
+    let fx = Fixture::new();
+    fx.seed();
+    support::drop_sidecars(&fx.root());
+    let before = support::state_of(&fx.root());
+    for args in [&["status"][..], &["note", "list"], &["note", "show", "1"]] {
+        let out = fx.run(args);
+        assert_eq!(out.status.code(), Some(1), "{args:?}");
+        assert!(out.stdout.is_empty());
+        let stderr = text(&out.stderr);
+        assert!(stderr.contains("hint:"), "{args:?}: {stderr}");
+        assert!(stderr.contains("next write"), "{args:?}: {stderr}");
+        assert_eq!(support::state_of(&fx.root()), before, "{args:?} wrote");
+    }
+    let err = json(&fx.run(&["note", "list", "--json"]).stderr);
+    assert_eq!(err["code"], "store_wal_unavailable");
+    assert!(
+        err["hint"].as_str().unwrap().contains("next write"),
+        "{err}"
+    );
+
+    fx.ok(&["note", "add", "Repairs the store"]);
+    let listed = json(&fx.ok(&["note", "list", "--json"]).stdout);
+    assert_eq!(listed["total"], 4);
+    fx.ok(&["status"]);
+}
+
+#[test]
 fn an_empty_list_prints_nothing_to_stdout_one_line_to_stderr_and_exits_zero() {
     // STD-01 R16.
     let fx = Fixture::new();

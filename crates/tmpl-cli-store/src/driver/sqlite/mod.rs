@@ -4,12 +4,16 @@
 //! The kit's `cw_sqlite` is the mechanism (private files, WAL, one
 //! `IMMEDIATE` write transaction, a read-only reader, versioned migrations);
 //! this driver holds only what is this project's: the file name here and the
-//! schema steps in `schema/`. It runs no query: each record's SQL and row
-//! mapping live in its repository under `crate::repository`.
+//! schema steps in `schema/`. It runs no record's query: each record's SQL and
+//! row mapping live in its repository under `crate::repository`; the one read
+//! it makes is the damage probe in `damage`.
 
 use cw_sqlite::Db;
+pub(crate) use damage::find as find_damage;
 use std::path::Path;
 use std::time::Duration;
+
+mod damage;
 
 mod schema;
 

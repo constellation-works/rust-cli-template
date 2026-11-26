@@ -83,4 +83,15 @@ are carried in an additive `warnings` array on the tool result:
 Stable codes: `note_not_found`, `io_error`, `encode_error`, `store_corrupt`,
 `store_bad_record`, `note_id_exhausted`, `store_too_new`,
 `store_locked`, `store_symlink`, `store_foreign_owner`, `store_permissions`,
-`store_not_regular`, `store_too_large`, `store_lock_reentrant`, `no_data_dir`, `output_error`, `usage_error`.
+`store_not_regular`, `store_too_large`, `store_lock_reentrant`,
+`store_wal_unavailable`, `no_data_dir`, `output_error`, `usage_error`.
+
+`store_wal_unavailable` (kind `refused`, exit 1, on the command line and as
+a tool error alike) is what `status`, `note list` and `note show` fail with
+when `store.db` exists but its `store.db-wal` or `store.db-shm` is missing
+(or the `-shm` needs recovery): an observation creates and changes no file
+(STD-01 R31), so it is refused rather than served from the main file alone.
+Its `hint` is `the next write creates the missing files: run a command that
+writes to this store, with the same --root, then read again`; `note add`
+creates the files, after which the reads succeed. Nothing is created or
+changed by the refused read, and `note add` is never refused for it.

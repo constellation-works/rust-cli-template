@@ -17,7 +17,9 @@ tmpl-cli status --json
 
 `status` shows the data directory and the store's format (`-` in a pipe and
 `null` with `--json` until a command has created the database). It reads
-only: it does not create the database or change records.
+only: it creates no file and changes no file or record. When the database
+exists but its `store.db-wal` or `store.db-shm` is missing, it fails with
+`store_wal_unavailable` (see [Configuration](#configuration)).
 
 The command line's behaviour is the cw-kit's (`cw-cli`), shared by every
 constellation CLI. A command displays a table on a terminal and
@@ -82,7 +84,9 @@ kit's, then the CLI's own); `make goldens UPDATE=1` rewrites it:
 | `TMPL_CLI_FORMAT` | The output format. | — | — |
 | `TMPL_CLI_LOG` | The log filter. | — | — |
 | `NO_COLOR` | Any non-empty value turns color off. | — | — |
+| `CLICOLOR_FORCE` | Any non-empty value turns color on for a terminal, even a `dumb` one; `NO_COLOR` still wins. | — | — |
 | `TERM` | The terminal type, such as `dumb`. | — | — |
+| `COLUMNS` | The width in columns that a table must fit, when it is a positive number. | — | — |
 | `HOME` | The home directory; the default data directory is under it. | — | — |
 | `USER` | The user the environment claims, recorded as the actor; a claim, not an identity. | — | — |
 | `USERNAME` | The claimed user when the one above is unset, empty or not UTF-8, on every platform. | — | — |
@@ -103,11 +107,22 @@ Records live in a SQLite database, `store.db`, under the data directory,
 with SQLite's `store.db-wal` and `store.db-shm` beside it. A mutating
 command appends one line with the record ID and outcome to the audit log,
 `audit.jsonl`; `.audit.lock` is its lock file. Every file is `0600` and the
-directory `0700` on Unix. Reading commands change no record and write no
-audit line; in a writable directory a read of an existing database may
-rebuild `store.db-shm` (SQLite's index, not your data) and creates a missing
-`store.db-wal` (empty) or `store.db-shm`, owner-only; in a directory you
-cannot write, a read writes nothing.
+directory `0700` on Unix. Reading commands (`status`, and the example's
+list and show, and their MCP tools) create, rebuild and change no file
+(STD-01 R31): not the audit log, not `store.db-wal` or `store.db-shm`, and
+not their contents or modification times, in a directory you can write and
+in one you cannot. A write keeps `store.db-wal` and `store.db-shm` after it
+ends, so a store this CLI wrote is readable. When the database exists but
+either file is missing (a copy of `store.db` alone, or a tool that removed
+them), a read is refused with `store_wal_unavailable` and the hint that the
+next write creates them, because a writer may exist and the main file alone
+may lack committed records; it does not read around them and does not create
+them. Run a command that writes, with the same `--root`, and read again.
+<!-- example:begin -->
+`tmpl-cli note add <title>` is that command here.
+<!-- example:end -->
+Within one process (`tmpl-cli mcp`), a read ends before a later write
+begins, so a write after reads succeeds.
 
 ## Audit log
 
@@ -132,4 +147,6 @@ the kit maps each kind of failure to its code.
 If a file cannot be found, check the resolved data directory (`tmpl-cli
 status`) and use `--root <DIR>` to select a different one. If the CLI
 refuses a file's permissions, follow the remedy in the error. The store
-creates its own directories and files with owner-only modes on Unix.
+creates its own directories and files with owner-only modes on Unix. A read
+that fails with `store_wal_unavailable` found `store.db` without its
+`store.db-wal` or `store.db-shm`; a write creates them.

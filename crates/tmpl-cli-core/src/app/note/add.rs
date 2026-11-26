@@ -18,7 +18,7 @@ pub(super) fn add(ctx: &Ctx<'_>, new: NewNote) -> Result<Outcome, Error> {
     // The snapshot serves only these checks, so it is closed before the
     // write begins rather than holding its read transaction open across it.
     {
-        let snapshot = store.read()?;
+        let snapshot = store.read_before_write()?;
         let notes = snapshot.notes();
         if let Some(bad) = notes.bad_records()?.first() {
             return Err(bad.refusal().into());

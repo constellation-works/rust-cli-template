@@ -48,7 +48,7 @@ there.
   through it, which starts the audit record of a mutating command and
   translates the app's error once; the surface renders, then settles.
 - **Store** — the SQLite database `store.db` (with its `-wal` and `-shm`)
-  in an owner-only data directory; read through one read-only connection,
+  in an owner-only data directory; read through one strict read-only connection (creating no file),
   written in one transaction, its schema an append-only list of steps.
 - **Payload** — the typed record every output mode renders from; its JSON
   form is the machine contract.
@@ -71,13 +71,13 @@ there.
 | Payloads, each command's view, error and usage reporting through the kit | [crates/tmpl-cli/src/output/](../../../crates/tmpl-cli/src/output/) |
 | The `note` app: `exec`, its `cw_app::App` impl, audited-command table, flows | [crates/tmpl-cli-core/src/app/note/](../../../crates/tmpl-cli-core/src/app/note/) |
 | Next-id rule, list selection (filter, count, limit) | [crates/tmpl-cli-core/src/app/note/rule.rs](../../../crates/tmpl-cli-core/src/app/note/rule.rs) |
-| The chokepoint, `Env`, the audit log and its line format | `cw-app` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/9c9cc998720f0a75041be3451c14fbaf80f29dc8/crates/cw-app) |
+| The chokepoint, `Env`, the audit log and its line format | `cw-app` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/493a18f618e6bb11e2b01e430a648c246245562a/crates/cw-app) |
 | Note record shapes, validation | [crates/tmpl-cli-store/src/contract/](../../../crates/tmpl-cli-store/src/contract/) |
-| The one error type and its classification | `cw-base` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/9c9cc998720f0a75041be3451c14fbaf80f29dc8/crates/cw-base) |
+| The one error type and its classification | `cw-base` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/493a18f618e6bb11e2b01e430a648c246245562a/crates/cw-base) |
 | The store's codes for the kit's errors | [crates/tmpl-cli-store/src/error.rs](../../../crates/tmpl-cli-store/src/error.rs) |
 | Store facade: read, write transaction | [crates/tmpl-cli-store/src/store.rs](../../../crates/tmpl-cli-store/src/store.rs) |
 | The notes database: file, lock wait; schema steps per table in `schema/` | [crates/tmpl-cli-store/src/driver/sqlite/](../../../crates/tmpl-cli-store/src/driver/sqlite/) |
 | Repositories: the notes' SQL and row mapping | [crates/tmpl-cli-store/src/repository/](../../../crates/tmpl-cli-store/src/repository/) |
-| Private SQLite database: WAL, one write transaction, read-only reader, migrations | `cw-sqlite` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/9c9cc998720f0a75041be3451c14fbaf80f29dc8/crates/cw-sqlite) |
-| Append, lock, private state | `cw-fs` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/9c9cc998720f0a75041be3451c14fbaf80f29dc8/crates/cw-fs) |
+| Private SQLite database: WAL, one write transaction, read-only reader, migrations | `cw-sqlite` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/493a18f618e6bb11e2b01e430a648c246245562a/crates/cw-sqlite) |
+| Append, lock, private state | `cw-fs` in [constellation-works/satellites](https://github.com/constellation-works/satellites/tree/493a18f618e6bb11e2b01e430a648c246245562a/crates/cw-fs) |
 | Goldens of help and output | [crates/tmpl-cli/tests/golden.rs](../../../crates/tmpl-cli/tests/golden.rs) |

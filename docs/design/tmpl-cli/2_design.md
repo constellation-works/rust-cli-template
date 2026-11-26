@@ -49,7 +49,7 @@ one storage mechanism up once and returns a handle; a repository is one
 record's use of it. The core reaches a record only through
 `snapshot.<record>()` and `tx.<record>()`. The foundation is the cw-kit from
 [constellation-works/satellites](https://github.com/constellation-works/satellites),
-pinned to commit `9c9cc998720f0a75041be3451c14fbaf80f29dc8`: `cw-base` (the
+pinned to commit `493a18f618e6bb11e2b01e430a648c246245562a`: `cw-base` (the
 one error type every unit translates its typed error into, with its `Kind`
 and stable code), which the store and the core name; `cw-fs` (appends,
 locking and private-state checks, mechanism only) and `cw-sqlite` (one
@@ -141,10 +141,13 @@ directory belongs to this user, is open to no group or other permission bit
 and is not a link; the kit checks the database and its sidecars the same
 way. A refusal names the `chmod` that fixes it.
 
-A read opens one read-only connection that holds one read transaction, so
-every query in one command sees one committed version; it takes no lock,
-changes no note, and works on a read-only data directory. A missing data
-directory or database reads as an empty store and creates nothing. Each row
+An observation opens one strict read-only connection that holds one read
+transaction, so every query in one command sees one committed version; it
+takes no lock, changes no note and creates, rebuilds and changes no file,
+including the `-wal` and `-shm` (STD-01 R31). A database whose `-wal` or
+`-shm` is missing is refused with `store_wal_unavailable` rather than read
+around, and the next write creates them. A missing data directory or
+database reads as an empty store and creates nothing. Each row
 is mapped to the contract types at the construction boundary with no
 default: a row whose text is not valid UTF-8 or whose title, tag, priority
 or timestamp fails validation is
@@ -154,7 +157,9 @@ with that record's error, and `add` refuses while any bad record exists, so
 a bad record is repaired before anything is added beside it.
 
 The `add` flow reads the store once before touching anything, so a refused
-store leaves nothing behind, and closes that read. It then calls
+store leaves nothing behind, and closes that read (an ordinary read, which
+never refuses for a missing `-wal` or `-shm`, so `add` repairs a store whose
+observations are refused). It then calls
 `Store::write`, which creates the data directory (`0700`), opens the
 database (creating it `0600` and running any schema step it lacks), begins
 one `IMMEDIATE` transaction (waiting up to 10 seconds for another writer,

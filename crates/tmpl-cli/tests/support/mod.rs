@@ -210,3 +210,43 @@ pub fn execute(root: &Path, sql: &str) {
     tmpl_cli_store::test_support::execute(&tmpl_cli_store::Store::open(root), sql)
         .expect("run test SQL");
 }
+
+/// Every entry directly in `root` with its bytes (empty for a directory)
+/// and modification time: what an observation must leave as it found it
+/// (STD-01 R31).
+pub fn state_of(root: &Path) -> Vec<(String, Vec<u8>, std::time::SystemTime)> {
+    let mut entries: Vec<_> = std::fs::read_dir(root)
+        .expect("list the data directory")
+        .map(|entry| {
+            let entry = entry.expect("read a directory entry");
+            let meta = entry.metadata().expect("read metadata");
+            let bytes = if meta.is_file() {
+                std::fs::read(entry.path()).expect("read a file")
+            } else {
+                Vec::new()
+            };
+            (
+                entry.file_name().to_string_lossy().into_owned(),
+                bytes,
+                meta.modified().expect("read the modification time"),
+            )
+        })
+        .collect();
+    entries.sort();
+    entries
+}
+
+/// Leave only the main database file in `root`, with every record in it, as
+/// a copy of that one file would be: the log is folded in, then the
+/// `-wal` and `-shm` are removed.
+pub fn drop_sidecars(root: &Path) {
+    tmpl_cli_store::test_support::checkpoint(&tmpl_cli_store::Store::open(root))
+        .expect("checkpoint the store");
+    for sidecar in ["store.db-wal", "store.db-shm"] {
+        match std::fs::remove_file(root.join(sidecar)) {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            Err(err) => panic!("remove {sidecar}: {err}"),
+        }
+    }
+}

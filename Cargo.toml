@@ -36,15 +36,15 @@ publish = false
 # release is published yet, so the workspace pins one commit of the
 # satellites `agent-main` for every kit crate; moving the pin is a change of
 # its own.
-cw-app = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
-cw-cli = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
-cw-mcp = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
-cw-base = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
-cw-fs = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
-cw-sqlite = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
+cw-app = { git = "https://github.com/constellation-works/satellites", rev = "493a18f618e6bb11e2b01e430a648c246245562a" }
+cw-cli = { git = "https://github.com/constellation-works/satellites", rev = "493a18f618e6bb11e2b01e430a648c246245562a" }
+cw-mcp = { git = "https://github.com/constellation-works/satellites", rev = "493a18f618e6bb11e2b01e430a648c246245562a" }
+cw-base = { git = "https://github.com/constellation-works/satellites", rev = "493a18f618e6bb11e2b01e430a648c246245562a" }
+cw-fs = { git = "https://github.com/constellation-works/satellites", rev = "493a18f618e6bb11e2b01e430a648c246245562a" }
+cw-sqlite = { git = "https://github.com/constellation-works/satellites", rev = "493a18f618e6bb11e2b01e430a648c246245562a" }
 # Test isolation (a private temp root, an isolated child, goldens): a
 # dev-dependency only (scripts/check-dependency-direction.sh).
-cw-testkit = { git = "https://github.com/constellation-works/satellites", rev = "9c9cc998720f0a75041be3451c14fbaf80f29dc8" }
+cw-testkit = { git = "https://github.com/constellation-works/satellites", rev = "493a18f618e6bb11e2b01e430a648c246245562a" }
 # crates:begin
 tmpl-cli-store = { path = "crates/tmpl-cli-store" }
 tmpl-cli-core = { path = "crates/tmpl-cli-core" }

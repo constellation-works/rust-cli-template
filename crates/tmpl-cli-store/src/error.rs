@@ -131,6 +131,7 @@ impl Error {
             Self::Fs(source) | Self::Sqlite(cw_sqlite::Error::File(source)) => fs_code(source),
             // The kit's database failures get the store's codes here.
             Self::Sqlite(cw_sqlite::Error::Missing { .. }) => "store_missing",
+            Self::Sqlite(cw_sqlite::Error::WalUnavailable { .. }) => "store_wal_unavailable",
             Self::Sqlite(cw_sqlite::Error::Locked { .. }) => "store_locked",
             Self::Sqlite(cw_sqlite::Error::Corrupt { .. }) => "store_corrupt",
             Self::Sqlite(cw_sqlite::Error::CheckFailed { .. }) => "store_check_failed",
