@@ -43,3 +43,10 @@ allowed-idents-below-min-chars = []
 | R17 | review-only |
 | R18 | The `missing_docs` lint for presence; the content clause is review-only. |
 | R19 | `scripts/check-source-style.sh`, a `rustfmt::skip` without the comment on the line before it. To be built in the template. |
+| R20 | `clippy::arbitrary_source_item_ordering` at warn, with `source-item-ordering = ["module"]`, `module-item-order-groupings` (modules: extern_crate, mod, foreign_mod; use: use; macros: macro; constants: static, const; types: ty_alias, enum, struct, union, trait, trait_alias, impl; functions: fn, global_asm) and `module-items-ordered-within-groupings = "none"` in `clippy.toml`, run by `cargo clippy --all-targets -- -D warnings` (STD-02 §R22). |
+| R21 | scripts/check-source-style.sh, to be built in the template. |
+| R22 | scripts/check-source-style.sh, to be built in the template. |
+| R23 | clippy::inconsistent_struct_constructor at warn, with check-inconsistent-struct-field-initializers = true in clippy.toml. |
+| R24 | review-only |
+| R25 | review-only |
+| R26 | `scripts/check-source-style.sh`: a text match for `super::super` in `.rs` files (the script is to be built in the Rust CLI template) |

@@ -3,9 +3,9 @@ id: STD-12-source-style
 title: Source style — names, vertical spacing, line width and the formatter gate, as a language-neutral core with one profile per language
 summary: Normative rules for how source code reads on the page — singular module and file names, blank lines between items, a line-width limit, named bindings, file order and the formatter as the CI gate plus checks for what it misses — as a core every language follows and a profile per language (Rust first) that names its formatter, lints and checks; follow them in every constellation code repository.
 tags: [standard, style, naming, formatting, rust]
-version: 1
+version: 4
 created_date: 2026-11-25
-updated_date: 2026-11-25
+updated_date: 2026-11-26
 last_validated: 2026-11-25
 related: [STD-02-rust-architecture-and-errors, STD-09-project-docs]
 ---
@@ -36,8 +36,10 @@ A MUST here is machine-checked: [`checks.md`](checks.md) names the CI gate for e
 - **R3.** *The formatter is the gate.* Each profile MUST name one formatter and its checked-in configuration, and CI MUST run it in check mode on the toolchain the project builds with. A layout rule the formatter cannot enforce on that toolchain gets a check script in CI; it is not left to review.
 - **R4.** *A blank line between items.* A blank line MUST separate a file's header documentation, its import block, and each top-level item, and MUST separate the members of a type (the methods of an implementation, the functions of a class).
 - **R5.** *Line width.* A source line MUST NOT exceed the profile's width. The width is checked on the source as written, not only by the formatter, because a formatter may leave a line it cannot fit unformatted and still pass. A line that cannot be broken (one string literal or URL) is exempt, and the check recognises it.
-- **R6.** *File order.* A source file SHOULD read in this order: header documentation, imports, constants, types, functions, and its tests last.
+- **R6.** *File order.* A source file SHOULD read in this order: header documentation, the declarations of its child modules, imports, constants, types, functions, and its tests last.
 - **R7.** *Steps a reader can see.* Within a function, a blank line SHOULD separate the logical steps, and an operation SHOULD stay beside the handling of its error, not several lines below it.
+- **R24.** *One subject per file.* A source file SHOULD hold one subject, one main type with its small satellites (its error, its options, its builder) or one group of functions on one subject, and be named for it. A file that needs a divider comment between sections SHOULD be split.
+- **R25.** *Callers before callees.* Among a file's free functions, and among its private methods, the entry point SHOULD come first and each helper SHOULD follow the function that calls it.
 
 ### Core: shape
 
@@ -56,6 +58,11 @@ A MUST here is machine-checked: [`checks.md`](checks.md) names the CI gate for e
 - **R17.** *Types bare, functions through their module.* A type or trait SHOULD be imported and used by its bare name, and a free function SHOULD be called through its module (`store::open(…)`, not `open(…)` after `use store::open`). A type name that collides or misleads when bare (`io::Error` beside the project's `Error`) is used through its module or renamed on import.
 - **R18.** *Public items are documented.* Every public item MUST carry a doc comment, enforced by the `missing_docs` lint at warn. A comment SHOULD say what the code does not already say: the contract, the guarantee, the reason, a panic or an unsafe invariant, not a restatement of the signature.
 - **R19.** *`#[rustfmt::skip]` only for alignment or generated code.* `#[rustfmt::skip]` MUST be used only for hand-aligned code (a table, a matrix) or generated code, and MUST carry a comment on the line before it saying which. A check script in CI fails a `rustfmt::skip` without that comment.
+- **R20.** *Top-level order in a Rust file.* A Rust file MUST read, in this order: its module documentation; its `mod` items (declarations and inline modules); its `use` items (re-exports included); its `macro_rules!` definitions; its constants and statics; its types, each with its impl blocks; its free functions; and its test module last. Order within a group is not checked; rustfmt sorts the `mod` and `use` items. A `macro_rules!` that a child module uses MAY precede that `mod` line, with `#![expect(clippy::arbitrary_source_item_ordering, reason = "...")]` (STD-02 §R35). This is R6 for Rust, and it is a gate.
+- **R21.** *A type and its impls are adjacent.* A type MUST be followed by its inherent impl and then its trait impls, standard-library traits before the project's, and no other item sits between them.
+- **R22.** *Order inside an inherent impl.* An inherent impl MUST list, in this order: associated constants and types; associated functions with no receiver, constructors first (a constructor returns `Self`); `with_*` methods, whatever their receiver; methods taking `&self`; methods taking `&mut self`; methods that take `self` by value. Within each of these groups, methods private to the module follow the ones visible outside it.
+- **R23.** *Struct literal field order.* A struct literal MUST list its fields in the order the struct declares them, whether a field is written in full or as a shorthand.
+- **R26.** *`super` reaches one level.* A path MUST NOT contain `super::super`; an item further away is named from `crate::`.
 
 ## Applies to
 
