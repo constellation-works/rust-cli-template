@@ -1,6 +1,6 @@
 ---
 type: architecture
-summary: The tmpl-cli binary crate as it is: the command line, each command's view, and the MCP server.
+summary: "The tmpl-cli binary crate as it is: the command line, each command's view, and the MCP server."
 created_date: 2026-11-25
 updated_date: 2026-11-25
 ---

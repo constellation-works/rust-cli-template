@@ -13,9 +13,10 @@ STANDARDS_STRICT ?=
 # GitHub Actions sets CI=true. There a missing gate tool fails the gate;
 # locally it warns and skips or falls back (STD-04 R10).
 CI ?=
-# The crates of this workspace. With none yet (a new workspace), every Cargo
-# target says so and passes, so the gates hold from the first commit.
-CRATES := $(wildcard crates/*/Cargo.toml)
+# Whether this workspace has no packages yet (from Cargo, not a path glob).
+# Only a successful `cargo metadata` with an empty `packages` array skips
+# Cargo targets; a broken manifest or missing cargo falls through and fails.
+WORKSPACE_EMPTY := $(shell $(CARGO) metadata --format-version 1 --no-deps --offline 2>/dev/null | python3 -I -c 'import json, sys; data = json.load(sys.stdin); print("yes" if not data.get("packages") else "no")' 2>/dev/null)
 
 # The oldest Rust the code supports: `rust-version` in Cargo.toml, its one
 # statement. The pinned toolchain is rust-toolchain.toml's.
@@ -55,10 +56,10 @@ help:
 # Cargo targets: skipped while the workspace has no crate
 # ---------------------------------------------------------------------------
 
-ifeq ($(strip $(CRATES)),)
+ifeq ($(WORKSPACE_EMPTY),yes)
 
 build fmt fmt-check clippy deny msrv test goldens install clean:
-	@echo "$@: no crates/*/Cargo.toml yet; skipping" >&2
+	@echo "$@: workspace has no packages yet; skipping" >&2
 
 else
 
@@ -123,13 +124,16 @@ test:
 	fi
 	$(CARGO) test --workspace --doc $(LOCKED)
 
-# Goldens of the shipped surface (STD-01 R24): captured from the built binary.
+# Goldens of the shipped surface (STD-01 R24): captured from the built binary
+# and the MCP server's `tools/list`.
 goldens:
-	@if $(CARGO) nextest --version >/dev/null 2>&1; then \
+	@set -e; if $(CARGO) nextest --version >/dev/null 2>&1; then \
 		UPDATE_GOLDENS=$(if $(UPDATE),1,0) $(CARGO) nextest run -p $(BINARY) --test golden $(LOCKED) --no-tests=fail; \
+		UPDATE_GOLDENS=$(if $(UPDATE),1,0) $(CARGO) nextest run -p $(BINARY) --test mcp tools_list_matches_its_golden $(LOCKED) --no-tests=fail; \
 	else \
 		$(call missing_tool,cargo-nextest,the zero-test check); \
 		UPDATE_GOLDENS=$(if $(UPDATE),1,0) $(CARGO) test -p $(BINARY) --test golden $(LOCKED); \
+		UPDATE_GOLDENS=$(if $(UPDATE),1,0) $(CARGO) test -p $(BINARY) --test mcp tools_list_matches_its_golden $(LOCKED); \
 	fi
 
 install:

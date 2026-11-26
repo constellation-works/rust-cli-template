@@ -1,6 +1,6 @@
 ---
 type: architecture
-summary: The tmpl-cli-store library as it is: the data directory, the SQLite database and its schema steps, one repository per record, and the record shapes.
+summary: "The tmpl-cli-store library as it is: the data directory, the SQLite database and its schema steps, one repository per record, and the record shapes."
 created_date: 2026-11-25
 updated_date: 2026-11-25
 ---

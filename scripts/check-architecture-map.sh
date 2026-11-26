@@ -27,12 +27,6 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# A workspace with no crate yet has no unit to map.
-if ! compgen -G 'crates/*/Cargo.toml' >/dev/null; then
-  echo "architecture-map: no crates/*/Cargo.toml yet; nothing to check"
-  exit 0
-fi
-
 for tool in cargo python3; do
   command -v "$tool" >/dev/null 2>&1 || {
     echo "architecture-map: cannot run: $tool not found" >&2
@@ -71,6 +65,9 @@ for pkg in meta["packages"]:
     src = os.path.join(crate_dir, "src")
     crates.append({"name": pkg["name"], "dir": crate_dir, "src": src,
                    "roots": sorted(set(os.path.realpath(r) for r in roots))})
+if not crates:
+    print("architecture-map: workspace has no packages yet; nothing to check")
+    sys.exit(0)
 by_name = {c["name"]: c for c in crates}
 
 if not os.path.isfile(DOC):

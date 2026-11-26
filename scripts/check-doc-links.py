@@ -42,12 +42,7 @@ def main():
         rel = path.relative_to(ROOT).as_posix()
         for link, target, fragment in readme.local_links(path.read_text(encoding="utf-8")):
             checked += 1
-            if not target:
-                resolved = path
-            elif target.startswith("/"):
-                resolved = ROOT / target.lstrip("/")
-            else:
-                resolved = (path.parent / target).resolve()
+            resolved = readme.resolve_local(ROOT, path.parent, target, path)
             if resolved != ROOT and ROOT not in resolved.parents:
                 broken.append(f"{rel}: link leaves the repository: {link}")
                 continue

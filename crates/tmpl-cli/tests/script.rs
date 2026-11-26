@@ -53,6 +53,10 @@ fn deny_uses_a_writable_cache_when_the_cargo_home_is_unusable() {
         &cargo,
         r#"#!/bin/sh
 set -eu
+if [ "$1" = metadata ]; then
+  printf '{"packages":[{"name":"app"}]}\n'
+  exit 0
+fi
 test "$1" = deny
 if [ "$2" = --version ]; then exit 0; fi
 test "$2" = check
@@ -109,41 +113,280 @@ fn check_test_modules_fails_when_parent_lacks_mod_tests() {
     );
 }
 
+/// A `PATH` with the toolchain directory that holds `CARGO` first, so child
+/// scripts find `cargo` and `rustfmt` reliably.
+fn path_with_cargo() -> std::ffi::OsString {
+    let cargo_dir = Path::new(env!("CARGO")).parent().unwrap();
+    let current = std::env::var_os("PATH").unwrap_or_default();
+    let mut paths = vec![cargo_dir.to_path_buf()];
+    paths.extend(std::env::split_paths(&current));
+    std::env::join_paths(paths).unwrap()
+}
+
 #[test]
-fn check_dependency_direction_catches_grouped_std_fs_import() {
+fn check_doc_frontmatter_refuses_invalid_yaml() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
-    let script = copy_script("check-dependency-direction.sh", root);
+    let script = copy_script("check-doc-frontmatter.py", root);
 
-    fs::create_dir_all(root.join("crates/tmpl-cli-core/src/store")).unwrap();
-    fs::create_dir_all(root.join("crates/tmpl-cli/src/output")).unwrap();
+    fs::create_dir_all(root.join("docs")).unwrap();
     fs::write(
-        root.join("crates/tmpl-cli-core/Cargo.toml"),
-        "[package]\nname = \"tmpl-cli-core\"\n[dependencies]\n",
+        root.join("docs/colon.md"),
+        "---\ntype: guide\nsummary: How to run demo: its commands.\n\
+         created_date: 2026-01-01\nupdated_date: 2026-01-01\n---\n\n# Guide\n",
     )
     .unwrap();
     fs::write(
-        root.join("crates/tmpl-cli/Cargo.toml"),
-        "[package]\nname = \"tmpl-cli\"\n[dependencies]\ntmpl-cli-core = { workspace = true }\n",
+        root.join("docs/unclosed.md"),
+        "---\ntype: guide\nsummary: \"unclosed quote\n\
+         created_date: 2026-01-01\nupdated_date: 2026-01-01\n---\n\n# Unclosed\n",
+    )
+    .unwrap();
+
+    // Run once with the default Python environment (PyYAML if installed) and
+    // once with `yaml` blocked so the built-in stdlib parser is exercised too.
+    let default_out = Command::new("python3").arg(&script).output().unwrap();
+    let default_stderr = String::from_utf8_lossy(&default_out.stderr);
+    assert_eq!(default_out.status.code(), Some(1), "{default_stderr}");
+    assert!(
+        default_stderr.contains("docs/colon.md:") && default_stderr.contains("YAML"),
+        "{default_stderr}"
+    );
+    assert!(
+        default_stderr.contains("docs/unclosed.md:") && default_stderr.contains("YAML"),
+        "{default_stderr}"
+    );
+
+    let fallback_out = Command::new("python3")
+        .args([
+            "-I",
+            "-c",
+            "import runpy, sys; sys.modules['yaml'] = None; runpy.run_path(sys.argv[1], run_name='__main__')",
+        ])
+        .arg(&script)
+        .output()
+        .unwrap();
+    let fallback_stderr = String::from_utf8_lossy(&fallback_out.stderr);
+    assert_eq!(fallback_out.status.code(), Some(1), "{fallback_stderr}");
+    assert!(
+        fallback_stderr.contains("docs/colon.md:") && fallback_stderr.contains("YAML"),
+        "{fallback_stderr}"
+    );
+    assert!(
+        fallback_stderr.contains("docs/unclosed.md:") && fallback_stderr.contains("YAML"),
+        "{fallback_stderr}"
+    );
+}
+
+#[test]
+fn check_doc_links_refuses_root_relative_and_symlink_escape() {
+    let outer = tempfile::tempdir().unwrap();
+    let root = outer.path().join("repo");
+    fs::create_dir_all(root.join("docs")).unwrap();
+    fs::write(outer.path().join("outside.txt"), "secret\n").unwrap();
+    std::os::unix::fs::symlink(outer.path().join("outside.txt"), root.join("escape.txt")).unwrap();
+
+    let script = copy_script("check-doc-links.py", &root);
+    copy_script("check-readme.py", &root);
+    copy_script("check-doc-frontmatter.py", &root);
+
+    fs::write(
+        root.join("docs/guide.md"),
+        "---\ntype: guide\nsummary: Links that leave the repository.\n\
+         created_date: 2026-01-01\nupdated_date: 2026-01-01\n---\n\n\
+         [root-up](/../outside.txt)\n\
+         [root-link](/escape.txt)\n\
+         [rel-link](../escape.txt)\n",
+    )
+    .unwrap();
+
+    let out = Command::new("python3").arg(&script).output().unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    for expected in [
+        "link leaves the repository: /../outside.txt",
+        "link leaves the repository: /escape.txt",
+        "link leaves the repository: ../escape.txt",
+    ] {
+        assert!(stderr.contains(expected), "{expected}: {stderr}");
+    }
+}
+
+#[test]
+fn check_readme_refuses_escape_links() {
+    let outer = tempfile::tempdir().unwrap();
+    let root = outer.path().join("repo");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(outer.path().join("outside.txt"), "secret\n").unwrap();
+    std::os::unix::fs::symlink(outer.path().join("outside.txt"), root.join("escape.txt")).unwrap();
+
+    let script = copy_script("check-readme.py", &root);
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace.package]\nversion = \"0.1.0\"\n",
     )
     .unwrap();
     fs::write(
-        root.join("crates/tmpl-cli-core/src/flow.rs"),
-        "use std::{fmt, fs};\n",
+        root.join("README.md"),
+        "# Demo\n\n\
+         ![version](https://img.shields.io/badge/version-0.1.0-blue)\n\n\
+         [rel-up](../outside.txt)\n\
+         [root-up](/../outside.txt)\n\
+         [root-link](/escape.txt)\n\
+         [rel-link](escape.txt)\n",
     )
     .unwrap();
-    fs::write(root.join("crates/tmpl-cli-core/src/store/fsio.rs"), "").unwrap();
-    fs::write(root.join("crates/tmpl-cli-core/src/store/format.rs"), "").unwrap();
-    fs::write(root.join("crates/tmpl-cli-core/src/store/audit.rs"), "").unwrap();
-    fs::write(root.join("crates/tmpl-cli/src/app.rs"), "").unwrap();
-    fs::write(root.join("crates/tmpl-cli/src/audit_middleware.rs"), "").unwrap();
-    fs::write(root.join("crates/tmpl-cli/src/output/mod.rs"), "").unwrap();
+
+    let out = Command::new("python3").arg(&script).output().unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    for expected in [
+        "link leaves the repository: ../outside.txt",
+        "link leaves the repository: /../outside.txt",
+        "link leaves the repository: /escape.txt",
+        "link leaves the repository: escape.txt",
+    ] {
+        assert!(stderr.contains(expected), "{expected}: {stderr}");
+    }
+}
+
+#[test]
+fn check_module_cycles_catches_grouped_imports_and_deep_sibling_cycles() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let script = copy_script("check-module-cycles.sh", root);
+
+    let src = root.join("crates/demo/src");
+    fs::create_dir_all(src.join("driver/sqlite")).unwrap();
+    fs::write(
+        src.join("lib.rs"),
+        "//! Demo.\nmod alpha;\nmod beta;\nmod driver;\nmod gamma;\n",
+    )
+    .unwrap();
+    // Grouped import cycle at top level.
+    fs::write(src.join("alpha.rs"), "use crate::{beta, gamma};\n").unwrap();
+    fs::write(src.join("beta.rs"), "use crate::alpha::Item;\n").unwrap();
+    fs::write(src.join("gamma.rs"), "//! Leaf.\n").unwrap();
+    // Third-level sibling cycle under driver/sqlite/.
+    fs::write(src.join("driver/mod.rs"), "mod sqlite;\n").unwrap();
+    fs::write(
+        src.join("driver/sqlite/mod.rs"),
+        "mod first;\nmod second;\n",
+    )
+    .unwrap();
+    fs::write(
+        src.join("driver/sqlite/first.rs"),
+        "use super::second::Row;\n",
+    )
+    .unwrap();
+    fs::write(
+        src.join("driver/sqlite/second.rs"),
+        "use crate::driver::sqlite::{first};\n",
+    )
+    .unwrap();
 
     let out = Command::new(&script).output().unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    for expected in [
+        "demo: top-level modules: alpha -> beta -> alpha",
+        "demo: modules of driver/sqlite/: first -> second -> first",
+    ] {
+        assert!(stderr.contains(expected), "{expected}: {stderr}");
+    }
+}
+
+#[test]
+fn empty_workspace_exemption_decides_from_cargo_metadata_not_crates_glob() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let path_env = path_with_cargo();
+
+    fs::copy(repo_root().join("Makefile"), root.join("Makefile")).unwrap();
+    let arch_script = copy_script("check-architecture-map.sh", root);
+    let dep_script = copy_script("check-dependency-direction.sh", root);
+    copy_script("check-module-cycles.sh", root);
+
+    // A crate outside `crates/*/Cargo.toml` must NOT trigger the empty-workspace skip.
+    fs::create_dir_all(root.join("packages/demo/src")).unwrap();
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"packages/demo\"]\nresolver = \"2\"\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("packages/demo/Cargo.toml"),
+        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("packages/demo/src/lib.rs"),
+        "pub fn   unformatted( ){}\n",
+    )
+    .unwrap();
+    fs::write(root.join("ARCHITECTURE.md"), "# Architecture\n").unwrap();
+
+    let arch_out = Command::new(&arch_script)
+        .env("PATH", &path_env)
+        .output()
+        .unwrap();
+    let arch_err = String::from_utf8_lossy(&arch_out.stderr);
+    assert_eq!(arch_out.status.code(), Some(1), "{arch_err}");
+    assert!(
+        arch_err.contains("ARCHITECTURE.md: crate `demo` (packages/demo) has no section"),
+        "{arch_err}"
+    );
+
+    let dep_out = Command::new(&dep_script)
+        .env("PATH", &path_env)
+        .output()
+        .unwrap();
+    let dep_err = String::from_utf8_lossy(&dep_out.stderr);
+    assert_eq!(dep_out.status.code(), Some(1), "{dep_err}");
+    assert!(dep_err.contains("crate 'demo' has no policy"), "{dep_err}");
+
+    let make_out = Command::new("make")
+        .arg("fmt-check")
+        .current_dir(root)
+        .env("PATH", &path_env)
+        .output()
+        .unwrap();
     assert_ne!(
-        out.status.code(),
+        make_out.status.code(),
         Some(0),
-        "expected grouped `use std::{{fmt, fs}};` to fail dependency-direction check"
+        "expected make fmt-check to run on packages/demo instead of skipping, stderr: {}",
+        String::from_utf8_lossy(&make_out.stderr)
+    );
+}
+
+#[test]
+fn check_terminal_guard_catches_imported_stdout_and_stderr() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let script = copy_script("check-terminal-guard.sh", root);
+
+    fs::create_dir_all(root.join("crates/tmpl-cli/src")).unwrap();
+    fs::write(
+        root.join("crates/tmpl-cli/src/cli.rs"),
+        "use std::io::{Write, stdout};\nfn write_out() { let _ = stdout(); }\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("crates/tmpl-cli/src/error.rs"),
+        "use std::io::{stderr as err_stream};\nfn write_err() { let _ = err_stream(); }\n",
+    )
+    .unwrap();
+
+    let out = Command::new(&script).output().unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert!(
+        stderr.contains("crates/tmpl-cli/src/cli.rs"),
+        "expected cli.rs in {stderr}"
+    );
+    assert!(
+        stderr.contains("crates/tmpl-cli/src/error.rs"),
+        "expected error.rs in {stderr}"
     );
 }
 
@@ -314,8 +557,10 @@ fn clippy_refuses_an_aliased_env_read_and_a_direct_file_read() {
     fs::create_dir_all(root.join("src")).unwrap();
     fs::write(
         root.join("src/main.rs"),
-        "use std::env;\n\nfn main() {\n    let _value = env::var(\"X\");\n    \
-         let _bytes = std::fs::read(\"f\");\n}\n",
+        "use std::env;\nuse std::path::Path;\nuse std::{fmt, fs};\n\n\
+         fn main() {\n    let _ = fmt::Error;\n    let _value = env::var(\"X\");\n    \
+         let _bytes = fs::read(\"f\");\n    let _exists = Path::new(\"f\").exists();\n    \
+         let _try_exists = Path::new(\"f\").try_exists();\n}\n",
     )
     .unwrap();
 
@@ -330,6 +575,8 @@ fn clippy_refuses_an_aliased_env_read_and_a_direct_file_read() {
     for refused in [
         "use of a disallowed method `std::env::var`",
         "use of a disallowed method `std::fs::read`",
+        "use of a disallowed method `std::path::Path::exists`",
+        "use of a disallowed method `std::path::Path::try_exists`",
     ] {
         assert!(stderr.contains(refused), "{refused}: {stderr}");
     }

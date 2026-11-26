@@ -1,6 +1,6 @@
 ---
 type: architecture
-summary: The tmpl-cli-core library as it is: the apps, their flows and rules, composition and the environment capture.
+summary: "The tmpl-cli-core library as it is: the apps, their flows and rules, composition and the environment capture."
 created_date: 2026-11-25
 updated_date: 2026-11-25
 ---

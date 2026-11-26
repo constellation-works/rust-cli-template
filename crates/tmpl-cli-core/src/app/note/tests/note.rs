@@ -50,7 +50,7 @@ fn lock_timeout_audited_command_waits_for_its_deadline_and_records_one_failure_l
     let elapsed = started.elapsed();
     let err_code = finished.result().unwrap_err().code();
     // The surface renders before it settles: no line exists yet.
-    let audit_written_before_settle = audit_path.exists();
+    let audit_written_before_settle = fixture::exists(&audit_path);
     let (_result, warning) = finished.settle();
     drop(release_tx);
     held.join().unwrap();
@@ -91,6 +91,11 @@ mod fixture {
     )]
 
     use std::path::Path;
+
+    /// Whether `path` exists.
+    pub(super) fn exists(path: &Path) -> bool {
+        path.exists()
+    }
 
     /// The text of the file `path`.
     pub(super) fn read(path: &Path) -> String {
