@@ -3,7 +3,7 @@ title: tmpl-cli — Overview
 owner: claude
 created_date: 2026-09-26
 updated_date: 2026-11-25
-last_validated: 2026-09-26
+last_validated: 2026-11-25
 status: Draft
 feature: tmpl-cli
 doc_role: overview
@@ -19,9 +19,9 @@ related_features: [tmpl-cli]
 # tmpl-cli — Overview
 
 tmpl-cli keeps short notes — a title, optional body, tags and a priority — in
-one JSON file under a data directory, through `note add`, `note list` and
-`note show`. The domain is deliberately trivial. What matters is the shape
-around it: every rule of the constellation standards STD-01 (CLI surface),
+the SQLite database `store.db` under a data directory, through `note add`,
+`note list` and `note show`. The domain is deliberately trivial. What matters
+is the shape around it: every rule of the constellation standards STD-01 (CLI surface),
 STD-02 (Rust architecture and errors), STD-03 (concurrency and process
 safety), STD-04 (testing and verification) and STD-05 (security boundaries)
 that applies to a small CLI is demonstrated here in code, a test or a gate,
@@ -52,8 +52,9 @@ there.
   written in one transaction, its schema an append-only list of steps.
 - **Payload** — the typed record every output mode renders from; its JSON
   form is the machine contract.
-- **Sink** — the kit's (`cw_cli::Sink`) path to stdout and stderr, rendering
-  as the one terminal decision (output mode, color, width) said.
+- **Sink** — the kit's (`cw_cli::Sink`) path for CLI output to stdout and
+  stderr, rendering as the one terminal decision (output mode, color, width)
+  said.
 
 ## 3. At a Glance
 

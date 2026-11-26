@@ -34,7 +34,7 @@ pin is a change of its own). Every kit crate is pinned to that one rev.
 
 | Crate | Kind | Owns | Internal and kit dependencies | Banned |
 |-------|------|------|-------------------------------|--------|
-| `tmpl-cli` | binary `tmpl-cli` | `main` (the one read of the arguments; it calls the core's `capture_env()` for the environment, STD-02 R7), argument declarations, the mapping from arguments to an app's `Command`, each command's human view, settling the audit record and printing its warning, the remedy for each error. The only stdout, stderr and terminal access, all of it through `cw-cli`: the terminal decision, the sink, error rendering with the exit code, logging and grouped root help are the kit's. The second surface, an MCP server (`tmpl-cli mcp`) with one tool per command, is `cw-mcp`'s. | `tmpl-cli-core`, `cw-cli`, `cw-mcp`; `cw-testkit`, `cw-mcp` (its `test-support`) and `tmpl-cli-store` (its `test-support`) as dev-dependencies only | `tmpl-cli-store` as a normal dependency, every other kit crate, `rusqlite`, `tracing-subscriber`, any terminal crate, `rustix` |
+| `tmpl-cli` | binary `tmpl-cli` | `main` (the one read of the arguments; it calls the core's `capture_env()` for the environment, STD-02 R7), argument declarations, the mapping from arguments to an app's `Command`, each command's human view, settling the audit record and printing its warning, the remedy for each error. CLI stdout, stderr and terminal access go through `cw-cli`: the terminal decision, sink, error rendering with the exit code, logging setup and grouped root help are the kit's. The second surface, an MCP server (`tmpl-cli mcp`) with one tool per command and protocol output, is `cw-mcp`'s. | `tmpl-cli-core`, `cw-cli`, `cw-mcp`; `cw-testkit`, `cw-mcp` (its `test-support`) and `tmpl-cli-store` (its `test-support`) as dev-dependencies only | `tmpl-cli-store` as a normal dependency, every other kit crate, `rusqlite`, `tracing-subscriber`, any terminal crate, `rustix` |
 | `tmpl-cli-core` | library | The apps, each a `cw_app::App`, and composition (the runtime every command runs against). | `tmpl-cli-store`, `cw-base`, `cw-app`; `cw-testkit`, `cw-fs` (the capacity the kit's audit reader takes) and the store's `test-support` as dev-dependencies only | `cw-fs` as a normal dependency, `cw-sqlite`, `cw-cli`, `cw-mcp`, `rusqlite`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix` |
 | `tmpl-cli-store` | library | The data directory: the database's driver, one repository per record, the record shapes (`contract`), and the store's stable code for each of the kit's errors. No audit code or file: the audit log is `cw-app`'s. It names no file primitive and no SQLite crate of its own: it reaches the directory through `cw-fs` and the database through `cw-sqlite`, and names `rusqlite` only through its re-export. | `cw-base`, `cw-fs`, `cw-sqlite`; `cw-testkit` as a dev-dependency only | `cw-cli`, `cw-mcp`, `clap`, `tracing-subscriber`, any terminal crate, `tempfile`, `rustix`, `rusqlite` as a dependency of its own |
 
@@ -66,7 +66,7 @@ Why the crates are laid out by app, and why the foundation is the kit:
 ## `tmpl-cli` (binary)
 
 ```
-main.rs              Env::capture() and the arguments, once; run
+main.rs              capture_env() from the core and the arguments, once; run
 lib.rs               probe the streams, parse, open the kit's sink, start logging and the runtime, dispatch, print an audit warning
 cli.rs               the root command, the global flags, the root help's groups (rendered by cw_cli::help::grouped); Invocation: a command, or mcp
 command/<noun>.rs    arguments -> app::<app>::Command; exec; Outcome -> payload; render, then settle
@@ -185,7 +185,7 @@ driver/
     note.rs          the note table's steps as named items (CREATE_NOTE)
 <!-- example:end -->
 repository/
-  mod.rs             Snapshot (one reader; its path and format), Tx (one write transaction)
+  mod.rs             Snapshot (one reader; path() and format()), Tx (one write transaction)
 <!-- example:begin -->
   note.rs            notes: the SQL and row mapping; all, get, bad records; put
 <!-- example:end -->
@@ -193,7 +193,7 @@ contract/
 <!-- example:begin -->
   note.rs            Note, NoteId (1 to NoteId::MAX), Title, Body, Tag, Priority, NoteError
 <!-- example:end -->
-error.rs             Error (a code for every cw_fs::Error and cw_sqlite::Error variant), its translator into cw_base::Error; BadRecord and its locator and reason
+error.rs             Error (including Sqlite(cw_sqlite::Error), with a code for every cw_fs::Error and cw_sqlite::Error variant), its translator into cw_base::Error; BadRecord and its locator and reason
 test_support.rs      behind the `test-support` feature: raw SQL on the database, for other crates' tests
 ```
 
@@ -214,11 +214,12 @@ test_support.rs      behind the `test-support` feature: raw SQL on the database,
   transaction `Store::write` began. There is no file-system driver, and no audit
   repository: the audit log is `cw-app`'s.
 - **The record-access seam.** A caller reaches a record only through
-  `snapshot.<record>()` in a read and `tx.<record>()` in a write. The store's public surface names no `rusqlite` or
-  `cw_sqlite` type, carries no borrow from a connection or a document, and
-  names no path but `Store::root()` (the status app reports it) and
-  `Store::path()` (an app names the database in its outcome and refusals).
-  Repository calls return owned values.
+  `snapshot.<record>()` in a read and `tx.<record>()` in a write.
+  `Snapshot::path()` exposes the database path, and `Snapshot::format()` its
+  format; `Store::root()` and `Store::path()` expose the store paths to apps.
+  The public store error's `Sqlite` variant carries `cw_sqlite::Error`, but no
+  `rusqlite` type or connection/document borrow escapes. Repository calls
+  return owned values.
 - **A second driver.** There is no trait per repository and no driver chosen
   at run time. When a second storage mechanism is added, `driver/<other>/`
   sets it up, and `repository/<record>.rs` becomes

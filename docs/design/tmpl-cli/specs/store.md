@@ -108,10 +108,11 @@ Version 1 is one `STRICT` table:
 ## Record access
 
 The core reaches a record only through `snapshot.<record>()` (a read) and
-`tx.<record>()` (a write); today that is `notes()`. The store's public
-surface carries no `rusqlite` or `cw_sqlite` type, no borrow from a
-connection, and no path but `Store::path()` (the note app names the database
-in its outcome and refusals). Repository calls return owned values.
+`tx.<record>()` (a write); today that is `notes()`. `Snapshot::path()` exposes
+the database path alongside `Snapshot::format()`, and `Store::path()` is
+available to the note app for its outcome and refusals. The public store
+error's `Sqlite` variant carries the kit's `cw_sqlite::Error`; no `rusqlite`
+type or connection borrow escapes. Repository calls return owned values.
 
 ## Error codes
 

@@ -25,9 +25,10 @@ For the template's own example, start with
   `Outcome` to a payload.
 - Each command's human view (a table or a detail text) and its JSON.
 - The remedy printed for an error, and the surface's own failures.
-- The MCP server: one tool per command.
-- Every byte on stdout and stderr, all of it through the kit's `cw-cli`
-  sink.
+- The MCP server: one tool per command, with protocol output handled by
+  `cw-mcp`.
+- CLI payloads and error output go through the kit's `cw-cli` sink.
+  `cw-cli` initializes logging separately, outside the sink.
 
 ## Main modules
 
