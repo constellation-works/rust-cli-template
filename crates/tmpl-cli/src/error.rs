@@ -10,6 +10,26 @@
 
 use tmpl_cli_core::{Error, Kind};
 
+/// The code an MCP tool that panicked is answered with.
+pub(crate) const TOOL_PANICKED: &str = "tool_panicked";
+
+/// Each fix this surface knows, keyed on the error's stable code (STD-02
+/// R10). A remedy is spelled in this surface's commands, so it lives here,
+/// and must be runnable as written (STD-02 R26): each keeps the reader on
+/// the same data directory.
+const HINTS: &[(&str, &str)] = &[
+    // example:begin
+    (
+        "note_not_found",
+        "run 'tmpl-cli note list' with the same --root to see existing ids",
+    ),
+    // example:end
+    (
+        "store_wal_unavailable",
+        "the next write creates the missing files: run a command that writes to this store, with the same --root, then read again",
+    ),
+];
+
 /// The surface's own failures.
 #[derive(Debug, thiserror::Error)]
 enum SurfaceError {
@@ -80,9 +100,6 @@ pub(crate) fn mcp_error(source: cw_mcp::Error) -> Error {
     SurfaceError::Mcp(source).into()
 }
 
-/// The code an MCP tool that panicked is answered with.
-pub(crate) const TOOL_PANICKED: &str = "tool_panicked";
-
 /// A command line that is not usable as typed, as the workspace's error
 /// type, which `Sink::report` exits 2 for: clap's sentence without its
 /// `error: ` prefix, or a check of the surface's own that clap cannot
@@ -91,23 +108,6 @@ pub(crate) const TOOL_PANICKED: &str = "tool_panicked";
 pub(crate) fn usage_error(message: &str) -> Error {
     SurfaceError::Usage(message.to_owned()).into()
 }
-
-/// Each fix this surface knows, keyed on the error's stable code (STD-02
-/// R10). A remedy is spelled in this surface's commands, so it lives here,
-/// and must be runnable as written (STD-02 R26): each keeps the reader on
-/// the same data directory.
-const HINTS: &[(&str, &str)] = &[
-    // example:begin
-    (
-        "note_not_found",
-        "run 'tmpl-cli note list' with the same --root to see existing ids",
-    ),
-    // example:end
-    (
-        "store_wal_unavailable",
-        "the next write creates the missing files: run a command that writes to this store, with the same --root, then read again",
-    ),
-];
 
 /// The fix, where it is known and not already in the message (STD-01 R21).
 pub(crate) fn hint(err: &Error) -> Option<&'static str> {

@@ -89,13 +89,6 @@ impl From<Error> for cw_base::Error {
     }
 }
 
-/// Run one `status` command through the kit's chokepoint, for the client
-/// `origin`. No `status` command is audited, so settling the returned
-/// [`Finished`] writes nothing.
-pub fn exec(runtime: &Runtime, origin: &Origin, command: Command) -> Finished<Outcome> {
-    cw_app::exec::<StatusApp>(runtime, origin, command)
-}
-
 /// The `status` app as the kit's chokepoint sees it.
 #[derive(Debug)]
 pub(crate) struct StatusApp;
@@ -120,4 +113,11 @@ impl App for StatusApp {
     fn target(_outcome: &Outcome) -> Option<String> {
         None
     }
+}
+
+/// Run one `status` command through the kit's chokepoint, for the client
+/// `origin`. No `status` command is audited, so settling the returned
+/// [`Finished`] writes nothing.
+pub fn exec(runtime: &Runtime, origin: &Origin, command: Command) -> Finished<Outcome> {
+    cw_app::exec::<StatusApp>(runtime, origin, command)
 }

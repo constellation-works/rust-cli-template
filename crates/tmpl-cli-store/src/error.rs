@@ -157,6 +157,17 @@ impl Error {
     }
 }
 
+/// The store's one translator into the workspace's error type, the kit's
+/// `cw_base::Error` (STD-02 R12).
+impl From<Error> for cw_base::Error {
+    fn from(err: Error) -> Self {
+        Self::new(err.kind(), err.code(), err)
+    }
+}
+
+/// `Result` with this crate's [`Error`].
+pub type Result<T, E = Error> = std::result::Result<T, E>;
+
 /// The store's code for each of the kit's file errors, met on the data
 /// directory or the database's own files.
 fn fs_code(source: &cw_fs::Error) -> &'static str {
@@ -171,14 +182,3 @@ fn fs_code(source: &cw_fs::Error) -> &'static str {
         cw_fs::Error::Reentrant { .. } => "store_lock_reentrant",
     }
 }
-
-/// The store's one translator into the workspace's error type, the kit's
-/// `cw_base::Error` (STD-02 R12).
-impl From<Error> for cw_base::Error {
-    fn from(err: Error) -> Self {
-        Self::new(err.kind(), err.code(), err)
-    }
-}
-
-/// `Result` with this crate's [`Error`].
-pub type Result<T, E = Error> = std::result::Result<T, E>;

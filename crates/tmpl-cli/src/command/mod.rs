@@ -12,15 +12,16 @@ pub(crate) mod input;
 // example:end
 mod status;
 
+// example:begin
+mod note;
+// example:end
+
 use crate::output::Output;
 use clap::Subcommand;
 use tmpl_cli_core::{AuditWarning, Error, Origin, Runtime};
 
 pub(crate) use status::StatusArgs;
 // example:begin
-
-mod note;
-
 pub(crate) use note::{AddArgs, ListArgs, NoteCommand, ShowArgs};
 // example:end
 

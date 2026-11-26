@@ -45,7 +45,7 @@ Each crate's README there is its contract.
 - Every crate: module, source directory and source file names are singular
   (`scripts/check-singular-names.sh`, STD-12 R1), and the source style that
   stable rustfmt cannot check holds (`scripts/check-source-style.sh`, STD-12
-  R12, R13, R16, R19).
+  R12, R13, R16, R19, R21, R22, R26).
 - Unit tests live in a sibling `tests/` directory mirroring source file
   names (`scripts/check-test-modules.sh`, STD-02 R19, R20).
 - Only `crates/tmpl-cli/src/output/` touches stdout, stderr or the terminal

@@ -162,18 +162,6 @@ impl From<Error> for cw_base::Error {
     }
 }
 
-/// Run one `note` command through the kit's chokepoint, for the client
-/// `origin`.
-///
-/// A mutating command's audit record starts before it runs, as a failure
-/// until it reports otherwise; a read-only command writes nothing. The
-/// surface renders the [`Finished`] result first, then settles the record,
-/// so the audit line follows the output and a failure to write it comes
-/// back as a warning value.
-pub fn exec(runtime: &Runtime, origin: &Origin, command: Command) -> Finished<Outcome> {
-    cw_app::exec::<NoteApp>(runtime, origin, command)
-}
-
 /// The `note` app as the kit's chokepoint sees it.
 #[derive(Debug)]
 pub(crate) struct NoteApp;
@@ -201,6 +189,18 @@ impl App for NoteApp {
     fn target(outcome: &Outcome) -> Option<String> {
         outcome.target()
     }
+}
+
+/// Run one `note` command through the kit's chokepoint, for the client
+/// `origin`.
+///
+/// A mutating command's audit record starts before it runs, as a failure
+/// until it reports otherwise; a read-only command writes nothing. The
+/// surface renders the [`Finished`] result first, then settles the record,
+/// so the audit line follows the output and a failure to write it comes
+/// back as a warning value.
+pub fn exec(runtime: &Runtime, origin: &Origin, command: Command) -> Finished<Outcome> {
+    cw_app::exec::<NoteApp>(runtime, origin, command)
 }
 
 #[cfg(test)]

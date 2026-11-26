@@ -41,19 +41,6 @@ impl NewNote {
     }
 }
 
-/// The id to assign to a note added after `notes`: one past the highest, or
-/// [`NoteId::FIRST`] when there are none, or `None` when the highest id is
-/// already [`NoteId::MAX`], so an existing id is never handed out again.
-pub(crate) fn next_id(notes: &[Note]) -> Option<NoteId> {
-    match notes.iter().map(|note| note.id).max() {
-        None => Some(NoteId::FIRST),
-        Some(max) => max
-            .get()
-            .checked_add(1)
-            .and_then(|next| NoteId::try_from(next).ok()),
-    }
-}
-
 /// Which notes a `note list` returns.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ListFilter {
@@ -88,6 +75,19 @@ impl NoteList {
     #[must_use]
     pub fn truncated(&self) -> bool {
         self.notes.len() < self.total
+    }
+}
+
+/// The id to assign to a note added after `notes`: one past the highest, or
+/// [`NoteId::FIRST`] when there are none, or `None` when the highest id is
+/// already [`NoteId::MAX`], so an existing id is never handed out again.
+pub(crate) fn next_id(notes: &[Note]) -> Option<NoteId> {
+    match notes.iter().map(|note| note.id).max() {
+        None => Some(NoteId::FIRST),
+        Some(max) => max
+            .get()
+            .checked_add(1)
+            .and_then(|next| NoteId::try_from(next).ok()),
     }
 }
 

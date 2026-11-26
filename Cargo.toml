@@ -105,6 +105,12 @@ fn_params_excessive_bools = "warn"
 clone_on_ref_ptr = "warn"
 rc_buffer = "warn"
 needless_pass_by_value = "warn"
+# STD-02 R51: at most seven parameters (threshold in clippy.toml).
+too_many_arguments = "warn"
+# STD-12 R20: top-level item order (groups in clippy.toml).
+arbitrary_source_item_ordering = "warn"
+# STD-12 R23: struct literal fields in declaration order (clippy.toml).
+inconsistent_struct_constructor = "warn"
 
 [workspace.lints.rust]
 # STD-12 R18: every public item carries a doc comment.

@@ -5,6 +5,28 @@ allowed-idents-below-min-chars = []
 # STD-02 R36: a function takes at most one bool; a second is a mode enum.
 max-fn-params-bools = 1
 
+# STD-02 R51: a function takes at most seven parameters, the receiver counted;
+# parameters that travel together become a struct.
+too-many-arguments-threshold = 7
+
+# STD-12 R20: a file reads its modules, its `use` items, macros, constants,
+# types (each with its impl blocks) and functions in that order; the order
+# within a group is rustfmt's, not the lint's. `module` orders the items of a
+# module; the groupings below are the checked-in standard's.
+source-item-ordering = ["module"]
+module-item-order-groupings = [
+  ["modules", ["extern_crate", "mod", "foreign_mod"]],
+  ["use", ["use"]],
+  ["macros", ["macro"]],
+  ["constants", ["static", "const"]],
+  ["types", ["ty_alias", "enum", "struct", "union", "trait", "trait_alias", "impl"]],
+  ["functions", ["fn", "global_asm"]],
+]
+module-items-ordered-within-groupings = "none"
+
+# STD-12 R23: a struct literal lists its fields in declaration order.
+check-inconsistent-struct-field-initializers = true
+
 # File, environment and process boundaries (STD-02 R3, R5): the template
 # reaches files through the kit's cw_fs (in the store), reads the process
 # environment once through cw_app::Env::capture() (in the core's environment.rs,

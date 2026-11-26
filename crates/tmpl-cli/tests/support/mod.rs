@@ -126,10 +126,6 @@ impl Fixture {
 }
 // example:end
 
-pub fn text(bytes: &[u8]) -> String {
-    String::from_utf8(bytes.to_vec()).expect("utf-8 output")
-}
-
 /// A spawned child that is killed and reaped if the test ends early, panics
 /// included (STD-03 R18).
 pub struct ChildGuard(Option<Child>);
@@ -157,6 +153,10 @@ impl Drop for ChildGuard {
             let _ = child.wait();
         }
     }
+}
+
+pub fn text(bytes: &[u8]) -> String {
+    String::from_utf8(bytes.to_vec()).expect("utf-8 output")
 }
 
 /// Make `path` owner-only (`0700` for a directory, `0600` for a file), as

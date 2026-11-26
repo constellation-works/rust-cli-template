@@ -17,6 +17,168 @@
 
 mod support;
 
+#[cfg(unix)]
+mod unix {
+    //! Modes, links and read-only state (STD-01 R31, STD-05 R7–R9).
+    use super::support::{Fixture, make_private, text};
+    use std::fs::{self, Permissions};
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    use std::path::Path;
+
+    fn mode(path: &Path) -> u32 {
+        fs::metadata(path).unwrap().permissions().mode() & 0o7777
+    }
+
+    /// Every entry of `dir` with its bytes, to prove nothing changed.
+    fn snapshot(dir: &Path) -> Vec<(String, Vec<u8>)> {
+        let mut entries: Vec<_> = fs::read_dir(dir)
+            .unwrap()
+            .map(|entry| {
+                let entry = entry.unwrap();
+                (
+                    entry.file_name().to_string_lossy().into_owned(),
+                    fs::read(entry.path()).unwrap(),
+                )
+            })
+            .collect();
+        entries.sort();
+        entries
+    }
+
+    #[test]
+    fn state_is_created_owner_only_whatever_the_umask() {
+        // STD-05 R8: modes are set explicitly, so even umask 000 gives 0700/0600.
+        // The umask is set on the child alone (STD-04 R6), through sh.
+        let fx = Fixture::new();
+        // sh runs in the kit's isolated environment, which the binary inherits.
+        let out = fx
+            .command("/bin/sh")
+            .arg("-c")
+            .arg("umask 000; exec \"$0\" \"$@\"")
+            .arg(super::support::BIN)
+            .args(["note", "add", "x"])
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(0), "stderr: {}", text(&out.stderr));
+        assert_eq!(mode(&fx.root()), 0o700);
+        assert_eq!(mode(&fx.root().join("store.db")), 0o600);
+        assert_eq!(mode(&fx.root().join("store.db-wal")), 0o600);
+        assert_eq!(mode(&fx.root().join("store.db-shm")), 0o600);
+        assert_eq!(mode(&fx.root().join("audit.jsonl")), 0o600);
+        assert_eq!(mode(&fx.root().join(".audit.lock")), 0o600);
+    }
+
+    #[test]
+    fn a_store_writable_by_others_is_refused_with_a_chmod_fix() {
+        // STD-05 R9, and STD-02 R26: the message carries a runnable remedy.
+        let fx = Fixture::new();
+        fx.seed();
+        let store = fx.root().join("store.db");
+        fs::set_permissions(&store, Permissions::from_mode(0o666)).unwrap();
+        let before = fs::read(&store).unwrap();
+        let out = fx.run(&["note", "list"]);
+        assert_eq!(out.status.code(), Some(1));
+        assert!(
+            text(&out.stderr).contains("chmod -- 600"),
+            "stderr: {}",
+            text(&out.stderr)
+        );
+        let out = fx.run(&["note", "add", "y", "--json"]);
+        assert_eq!(super::json(&out.stderr)["code"], "store_permissions");
+        assert_eq!(
+            fs::read(&store).unwrap(),
+            before,
+            "a refused store is not rewritten"
+        );
+    }
+
+    #[test]
+    fn a_symlinked_store_is_refused_and_its_target_left_alone() {
+        // STD-05 R7, R9.
+        let fx = Fixture::new();
+        fx.seed();
+        let store = fx.root().join("store.db");
+        let target = fx.elsewhere("target.json");
+        fs::rename(&store, &target).unwrap();
+        symlink(&target, &store).unwrap();
+        let before = fs::read(&target).unwrap();
+        for args in [
+            &["note", "list", "--json"][..],
+            &["note", "add", "y", "--json"][..],
+        ] {
+            let out = fx.run(args);
+            assert_eq!(out.status.code(), Some(1), "{args:?}");
+            assert_eq!(
+                super::json(&out.stderr)["code"],
+                "store_symlink",
+                "{args:?}"
+            );
+        }
+        assert_eq!(fs::read(&target).unwrap(), before);
+    }
+
+    #[test]
+    fn a_symlinked_root_is_refused_before_anything_is_created() {
+        // STD-02 R34, STD-05 R7: the root is checked before the directory or
+        // the database is created.
+        let fx = Fixture::new();
+        let target = fx.elsewhere("target/.keep");
+        let target = target.parent().unwrap();
+        let link = fx.elsewhere("link");
+        symlink(target, &link).unwrap();
+        let out = fx.run(&[
+            "--root",
+            link.to_str().unwrap(),
+            "note",
+            "add",
+            "y",
+            "--json",
+        ]);
+        assert_eq!(out.status.code(), Some(1));
+        // The error object comes first; the audit log, refused the same
+        // root, adds its warning after it.
+        let stderr = text(&out.stderr);
+        let error = stderr.lines().next().unwrap();
+        assert_eq!(
+            super::json(error.as_bytes())["code"],
+            "store_symlink",
+            "{stderr:?}"
+        );
+        assert_eq!(fs::read_dir(target).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn reads_work_against_a_read_only_store_and_change_nothing() {
+        // STD-01 R31: list and show take no lock and write nothing.
+        let fx = Fixture::new();
+        fx.seed();
+        let root = fx.root();
+        let before = snapshot(&root);
+        fs::set_permissions(root.join("store.db"), Permissions::from_mode(0o400)).unwrap();
+        fs::set_permissions(&root, Permissions::from_mode(0o500)).unwrap();
+        let outs: Vec<_> = [
+            &["note", "list"][..],
+            &["note", "list", "--json", "--tag", "home"][..],
+            &["note", "show", "3", "--format", "table"][..],
+        ]
+        .iter()
+        .map(|args| (args.to_vec(), fx.run(args)))
+        .collect();
+        // Restore before asserting, so the fixture can always clean up.
+        make_private(&root);
+        make_private(&root.join("store.db"));
+        for (args, out) in outs {
+            assert_eq!(
+                out.status.code(),
+                Some(0),
+                "{args:?}: {}",
+                text(&out.stderr)
+            );
+        }
+        assert_eq!(snapshot(&root), before);
+    }
+}
+
 use std::io::{BufRead, BufReader};
 use std::process::Stdio;
 use support::{ChildGuard, Fixture, text};
@@ -952,166 +1114,4 @@ fn help_states_defaults_for_tag_and_json() {
         .find(|line| line.contains("--tag"))
         .expect("--tag line in note add --help");
     assert!(tag_line.contains("[default:"), "got {tag_line:?}");
-}
-
-#[cfg(unix)]
-mod unix {
-    //! Modes, links and read-only state (STD-01 R31, STD-05 R7–R9).
-    use super::support::{Fixture, make_private, text};
-    use std::fs::{self, Permissions};
-    use std::os::unix::fs::{PermissionsExt, symlink};
-    use std::path::Path;
-
-    fn mode(path: &Path) -> u32 {
-        fs::metadata(path).unwrap().permissions().mode() & 0o7777
-    }
-
-    /// Every entry of `dir` with its bytes, to prove nothing changed.
-    fn snapshot(dir: &Path) -> Vec<(String, Vec<u8>)> {
-        let mut entries: Vec<_> = fs::read_dir(dir)
-            .unwrap()
-            .map(|entry| {
-                let entry = entry.unwrap();
-                (
-                    entry.file_name().to_string_lossy().into_owned(),
-                    fs::read(entry.path()).unwrap(),
-                )
-            })
-            .collect();
-        entries.sort();
-        entries
-    }
-
-    #[test]
-    fn state_is_created_owner_only_whatever_the_umask() {
-        // STD-05 R8: modes are set explicitly, so even umask 000 gives 0700/0600.
-        // The umask is set on the child alone (STD-04 R6), through sh.
-        let fx = Fixture::new();
-        // sh runs in the kit's isolated environment, which the binary inherits.
-        let out = fx
-            .command("/bin/sh")
-            .arg("-c")
-            .arg("umask 000; exec \"$0\" \"$@\"")
-            .arg(super::support::BIN)
-            .args(["note", "add", "x"])
-            .output()
-            .unwrap();
-        assert_eq!(out.status.code(), Some(0), "stderr: {}", text(&out.stderr));
-        assert_eq!(mode(&fx.root()), 0o700);
-        assert_eq!(mode(&fx.root().join("store.db")), 0o600);
-        assert_eq!(mode(&fx.root().join("store.db-wal")), 0o600);
-        assert_eq!(mode(&fx.root().join("store.db-shm")), 0o600);
-        assert_eq!(mode(&fx.root().join("audit.jsonl")), 0o600);
-        assert_eq!(mode(&fx.root().join(".audit.lock")), 0o600);
-    }
-
-    #[test]
-    fn a_store_writable_by_others_is_refused_with_a_chmod_fix() {
-        // STD-05 R9, and STD-02 R26: the message carries a runnable remedy.
-        let fx = Fixture::new();
-        fx.seed();
-        let store = fx.root().join("store.db");
-        fs::set_permissions(&store, Permissions::from_mode(0o666)).unwrap();
-        let before = fs::read(&store).unwrap();
-        let out = fx.run(&["note", "list"]);
-        assert_eq!(out.status.code(), Some(1));
-        assert!(
-            text(&out.stderr).contains("chmod -- 600"),
-            "stderr: {}",
-            text(&out.stderr)
-        );
-        let out = fx.run(&["note", "add", "y", "--json"]);
-        assert_eq!(super::json(&out.stderr)["code"], "store_permissions");
-        assert_eq!(
-            fs::read(&store).unwrap(),
-            before,
-            "a refused store is not rewritten"
-        );
-    }
-
-    #[test]
-    fn a_symlinked_store_is_refused_and_its_target_left_alone() {
-        // STD-05 R7, R9.
-        let fx = Fixture::new();
-        fx.seed();
-        let store = fx.root().join("store.db");
-        let target = fx.elsewhere("target.json");
-        fs::rename(&store, &target).unwrap();
-        symlink(&target, &store).unwrap();
-        let before = fs::read(&target).unwrap();
-        for args in [
-            &["note", "list", "--json"][..],
-            &["note", "add", "y", "--json"][..],
-        ] {
-            let out = fx.run(args);
-            assert_eq!(out.status.code(), Some(1), "{args:?}");
-            assert_eq!(
-                super::json(&out.stderr)["code"],
-                "store_symlink",
-                "{args:?}"
-            );
-        }
-        assert_eq!(fs::read(&target).unwrap(), before);
-    }
-
-    #[test]
-    fn a_symlinked_root_is_refused_before_anything_is_created() {
-        // STD-02 R34, STD-05 R7: the root is checked before the directory or
-        // the database is created.
-        let fx = Fixture::new();
-        let target = fx.elsewhere("target/.keep");
-        let target = target.parent().unwrap();
-        let link = fx.elsewhere("link");
-        symlink(target, &link).unwrap();
-        let out = fx.run(&[
-            "--root",
-            link.to_str().unwrap(),
-            "note",
-            "add",
-            "y",
-            "--json",
-        ]);
-        assert_eq!(out.status.code(), Some(1));
-        // The error object comes first; the audit log, refused the same
-        // root, adds its warning after it.
-        let stderr = text(&out.stderr);
-        let error = stderr.lines().next().unwrap();
-        assert_eq!(
-            super::json(error.as_bytes())["code"],
-            "store_symlink",
-            "{stderr:?}"
-        );
-        assert_eq!(fs::read_dir(target).unwrap().count(), 0);
-    }
-
-    #[test]
-    fn reads_work_against_a_read_only_store_and_change_nothing() {
-        // STD-01 R31: list and show take no lock and write nothing.
-        let fx = Fixture::new();
-        fx.seed();
-        let root = fx.root();
-        let before = snapshot(&root);
-        fs::set_permissions(root.join("store.db"), Permissions::from_mode(0o400)).unwrap();
-        fs::set_permissions(&root, Permissions::from_mode(0o500)).unwrap();
-        let outs: Vec<_> = [
-            &["note", "list"][..],
-            &["note", "list", "--json", "--tag", "home"][..],
-            &["note", "show", "3", "--format", "table"][..],
-        ]
-        .iter()
-        .map(|args| (args.to_vec(), fx.run(args)))
-        .collect();
-        // Restore before asserting, so the fixture can always clean up.
-        make_private(&root);
-        make_private(&root.join("store.db"));
-        for (args, out) in outs {
-            assert_eq!(
-                out.status.code(),
-                Some(0),
-                "{args:?}: {}",
-                text(&out.stderr)
-            );
-        }
-        assert_eq!(snapshot(&root), before);
-    }
 }
