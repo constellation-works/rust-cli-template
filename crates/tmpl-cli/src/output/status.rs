@@ -1,7 +1,7 @@
 //! The `status` payload's human view: the table the kit's sink renders in
 //! table mode and as one tab-separated line otherwise.
 
-use super::payload::StatusPayload;
+use super::common::payload::StatusPayload;
 use cw_cli::{Cell, Column, Role, Table};
 
 /// The store's status as one row, `ROOT  FORMAT`. A store with no database

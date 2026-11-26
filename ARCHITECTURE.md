@@ -77,7 +77,8 @@ mcp/                 the MCP surface: one cw_mcp::Tool per command, served by `t
   mod.rs             tools(): each command's Args as the input, its summary as the description, its handler as the call; server, serve
 output/              payloads and each command's human view, written through the kit's sink
   mod.rs             finish: emit or report through cw_cli::Sink; usage errors, help and version
-  payload.rs         the payloads every mode renders
+  common/            the payloads two or more commands share
+    payload.rs       the payloads every mode renders
   status.rs          the status table
 <!-- example:begin -->
   note.rs            the note payloads, the list table, the detail text, the priority's colour role
