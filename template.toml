@@ -1,4 +1,4 @@
 # The version of the constellation Rust CLI template. A pull request that
 # changes a shipped file raises it (scripts/check-template-version.sh);
 # scripts/init.sh writes it, with the kind, into a new project's copy.
-version = 30
+version = 31
