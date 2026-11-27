@@ -31,7 +31,10 @@ jobs:
     # install-action checks every download against the SHA-256 recorded in
     # its manifest.
     steps:
+      # Full history, so make ci's template-version check finds
+      # origin/agent-main and its merge base on a pull request too.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { fetch-depth: 0 }
       - name: Read the pinned toolchain
         id: toolchain
         run: echo "channel=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)" >>"$GITHUB_OUTPUT"
