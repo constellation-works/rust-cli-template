@@ -158,6 +158,7 @@ impl StoredRow {
                 });
             }
         };
+
         let bad = |reason| BadRecord {
             path: path.to_path_buf(),
             locator: RecordLocator::Id(id),
@@ -166,16 +167,20 @@ impl StoredRow {
         let title_text = decode_utf8("title", self.title).map_err(&bad)?;
         let title =
             Title::try_from(title_text).map_err(|err| bad(BadRecordReason::Validation(err)))?;
+
         let body = self
             .body
             .map(|bytes| decode_utf8("body", bytes))
             .transpose()
             .map_err(&bad)?;
+
         let tags_text = decode_utf8("tags", self.tags).map_err(&bad)?;
         let tags = parse_tags(&tags_text).map_err(&bad)?;
+
         let priority_text = decode_utf8("priority", self.priority).map_err(&bad)?;
         let priority = Priority::from_str(&priority_text)
             .map_err(|err| bad(BadRecordReason::Validation(err)))?;
+
         let created_at_text = decode_utf8("created_at", self.created_at).map_err(&bad)?;
         let created_at = OffsetDateTime::parse(&created_at_text, &Rfc3339).map_err(|err| {
             bad(BadRecordReason::InvalidField {
@@ -183,6 +188,7 @@ impl StoredRow {
                 detail: err.to_string(),
             })
         })?;
+
         Ok(Note {
             id,
             title,
@@ -266,11 +272,13 @@ fn put(conn: &Connection, path: &Path, note: &Note) -> Result<()> {
         what: "note tags",
         source,
     })?;
+
     let created_at = note
         .created_at
         .to_offset(UtcOffset::UTC)
         .format(&Rfc3339)
         .map_err(|source| Error::Timestamp { source })?;
+
     let action = "store a note in";
     conn.prepare_cached(
         "INSERT INTO note (id, title, body, tags, priority, created_at)
@@ -293,6 +301,7 @@ fn put(conn: &Connection, path: &Path, note: &Note) -> Result<()> {
         ])
     })
     .map_err(|err| sqlite(action, path, err))?;
+
     Ok(())
 }
 

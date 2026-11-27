@@ -11,7 +11,9 @@ pub(super) fn add(ctx: &Ctx<'_>, new: NewNote) -> Result<Outcome, Error> {
     // the time to the nanosecond.
     let now = ctx.now();
     let now = now.replace_nanosecond(0).unwrap_or(now);
+
     let store = ctx.state();
+
     // Every check that can refuse runs before the first write (STD-02 R34):
     // an unsafe, corrupt, newer, bad-record or id-exhausted store is refused
     // here, before the directory or the database is created.
@@ -27,6 +29,7 @@ pub(super) fn add(ctx: &Ctx<'_>, new: NewNote) -> Result<Outcome, Error> {
             return Err(Error::IdExhausted { path: store.path() });
         }
     }
+
     // The id is decided again inside the write, against what the store holds
     // under its write lock: anything read before it may be stale.
     // Inside the write the flow's own refusal is translated into the
@@ -39,8 +42,10 @@ pub(super) fn add(ctx: &Ctx<'_>, new: NewNote) -> Result<Outcome, Error> {
         tx.notes().put(&note)?;
         Ok(note)
     })?;
+
     let path = store.path();
     tracing::debug!(id = %note.id, path = ?path, "added note");
     tracing::info!(id = %note.id, "note added");
+
     Ok(Outcome::Added { note, path })
 }
