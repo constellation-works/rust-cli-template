@@ -37,6 +37,22 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tmpl_cli_core::{APP, Error, Origin, Runtime, State};
 
+/// Serve every tool on standard input and output until the input closes.
+pub(crate) fn serve(runtime: Runtime) -> Result<(), Error> {
+    server(runtime)?.serve_stdio().map_err(error::mcp_error)
+}
+
+/// The server over `runtime`: the program's name and version, and every
+/// tool.
+///
+/// # Errors
+///
+/// `mcp_tool_list` when the kit refuses the tool list.
+pub fn server(runtime: Runtime) -> Result<Server<State>, Error> {
+    let info = ServerInfo::new(APP, env!("CARGO_PKG_VERSION"), TOOL_PANICKED);
+    Server::new(info, runtime, tools()).map_err(error::mcp_error)
+}
+
 /// Every tool, one per command, in the order `tools/list` gives them.
 fn tools() -> Vec<Tool<State>> {
     vec![
@@ -53,22 +69,6 @@ fn tools() -> Vec<Tool<State>> {
         }),
         // example:end
     ]
-}
-
-/// The server over `runtime`: the program's name and version, and every
-/// tool.
-///
-/// # Errors
-///
-/// `mcp_tool_list` when the kit refuses the tool list.
-pub fn server(runtime: Runtime) -> Result<Server<State>, Error> {
-    let info = ServerInfo::new(APP, env!("CARGO_PKG_VERSION"), TOOL_PANICKED);
-    Server::new(info, runtime, tools()).map_err(error::mcp_error)
-}
-
-/// Serve every tool on standard input and output until the input closes.
-pub(crate) fn serve(runtime: Runtime) -> Result<(), Error> {
-    server(runtime)?.serve_stdio().map_err(error::mcp_error)
 }
 
 /// The tool for the command at `path`: named by the path joined with `_`,

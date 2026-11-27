@@ -79,19 +79,6 @@ impl Session {
     }
 }
 
-/// What the binary prints with `--json` for `args`.
-fn cli_json(fx: &Fixture, args: &[&str]) -> Value {
-    let mut args = args.to_vec();
-    args.push("--json");
-    serde_json::from_slice(&fx.ok(&args).stdout).unwrap()
-}
-
-/// A successful tool result's structured content.
-fn structured(result: &Value) -> Value {
-    assert_eq!(result["isError"], json!(false), "{result}");
-    result["structuredContent"].clone()
-}
-
 #[test]
 fn status_returns_what_json_prints() {
     // STD-01 R6, R10.
@@ -404,3 +391,16 @@ fn note_show_reports_skipped_records_in_tool_result() {
     assert_eq!(shown["warnings"][0]["record"], "note 2", "{shown}");
 }
 // example:end
+
+/// What the binary prints with `--json` for `args`.
+fn cli_json(fx: &Fixture, args: &[&str]) -> Value {
+    let mut args = args.to_vec();
+    args.push("--json");
+    serde_json::from_slice(&fx.ok(&args).stdout).unwrap()
+}
+
+/// A successful tool result's structured content.
+fn structured(result: &Value) -> Value {
+    assert_eq!(result["isError"], json!(false), "{result}");
+    result["structuredContent"].clone()
+}
