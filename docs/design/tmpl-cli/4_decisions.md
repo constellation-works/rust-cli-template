@@ -985,9 +985,14 @@ re-vendored. Each line names the rule and how it is now met.
   the record was written) asks of every document with frontmatter, and the
   check holds that too. The vendored `docs/standards/` is the one gap: see
   [The vendored standards carry no project frontmatter](../kit/4_decisions.md#the-vendored-standards-carry-no-project-frontmatter).
-- **STD-09@3 §R16**: `scripts/generate-doc-index.py` renders
-  `docs/INDEX.md` from the summaries; `make docs-check` fails when the
-  committed file differs, and `scripts/init.sh` regenerates it for a copy.
+- **STD-09@5 §R16**: `scripts/generate-doc-index.py` renders
+  `docs/INDEX.md` from the summaries of the documents outside the feature
+  design folders, which the feature board links once through
+  `docs/design/FEATURES.md`; `make docs-check` fails when the committed file
+  differs, and `scripts/init.sh` regenerates it for a copy. The shared
+  `docs/design/_templates/` and `docs/design/CONVENTIONS.md` stay indexed:
+  neither sits in a feature folder (the board skips folders starting with
+  `_`, and CONVENTIONS.md is at the design root).
 - **STD-09@3 §R17**: `scripts/check-doc-links.py`, in `make docs-check`,
   resolves every relative link and heading anchor in the root and `docs/`
   Markdown, with the parser `scripts/check-readme.py` uses for the README.
