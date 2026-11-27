@@ -326,9 +326,9 @@ ban "$STORE"         '^[[:space:]]*pub[[:space:]]+(fn|struct|enum|type|use|const
 # a process; it reaches the data directory through the store (R5).
 ban "$CORE"          'std::net|tempfile::|rustix::|cw_fs\b|cw_sqlite\b|rusqlite\b'  "the core reaches files only through tmpl-cli-store"
 # The record-access seam: the core reaches a record only through
-# snapshot.<record>() and tx.<record>(), never a repository by its path.
-ban "$CORE"          'tmpl_cli_store::repository\b'                       "the core reaches a record through snapshot.<record>() or tx.<record>(), never tmpl_cli_store::repository"
-ban_import "$CORE"   'tmpl_cli_store' 'repository'                         "the core reaches a record through snapshot.<record>() or tx.<record>(), never tmpl_cli_store::repository"
+# snapshot.<record>() and tx.<record>(). The store's `repository` module is
+# private, so a repository path from the core does not compile: visibility
+# holds the seam (STD-02 R6), and no grep repeats it here.
 ban_import "$CORE"   'std' 'net'                                           "the core opens no socket"
 # One chokepoint (R24): the kit's cw_app::exec. An app's exec forwards to it
 # and supplies its parts by implementing cw_app::App; nothing calls an app's

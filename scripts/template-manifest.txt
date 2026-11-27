@@ -99,6 +99,7 @@ regions crates/tmpl-cli/tests/golden.rs
 regions crates/tmpl-cli/tests/mcp.rs
 regions crates/tmpl-cli/tests/support/mod.rs
 regions crates/tmpl-cli-core/src/app/mod.rs
+regions crates/tmpl-cli-store/src/lib.rs
 regions crates/tmpl-cli-store/src/contract/mod.rs
 regions crates/tmpl-cli-store/src/driver/sqlite/schema/mod.rs
 regions crates/tmpl-cli-store/src/error.rs

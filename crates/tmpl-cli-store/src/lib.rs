@@ -4,10 +4,10 @@
 //!   project's part of it. `driver::sqlite` names the database, its
 //!   lock wait and its schema steps, and hands out the kit's
 //!   `cw_sqlite::Db`; it holds no query;
-//! - [`repository`]: one repository per record, read through a
+//! - `repository` (private): one repository per record, read through a
 //!   [`Snapshot`] and written through a [`Tx`] inside [`Store::write`]; the
 //!   repository of a record held in the database holds its SQL and row
-//!   mapping;
+//!   mapping, and a caller reaches it only through those two types;
 //! - [`contract`]: the record shapes;
 //! - the crate's typed [`Error`], and its one translator into the
 //!   workspace's error type.
@@ -45,7 +45,7 @@ mod driver;
 
 mod error;
 
-pub mod repository;
+mod repository;
 
 mod store;
 
@@ -56,6 +56,10 @@ pub use driver::sqlite::STORE_FILE;
 pub use error::{BadRecord, BadRecordReason, Error, RecordLocator, Result};
 pub use repository::{Snapshot, Tx};
 pub use store::Store;
+
+// example:begin
+pub use repository::{Notes, NotesMut};
+// example:end
 
 #[cfg(test)]
 mod tests;
