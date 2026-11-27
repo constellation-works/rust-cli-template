@@ -10,7 +10,7 @@
 //! `note/support.rs` for what they share, and `note/tests/` beside them.
 //! STD-02 R18: split along responsibilities, not by length alone.
 
-use crate::command::input::{parsed, parsed_list, parsed_option};
+use crate::command::common::input;
 use crate::output::{NotePayload, Output, Payload, SkippedRecord};
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::{ArgAction, Args, Subcommand};
@@ -67,19 +67,19 @@ pub(crate) enum NoteCommand {
 pub(crate) struct AddArgs {
     /// The note's title: one line, at most 200 characters
     #[arg(value_name = "TITLE")]
-    #[serde(deserialize_with = "parsed")]
+    #[serde(deserialize_with = "input::parsed")]
     #[schemars(with = "String")]
     pub(crate) title: Title,
 
     /// Longer text, shown by `note show` and in --json output; not blank [default: none]
     #[arg(long, value_name = "TEXT")]
-    #[serde(default, deserialize_with = "parsed_option")]
+    #[serde(default, deserialize_with = "input::parsed_option")]
     #[schemars(with = "Option<String>")]
     pub(crate) body: Option<Body>,
 
     /// Label the note; repeat for several (lowercase letters, digits, '-') [default: none]
     #[arg(long = "tag", value_name = "TAG", action = ArgAction::Append)]
-    #[serde(default, deserialize_with = "parsed_list")]
+    #[serde(default, deserialize_with = "input::parsed_list")]
     #[schemars(with = "Vec<String>")]
     pub(crate) tags: Vec<Tag>,
 
@@ -97,7 +97,7 @@ pub(crate) struct AddArgs {
 pub(crate) struct ListArgs {
     /// Only notes with this tag [default: any]
     #[arg(long, value_name = "TAG")]
-    #[serde(default, deserialize_with = "parsed_option")]
+    #[serde(default, deserialize_with = "input::parsed_option")]
     #[schemars(with = "Option<String>")]
     pub(crate) tag: Option<Tag>,
 

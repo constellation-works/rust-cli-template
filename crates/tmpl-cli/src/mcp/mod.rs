@@ -4,7 +4,7 @@
 //! A tool is a second mapping onto the same command, not a second command:
 //! its input is the command's own clap `Args` struct (which also derives
 //! `Deserialize` and `JsonSchema`; a text argument is read through its
-//! type's `FromStr`, as the example's `command/input.rs` shows), its description is the
+//! type's `FromStr`, as the example's `command/common/input.rs` shows), its description is the
 //! command's summary, and its function wraps the input in the CLI's
 //! [`Command`] and calls the same handler, [`command::run`], which runs the
 //! app through `app::<app>::exec` and the kit's `cw_app::exec`. So the tool

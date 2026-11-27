@@ -25,7 +25,7 @@
 example crates/tmpl-cli/src/command/note.rs
 example crates/tmpl-cli/src/output/note.rs
 example crates/tmpl-cli/src/output/tests/note.rs
-example crates/tmpl-cli/src/command/input.rs
+example crates/tmpl-cli/src/command/common/input.rs
 example crates/tmpl-cli/tests/note.rs
 example crates/tmpl-cli/tests/goldens/help/note.txt
 example crates/tmpl-cli/tests/goldens/help/note-add.txt
@@ -86,6 +86,7 @@ regions docs/architecture/tmpl-cli-store.md
 regions docs/usage.md
 regions scripts/check-dependency-direction.sh
 regions crates/tmpl-cli/src/cli.rs
+regions crates/tmpl-cli/src/command/common/mod.rs
 regions crates/tmpl-cli/src/command/mod.rs
 regions crates/tmpl-cli/src/error.rs
 regions crates/tmpl-cli/src/mcp/mod.rs
