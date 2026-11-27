@@ -46,12 +46,15 @@ fn emit<O: Write, E: Write>(sink: &mut Sink<O, E>, output: &Output) -> Result<()
         skipped: _,
         // example:end
     } = output;
+
     for warning in warnings {
         sink.warn(warning);
     }
+
     if let Some(notice) = notice {
         sink.notice(notice);
     }
+
     let json = payload.json();
     let emitted = match payload {
         Payload::Status(status) => sink.emit(&json, |_| status::to_table(status)),
@@ -65,6 +68,7 @@ fn emit<O: Write, E: Write>(sink: &mut Sink<O, E>, output: &Output) -> Result<()
         Payload::Note(note) => sink.emit_text(&json, |_| note::detail_text(note)),
         // example:end
     };
+
     emitted
         .and_then(|()| sink.finish())
         .map_err(error::output_error)

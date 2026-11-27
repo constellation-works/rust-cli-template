@@ -169,13 +169,16 @@ impl Store {
     fn snapshot(&self, mode: Mode) -> Result<Snapshot> {
         let db = sqlite::open(&self.root, self.lock_wait);
         let path = db.path().to_path_buf();
+
         if !cw_fs::inspect_dir(&self.root)? {
             return Ok(Snapshot::new(None, path));
         }
+
         let reader = match mode {
             Mode::Strict => db.read_strict(),
             Mode::Ordinary => db.read(),
         };
+
         match reader {
             Ok(reader) => Ok(Snapshot::new(Some(reader), path)),
             Err(cw_sqlite::Error::Missing { .. }) => Ok(Snapshot::new(None, path)),

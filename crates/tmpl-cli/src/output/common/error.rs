@@ -31,18 +31,22 @@ pub(crate) fn finish_parse_error(
     requested: Option<Format>,
 ) -> ExitCode {
     let rendered = err.render().to_string();
+
     if !err.use_stderr() {
         // Help and version are text in every mode.
         let mut sink = sink(decide(env, probe, Some(Format::Table)));
         let written = sink
             .emit_text(rendered.as_str(), ToOwned::to_owned)
             .and_then(|()| sink.finish());
+
         return match written {
             Ok(()) => ExitCode::SUCCESS,
             Err(write_err) => report(&mut sink, &error::output_error(write_err)),
         };
     }
+
     let mut sink = sink(decide(env, probe, requested));
+
     let (first, tail) = rendered.split_once('\n').unwrap_or((&rendered, ""));
     let Some(message) = first.strip_prefix("error: ") else {
         // A missing subcommand: clap's help, on stderr, is the message.
@@ -52,6 +56,7 @@ pub(crate) fn finish_parse_error(
         sink.notice(rendered.trim_end_matches('\n'));
         return Exit::of(Kind::Usage).into();
     };
+
     if sink.terminal().mode() == Mode::Json {
         // One JSON object: the lines that name the argument join the
         // message, and clap's usage and tip are its hint.
@@ -60,12 +65,15 @@ pub(crate) fn finish_parse_error(
         let hint = (!rest.is_empty()).then_some(rest.as_str());
         return sink.report(&err, hint).into();
     }
+
     let exit = report(&mut sink, &error::usage_error(message));
+
     // As text, clap's usage and tip follow the error line unchanged.
     let tail = tail.trim_end_matches('\n');
     if !tail.is_empty() {
         sink.notice(tail);
     }
+
     exit
 }
 

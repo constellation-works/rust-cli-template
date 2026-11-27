@@ -60,6 +60,7 @@ pub fn run(args: &[OsString], env: &Env) -> ExitCode {
     // from it and the captured environment.
     let probe = Probe::detect();
     let help_width = output::decide(env, probe, None).width();
+
     let cli = match cli::Cli::parse_args(args, help_width) {
         Ok(cli) => cli,
         Err(err) => {
@@ -67,18 +68,23 @@ pub fn run(args: &[OsString], env: &Env) -> ExitCode {
             return output::finish_parse_error(&err, env, probe, requested);
         }
     };
+
     let mut sink = output::sink(output::decide(env, probe, cli.global.requested_format()));
     if let Err(err) = cli.global.check() {
         return output::fail(&mut sink, &err);
     }
+
     Logging::from_env(env, APP).init();
+
     let runtime = match tmpl_cli_core::start(env, cli.global.root.as_deref()) {
         Ok(runtime) => runtime,
         Err(err) => return output::finish(&mut sink, Err(err)),
     };
+
     // The actor is the user the environment claims; the audit line records
     // it only when it reads as an identifier.
     let origin = Origin::new(Surface::CLI, env.user().map(str::to_owned));
+
     let command = match cli.command {
         Invocation::Run(command) => command,
         // The server names each call's origin itself, from the client.
@@ -89,12 +95,15 @@ pub fn run(args: &[OsString], env: &Env) -> ExitCode {
             };
         }
     };
+
     let (code, warning) = command::run(command, &runtime, &origin, |outcome| {
         output::finish(&mut sink, outcome)
     });
+
     if let Some(warning) = warning {
         output::audit_warning(&mut sink, &warning);
     }
+
     code
 }
 

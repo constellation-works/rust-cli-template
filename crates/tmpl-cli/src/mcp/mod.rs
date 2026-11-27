@@ -104,24 +104,29 @@ fn summary(path: &[&str]) -> String {
 /// (STD-02 R31, R32).
 fn call(runtime: &Runtime, origin: &Origin, command: Command) -> Result<Value, Error> {
     let (outcome, audit_warning) = command::run(command, runtime, origin, |outcome| outcome);
+
     let audit_warning = audit_warning.map(|warning| {
         let text = warning.to_string();
         tracing::warn!(warning = ?text, "audit line not written");
         text
     });
+
     let output = outcome?;
     for warning in &output.warnings {
         tracing::warn!(warning = ?warning, "store warning");
     }
+
     let mut extra_warnings = Vec::new();
     // example:begin
     for skipped in &output.skipped {
         extra_warnings.push(serde_json::to_value(skipped).map_err(error::encode_error)?);
     }
     // example:end
+
     if let Some(warning) = audit_warning {
         extra_warnings.push(Value::String(warning));
     }
+
     let mut value = json(&output.payload)?;
     attach_warnings(&mut value, extra_warnings);
     Ok(value)
