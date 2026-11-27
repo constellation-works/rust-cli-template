@@ -164,12 +164,6 @@ impl JsonSchema for NoteIdSchema {
     }
 }
 
-/// Allowed priorities come from the domain type, so help and parsing cannot
-/// drift from it (STD-01 R25).
-fn priority_parser() -> impl TypedValueParser<Value = Priority> {
-    PossibleValuesParser::new(Priority::NAMES).try_map(|value| value.parse::<Priority>())
-}
-
 /// Run one `note` verb through the `note` app, pass the payload to
 /// `finish`, then settle the audit record.
 pub(super) fn run<R>(
@@ -181,6 +175,12 @@ pub(super) fn run<R>(
     let (outcome, audit) = note::exec(runtime, origin, app_command(command)).into_parts();
     let rendered = finish(outcome.map(output));
     (rendered, audit.settle())
+}
+
+/// Allowed priorities come from the domain type, so help and parsing cannot
+/// drift from it (STD-01 R25).
+fn priority_parser() -> impl TypedValueParser<Value = Priority> {
+    PossibleValuesParser::new(Priority::NAMES).try_map(|value| value.parse::<Priority>())
 }
 
 /// The parsed arguments as the app's command.

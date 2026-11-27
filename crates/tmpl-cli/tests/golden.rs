@@ -62,27 +62,6 @@ const TABLE_BEGIN: &str = "<!-- generated: environment table -->\n";
 /// The marker that closes it.
 const TABLE_END: &str = "<!-- end generated -->";
 
-/// The goldens folder. `Goldens` rewrites a file instead of comparing it
-/// when `UPDATE_GOLDENS=1`, which `make goldens UPDATE=1` sets.
-fn goldens() -> Goldens {
-    Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"))
-}
-
-/// Compare `actual` to the golden at `rel`, or rewrite it when updating.
-/// Returns the failure instead of panicking so one run reports every stale
-/// or missing golden at once.
-fn check(goldens: &Goldens, rel: &str, actual: &str) -> Option<String> {
-    goldens.check(rel, actual).err().map(|err| err.to_string())
-}
-
-fn report(failures: &[String]) {
-    assert!(
-        failures.is_empty(),
-        "{}\n\nIf the change is intended: make goldens UPDATE=1, then review the diff.",
-        failures.join("\n\n")
-    );
-}
-
 #[test]
 fn help_matches_goldens() {
     let fx = Fixture::new();
@@ -216,4 +195,25 @@ fn usage_environment_table_matches_the_declarations() {
          --- in docs/usage.md\n{}--- rendered\n{table}",
         &doc[start..end]
     )]);
+}
+
+/// The goldens folder. `Goldens` rewrites a file instead of comparing it
+/// when `UPDATE_GOLDENS=1`, which `make goldens UPDATE=1` sets.
+fn goldens() -> Goldens {
+    Goldens::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/goldens"))
+}
+
+/// Compare `actual` to the golden at `rel`, or rewrite it when updating.
+/// Returns the failure instead of panicking so one run reports every stale
+/// or missing golden at once.
+fn check(goldens: &Goldens, rel: &str, actual: &str) -> Option<String> {
+    goldens.check(rel, actual).err().map(|err| err.to_string())
+}
+
+fn report(failures: &[String]) {
+    assert!(
+        failures.is_empty(),
+        "{}\n\nIf the change is intended: make goldens UPDATE=1, then review the diff.",
+        failures.join("\n\n")
+    );
 }

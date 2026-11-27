@@ -28,13 +28,6 @@ pub(crate) fn finish<O: Write, E: Write>(
     }
 }
 
-/// Print the audit log's warning after the command's own output: the line
-/// for a command that already ran could not be written. Fail open
-/// (STD-02 R31): it never changes the exit code.
-pub(crate) fn audit_warning(sink: &mut Sink, warning: &impl Display) {
-    sink.warn(&warning.to_string());
-}
-
 /// Warnings and the notice to stderr, then the payload to stdout in the
 /// sink's mode, then the flush.
 fn emit<O: Write, E: Write>(sink: &mut Sink<O, E>, output: &Output) -> Result<(), Error> {
@@ -72,4 +65,11 @@ fn emit<O: Write, E: Write>(sink: &mut Sink<O, E>, output: &Output) -> Result<()
     emitted
         .and_then(|()| sink.finish())
         .map_err(error::output_error)
+}
+
+/// Print the audit log's warning after the command's own output: the line
+/// for a command that already ran could not be written. Fail open
+/// (STD-02 R31): it never changes the exit code.
+pub(crate) fn audit_warning(sink: &mut Sink, warning: &impl Display) {
+    sink.warn(&warning.to_string());
 }

@@ -166,6 +166,33 @@ impl GlobalArgs {
     }
 }
 
+/// Every command path in the CLI tree, starting with the root (`"tmpl-cli"`),
+/// paired with its built [`clap::Command`]. Used by help and golden tests so a
+/// newly added command cannot be forgotten (STD-01 R22, R24).
+#[must_use]
+pub fn every_command() -> Vec<(String, clap::Command)> {
+    fn collect(
+        cmd: &clap::Command,
+        path: &mut Vec<String>,
+        out: &mut Vec<(String, clap::Command)>,
+    ) {
+        out.push((path.join(" "), cmd.clone()));
+        for sub in cmd.get_subcommands() {
+            if sub.get_name() == "help" {
+                continue;
+            }
+            path.push(sub.get_name().to_owned());
+            collect(sub, path, out);
+            path.pop();
+        }
+    }
+    let mut root = root(None);
+    root.build();
+    let mut out = Vec::new();
+    collect(&root, &mut vec![String::from("tmpl-cli")], &mut out);
+    out
+}
+
 /// `--root`'s help: the variable's name comes from its declaration
 /// (`tmpl_cli_core::env::ROOT`), the default directory from the program's
 /// name (STD-01 R25).
@@ -227,31 +254,4 @@ pub(crate) fn raw_requested_format(args: &[OsString]) -> Option<Format> {
 /// value for `--format`.
 fn is_flag(token: &str) -> bool {
     token.starts_with('-') && token.len() > 1
-}
-
-/// Every command path in the CLI tree, starting with the root (`"tmpl-cli"`),
-/// paired with its built [`clap::Command`]. Used by help and golden tests so a
-/// newly added command cannot be forgotten (STD-01 R22, R24).
-#[must_use]
-pub fn every_command() -> Vec<(String, clap::Command)> {
-    fn collect(
-        cmd: &clap::Command,
-        path: &mut Vec<String>,
-        out: &mut Vec<(String, clap::Command)>,
-    ) {
-        out.push((path.join(" "), cmd.clone()));
-        for sub in cmd.get_subcommands() {
-            if sub.get_name() == "help" {
-                continue;
-            }
-            path.push(sub.get_name().to_owned());
-            collect(sub, path, out);
-            path.pop();
-        }
-    }
-    let mut root = root(None);
-    root.build();
-    let mut out = Vec::new();
-    collect(&root, &mut vec![String::from("tmpl-cli")], &mut out);
-    out
 }
