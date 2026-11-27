@@ -2,7 +2,7 @@
 type: architecture
 summary: The crates, their allowed and forbidden edges, each crate's modules, and the rules the structure gates hold them to.
 created_date: 2026-09-26
-updated_date: 2026-11-25
+updated_date: 2026-11-27
 ---
 
 # Architecture
@@ -202,7 +202,7 @@ contract/            Defines persisted record shapes; imports no sibling modules
 <!-- example:begin -->
   note.rs            Note, NoteId (1 to NoteId::MAX), Title, Body, Tag, Priority, NoteError
 <!-- example:end -->
-error.rs             Defines store errors and bad-record reports; imports no sibling modules.
+error.rs             Defines store errors and bad-record reports; imports contract.
 test_support.rs      Provides raw SQL for tests behind a feature; imports driver, error and store.
 ```
 
