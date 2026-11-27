@@ -2,7 +2,7 @@
 title: tmpl-cli — Overview
 owner: claude
 created_date: 2026-09-26
-updated_date: 2026-11-25
+updated_date: 2026-11-27
 last_validated: 2026-11-25
 status: Draft
 feature: tmpl-cli
@@ -27,7 +27,7 @@ safety), STD-04 (testing and verification) and STD-05 (security boundaries)
 that applies to a small CLI is demonstrated here in code, a test or a gate,
 so a project created from this template starts compliant and its agents copy
 compliant code. The rules it does not exercise are listed in
-[4_decisions.md](./4_decisions.md#standard-rules-this-template-does-not-exercise).
+[the kit's decisions](../kit/4_decisions.md#standard-rules-this-template-does-not-exercise).
 
 ## 1. Motivation
 

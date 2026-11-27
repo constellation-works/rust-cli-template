@@ -2,7 +2,7 @@
 title: tmpl-cli — Design
 owner: claude
 created_date: 2026-09-26
-updated_date: 2026-11-25
+updated_date: 2026-11-27
 last_validated: 2026-11-25
 status: Draft
 feature: tmpl-cli
@@ -278,7 +278,7 @@ as one grouped pull request per ecosystem, a week after a release.
   one line per command. Sampling an unexported terminal width needs a
   dependency (`terminal_size`) the template does not take.
 - Usage errors keep clap's multi-line rendering in human mode
-  ([4_decisions.md](./4_decisions.md#usage-errors-keep-claps-rendering)).
+  ([4_decisions.md](./4_decisions.md#usage-errors-keep-claps-rendering); the STD-08 deviation is in [the kit's decisions](../kit/4_decisions.md#usage-errors-keep-claps-tips-and-usage-line)).
 - Under plain `cargo test` (nextest absent) there is no per-test timeout;
   only the CI job timeout bounds a hang.
 - A note-write lock timeout (`store_locked`) names no holder: SQLite's locks

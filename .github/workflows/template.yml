@@ -70,5 +70,7 @@ jobs:
             echo "::error::the $KIND copy still carries the template's own name or summary"
             exit 1
           fi
+      - name: The copy records every deviation its code carries
+        run: python3 -I scripts/check-template.py --decisions "$SCRATCH" "$KIND"
       - name: make ci in the copy
         run: make -C "$SCRATCH" ci

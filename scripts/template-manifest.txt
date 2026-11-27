@@ -84,6 +84,7 @@ regions docs/architecture/README.md
 regions docs/architecture/tmpl-cli.md
 regions docs/architecture/tmpl-cli-core.md
 regions docs/architecture/tmpl-cli-store.md
+regions docs/design/kit/4_decisions.md
 regions docs/usage.md
 regions scripts/check-dependency-direction.sh
 regions crates/tmpl-cli/src/cli.rs
