@@ -6,21 +6,12 @@
 //! or retyping one is a breaking change, pinned by the output goldens. This
 //! shape is deliberately separate from the store's persisted document.
 
+use crate::output::status::StatusPayload;
 use serde::Serialize;
 // example:begin
 
 use crate::output::note::{ListPayload, NotePayload, SkippedRecord};
 // example:end
-
-/// The store's status as every output mode sees it.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub(crate) struct StatusPayload {
-    /// The data directory.
-    pub(crate) root: String,
-    /// The database's store format; `null` when there is no database yet,
-    /// never omitted (R11).
-    pub(crate) format: Option<u32>,
-}
 
 /// What a command produced, before rendering: the payload for stdout and
 /// the lines for stderr.
@@ -43,7 +34,7 @@ pub(crate) struct Output {
 }
 
 impl Output {
-    /// `body` with no notice and no warning.
+    /// `payload` with no notice and no warning.
     pub(crate) fn new(payload: Payload) -> Self {
         Self {
             payload,
