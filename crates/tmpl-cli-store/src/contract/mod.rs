@@ -1,3 +1,5 @@
+//! Defines persisted record shapes; imports no sibling modules.
+//!
 //! Record shapes: what the store persists and what reads return.
 //!
 //! Type definitions only, each with the constructor or parser that enforces

@@ -1,3 +1,5 @@
+//! Defines store errors and bad-record reports; imports no sibling modules.
+//!
 //! The store's one error type, and the bad-record report a read carries.
 //!
 //! Callers branch on the variant (or on [`Error::code`]), never on the message

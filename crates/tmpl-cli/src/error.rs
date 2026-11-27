@@ -1,3 +1,5 @@
+//! Defines surface failures and remedies; imports no sibling modules.
+//!
 //! What the surfaces decide about a failure: the remedy to print, and their
 //! own failures (output that could not be written, a command line that does
 //! not parse, an MCP session that could not be served).

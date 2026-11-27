@@ -1,3 +1,5 @@
+//! Provides raw SQL for tests behind a feature; imports driver, error and store.
+//!
 //! Hand-made store state for tests, behind the `test-support` feature.
 //!
 //! A test that needs a store the public API never writes (a bad record, an

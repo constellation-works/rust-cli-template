@@ -1,3 +1,5 @@
+//! Holds record queries and row mappings; imports contract and error.
+//!
 //! One repository per record.
 //!
 //! A repository is named for the record it holds, never for a command: it

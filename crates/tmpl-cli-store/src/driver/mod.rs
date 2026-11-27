@@ -1,3 +1,5 @@
+//! Sets up each storage mechanism; imports no sibling modules.
+//!
 //! One module per storage mechanism, each holding only this project's part
 //! of it: the kit crate is the mechanism.
 //!

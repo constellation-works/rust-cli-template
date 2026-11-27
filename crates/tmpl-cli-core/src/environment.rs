@@ -1,3 +1,5 @@
+//! Captures the process environment once; imports no sibling modules.
+//!
 //! The one read of the process environment (STD-02 R7: no read of the
 //! environment lives in the CLI crate).
 //!

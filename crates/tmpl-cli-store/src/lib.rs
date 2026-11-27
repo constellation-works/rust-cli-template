@@ -1,3 +1,5 @@
+//! Exports store types; imports contract, driver, error, repository and store.
+//!
 //! The tmpl-cli data directory as a library.
 //!
 //! - `driver`: one module per storage mechanism, each holding only this

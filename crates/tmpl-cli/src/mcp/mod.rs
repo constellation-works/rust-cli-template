@@ -1,3 +1,5 @@
+//! Serves commands as MCP tools; imports cli, command, error and output.
+//!
 //! The MCP surface: every command is also a tool, served by the kit's
 //! `cw-mcp` on standard input and output from `tmpl-cli mcp`.
 //!
