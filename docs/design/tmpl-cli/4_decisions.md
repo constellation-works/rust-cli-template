@@ -1321,7 +1321,7 @@ crate names it.
 ## The MCP surface is a second mapping onto the same commands
 
 **Recorded:** 2026-11-25
-**Code anchors:** `crates/tmpl-cli/src/mcp/mod.rs::tools`, `call`; `crates/tmpl-cli/src/command/input.rs`; `crates/tmpl-cli/src/command/note.rs::AddArgs`; `crates/tmpl-cli/src/output/payload.rs::Payload::json`; `crates/tmpl-cli/tests/mcp.rs`
+**Code anchors:** `crates/tmpl-cli/src/mcp/mod.rs::tools`, `call`; `crates/tmpl-cli/src/command/common/input.rs`; `crates/tmpl-cli/src/command/note.rs::AddArgs`; `crates/tmpl-cli/src/output/payload.rs::Payload::json`; `crates/tmpl-cli/tests/mcp.rs`
 
 ### Context
 

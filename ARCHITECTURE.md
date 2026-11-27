@@ -70,8 +70,9 @@ main.rs              capture_env() from the core and the arguments, once; run
 lib.rs               probe the streams, parse, open the kit's sink, start logging and the runtime, dispatch, print an audit warning
 cli.rs               the root command, the global flags, the root help's groups (rendered by cw_cli::help::grouped); Invocation: a command, or mcp
 command/<noun>.rs    arguments -> app::<app>::Command; exec; Outcome -> payload; render, then settle
+command/common/      command machinery two or more commands share
 <!-- example:begin -->
-command/input.rs     how a text argument is read from a tool's JSON: through the type's own FromStr
+command/common/input.rs   how a text argument is read from a tool's JSON: through the type's own FromStr
 <!-- example:end -->
 mcp/                 the MCP surface: one cw_mcp::Tool per command, served by `tmpl-cli mcp`
   mod.rs             tools(): each command's Args as the input, its summary as the description, its handler as the call; server, serve

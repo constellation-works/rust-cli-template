@@ -6,10 +6,8 @@
 //! behaviour (the audit log) attaches once, in the kit's chokepoint that
 //! every app's `exec` forwards to (STD-02 R24), not here.
 
-// example:begin
-pub(crate) mod input;
+mod common;
 
-// example:end
 mod status;
 
 // example:begin
