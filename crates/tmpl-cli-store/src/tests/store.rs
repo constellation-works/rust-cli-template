@@ -57,7 +57,7 @@ fn write(store: &Store, ran: &mut bool) -> Result<(), cw_base::Error> {
 
 #[test]
 fn a_write_refuses_when_another_writer_holds_the_lock_and_runs_nothing() {
-    let dir = crate::tests::private_tempdir();
+    let dir = private_tempdir();
     let store = Store::open(dir.path()).with_lock_wait(Duration::from_millis(60));
     let held = hold_write_elsewhere(dir.path());
     let mut ran = false;
@@ -69,4 +69,10 @@ fn a_write_refuses_when_another_writer_holds_the_lock_and_runs_nothing() {
     ));
     drop(held);
     assert!(!ran, "a refused write runs nothing");
+}
+
+/// A temporary directory that is owner-only whatever the umask, as a store
+/// directory must be (STD-05 R9). The kit's temp root is `0700`.
+fn private_tempdir() -> cw_testkit::TempRoot {
+    cw_testkit::TempRoot::new("TMPL_CLI").unwrap()
 }
