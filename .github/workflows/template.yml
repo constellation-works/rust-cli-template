@@ -12,8 +12,10 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/agent-main' }}
 jobs:
   # A pull request that changes a shipped file raises version in template.toml.
+  # It also runs on push to agent-main against HEAD^, so a squash merge that
+  # changes shipped files without raising the version fails on agent-main at
+  # once (a lost bump between parallel PRs passes its stale PR base).
   version:
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -22,7 +24,12 @@ jobs:
       - name: The template version is raised
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: scripts/check-template-version.sh "origin/$BASE_REF"
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            scripts/check-template-version.sh "origin/$BASE_REF"
+          else
+            scripts/check-template-version.sh "HEAD^"
+          fi
 
   # One job per kind: initialize a scratch copy, check that none of the
   # template's own text is left, then run the copy's full gate.

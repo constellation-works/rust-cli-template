@@ -165,6 +165,21 @@ structure:
 # template:begin
 # The template's own gate: the example stays removable (scripts/template-manifest.txt).
 	python3 -I scripts/check-template.py
+# A change to a shipped file raises the template version (template.toml:1-2).
+# TEMPLATE_VERSION_BASE defaults so `make ci-fast` works locally without
+# arguments; override it to check against another base.
+	BASE="$${TEMPLATE_VERSION_BASE:-origin/agent-main}"; \
+	if git rev-parse --verify --quiet "$$BASE^{commit}" >/dev/null; then \
+	  scripts/check-template-version.sh "$$BASE"; \
+	elif [ -n "$${TEMPLATE_VERSION_BASE:-}" ]; then \
+	  echo "error: no such template version base '$$BASE'." >&2; exit 1; \
+	elif git rev-parse --verify --quiet "agent-main^{commit}" >/dev/null; then \
+	  scripts/check-template-version.sh "agent-main"; \
+	elif [ "$${CI:-}" = "true" ]; then \
+	  echo "error: no template version base (tried origin/agent-main and agent-main)." >&2; exit 1; \
+	else \
+	  echo "warning: no template version base; skipping the template-version check." >&2; \
+	fi
 # template:end
 
 # The constellation standards this repo adopted are vendored under
