@@ -17,7 +17,7 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::Output;
 
 /// A task id, built at run time so that this file names none: the gate scans
 /// every tracked file, this one included.
@@ -268,8 +268,8 @@ grep -Fx '[licenses]' "$4"
 
 #[test]
 fn check_test_modules_fails_when_parent_lacks_mod_tests() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
     let script = copy_script("check-test-modules.sh", root);
 
     // Parent module omits `mod tests;` even though tests/mod.rs declares its child.
@@ -282,7 +282,7 @@ fn check_test_modules_fails_when_parent_lacks_mod_tests() {
     )
     .unwrap();
 
-    let out = Command::new(&script).output().unwrap();
+    let out = temp.command(&script).output().unwrap();
     assert_ne!(
         out.status.code(),
         Some(0),
@@ -296,20 +296,25 @@ fn check_test_modules_fails_when_parent_lacks_mod_tests() {
     );
 }
 
-/// A `PATH` with the toolchain directory that holds `CARGO` first, so child
-/// scripts find `cargo` and `rustfmt` reliably.
-fn path_with_cargo() -> std::ffi::OsString {
+/// A `PATH` for a kit child that must run the toolchain: the fixture's
+/// `bin/` first, then the directory holding `CARGO`, then the system
+/// directories the kit already puts on `PATH`. Built from named values only;
+/// the parent's `PATH` is never inherited (STD-03 R20).
+fn isolated_path(temp: &cw_testkit::TempRoot) -> std::ffi::OsString {
     let cargo_dir = Path::new(env!("CARGO")).parent().unwrap();
-    let current = std::env::var_os("PATH").unwrap_or_default();
-    let mut paths = vec![cargo_dir.to_path_buf()];
-    paths.extend(std::env::split_paths(&current));
-    std::env::join_paths(paths).unwrap()
+    std::env::join_paths([
+        temp.bin(),
+        cargo_dir.to_path_buf(),
+        PathBuf::from("/usr/bin"),
+        PathBuf::from("/bin"),
+    ])
+    .unwrap()
 }
 
 #[test]
 fn check_doc_frontmatter_refuses_invalid_yaml() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
     let script = copy_script("check-doc-frontmatter.py", root);
 
     fs::create_dir_all(root.join("docs")).unwrap();
@@ -328,7 +333,7 @@ fn check_doc_frontmatter_refuses_invalid_yaml() {
 
     // Run once with the default Python environment (PyYAML if installed) and
     // once with `yaml` blocked so the built-in stdlib parser is exercised too.
-    let default_out = Command::new("python3").arg(&script).output().unwrap();
+    let default_out = temp.command("python3").arg(&script).output().unwrap();
     let default_stderr = String::from_utf8_lossy(&default_out.stderr);
     assert_eq!(default_out.status.code(), Some(1), "{default_stderr}");
     assert!(
@@ -340,7 +345,7 @@ fn check_doc_frontmatter_refuses_invalid_yaml() {
         "{default_stderr}"
     );
 
-    let fallback_out = Command::new("python3")
+    let fallback_out = temp.command("python3")
         .args([
             "-I",
             "-c",
@@ -363,11 +368,11 @@ fn check_doc_frontmatter_refuses_invalid_yaml() {
 
 #[test]
 fn check_doc_links_refuses_root_relative_and_symlink_escape() {
-    let outer = tempfile::tempdir().unwrap();
-    let root = outer.path().join("repo");
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path().join("repo");
     fs::create_dir_all(root.join("docs")).unwrap();
-    fs::write(outer.path().join("outside.txt"), "secret\n").unwrap();
-    std::os::unix::fs::symlink(outer.path().join("outside.txt"), root.join("escape.txt")).unwrap();
+    fs::write(temp.path().join("outside.txt"), "secret\n").unwrap();
+    std::os::unix::fs::symlink(temp.path().join("outside.txt"), root.join("escape.txt")).unwrap();
 
     let script = copy_script("check-doc-links.py", &root);
     copy_script("check-readme.py", &root);
@@ -383,7 +388,7 @@ fn check_doc_links_refuses_root_relative_and_symlink_escape() {
     )
     .unwrap();
 
-    let out = Command::new("python3").arg(&script).output().unwrap();
+    let out = temp.command("python3").arg(&script).output().unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{stderr}");
     for expected in [
@@ -397,11 +402,11 @@ fn check_doc_links_refuses_root_relative_and_symlink_escape() {
 
 #[test]
 fn check_readme_refuses_escape_links() {
-    let outer = tempfile::tempdir().unwrap();
-    let root = outer.path().join("repo");
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path().join("repo");
     fs::create_dir_all(&root).unwrap();
-    fs::write(outer.path().join("outside.txt"), "secret\n").unwrap();
-    std::os::unix::fs::symlink(outer.path().join("outside.txt"), root.join("escape.txt")).unwrap();
+    fs::write(temp.path().join("outside.txt"), "secret\n").unwrap();
+    std::os::unix::fs::symlink(temp.path().join("outside.txt"), root.join("escape.txt")).unwrap();
 
     let script = copy_script("check-readme.py", &root);
     fs::write(
@@ -420,7 +425,7 @@ fn check_readme_refuses_escape_links() {
     )
     .unwrap();
 
-    let out = Command::new("python3").arg(&script).output().unwrap();
+    let out = temp.command("python3").arg(&script).output().unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{stderr}");
     for expected in [
@@ -435,8 +440,8 @@ fn check_readme_refuses_escape_links() {
 
 #[test]
 fn check_module_cycles_catches_grouped_imports_and_deep_sibling_cycles() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
     let script = copy_script("check-module-cycles.sh", root);
 
     let src = root.join("crates/demo/src");
@@ -468,7 +473,7 @@ fn check_module_cycles_catches_grouped_imports_and_deep_sibling_cycles() {
     )
     .unwrap();
 
-    let out = Command::new(&script).output().unwrap();
+    let out = temp.command(&script).output().unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{stderr}");
     for expected in [
@@ -481,9 +486,9 @@ fn check_module_cycles_catches_grouped_imports_and_deep_sibling_cycles() {
 
 #[test]
 fn empty_workspace_exemption_decides_from_cargo_metadata_not_crates_glob() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
-    let path_env = path_with_cargo();
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
+    let path_env = isolated_path(&temp);
 
     fs::copy(repo_root().join("Makefile"), root.join("Makefile")).unwrap();
     let arch_script = copy_script("check-architecture-map.sh", root);
@@ -509,7 +514,8 @@ fn empty_workspace_exemption_decides_from_cargo_metadata_not_crates_glob() {
     .unwrap();
     fs::write(root.join("ARCHITECTURE.md"), "# Architecture\n").unwrap();
 
-    let arch_out = Command::new(&arch_script)
+    let arch_out = temp
+        .command(&arch_script)
         .env("PATH", &path_env)
         .output()
         .unwrap();
@@ -520,7 +526,8 @@ fn empty_workspace_exemption_decides_from_cargo_metadata_not_crates_glob() {
         "{arch_err}"
     );
 
-    let dep_out = Command::new(&dep_script)
+    let dep_out = temp
+        .command(&dep_script)
         .env("PATH", &path_env)
         .output()
         .unwrap();
@@ -528,7 +535,8 @@ fn empty_workspace_exemption_decides_from_cargo_metadata_not_crates_glob() {
     assert_eq!(dep_out.status.code(), Some(1), "{dep_err}");
     assert!(dep_err.contains("crate 'demo' has no policy"), "{dep_err}");
 
-    let make_out = Command::new("make")
+    let make_out = temp
+        .command("make")
         .arg("fmt-check")
         .current_dir(root)
         .env("PATH", &path_env)
@@ -544,8 +552,8 @@ fn empty_workspace_exemption_decides_from_cargo_metadata_not_crates_glob() {
 
 #[test]
 fn check_terminal_guard_catches_imported_stdout_and_stderr() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
     let script = copy_script("check-terminal-guard.sh", root);
 
     fs::create_dir_all(root.join("crates/tmpl-cli/src")).unwrap();
@@ -560,7 +568,7 @@ fn check_terminal_guard_catches_imported_stdout_and_stderr() {
     )
     .unwrap();
 
-    let out = Command::new(&script).output().unwrap();
+    let out = temp.command(&script).output().unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{stderr}");
     assert!(
@@ -613,9 +621,11 @@ fn architecture_fixture(root: &Path) -> PathBuf {
     script
 }
 
-/// Run the script and return its exit code and stderr.
-fn run_architecture_map(script: &Path) -> (Option<i32>, String) {
-    let out = Command::new(script).output().unwrap();
+/// Run the script in the kit's isolated environment and return its exit code
+/// and stderr. `cargo` comes from the toolchain on an explicit `PATH`.
+fn run_architecture_map(temp: &cw_testkit::TempRoot, script: &Path) -> (Option<i32>, String) {
+    let path = isolated_path(temp);
+    let out = temp.command(script).env("PATH", &path).output().unwrap();
     (
         out.status.code(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -624,16 +634,16 @@ fn run_architecture_map(script: &Path) -> (Option<i32>, String) {
 
 #[test]
 fn check_architecture_map_passes_on_a_complete_map() {
-    let dir = tempfile::tempdir().unwrap();
-    let script = architecture_fixture(dir.path());
-    let (code, stderr) = run_architecture_map(&script);
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let script = architecture_fixture(temp.path());
+    let (code, stderr) = run_architecture_map(&temp, &script);
     assert_eq!(code, Some(0), "{stderr}");
 }
 
 #[test]
 fn check_architecture_map_fails_on_a_crate_missing_from_the_doc() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
     let script = architecture_fixture(root);
     // A new crate and its member entry; the script is not edited.
     fs::write(
@@ -648,7 +658,7 @@ fn check_architecture_map_fails_on_a_crate_missing_from_the_doc() {
     )
     .unwrap();
     fs::write(root.join("crates/extra/src/lib.rs"), "//! Extra.\n").unwrap();
-    let (code, stderr) = run_architecture_map(&script);
+    let (code, stderr) = run_architecture_map(&temp, &script);
     assert_eq!(code, Some(1), "{stderr}");
     assert!(
         stderr.contains("ARCHITECTURE.md: crate `extra` (crates/extra) has no section"),
@@ -658,11 +668,11 @@ fn check_architecture_map_fails_on_a_crate_missing_from_the_doc() {
 
 #[test]
 fn check_architecture_map_fails_on_a_module_missing_from_its_section() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
     let script = architecture_fixture(root);
     fs::write(root.join("crates/demo/src/help.rs"), "//! The help.\n").unwrap();
-    let (code, stderr) = run_architecture_map(&script);
+    let (code, stderr) = run_architecture_map(&temp, &script);
     assert_eq!(code, Some(1), "{stderr}");
     assert!(
         stderr.contains(
@@ -674,8 +684,8 @@ fn check_architecture_map_fails_on_a_module_missing_from_its_section() {
 
 #[test]
 fn check_architecture_map_fails_on_a_documented_path_that_does_not_exist() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
     let script = architecture_fixture(root);
     let doc = fs::read_to_string(root.join("ARCHITECTURE.md")).unwrap();
     let doc = doc
@@ -688,7 +698,7 @@ fn check_architecture_map_fails_on_a_documented_path_that_does_not_exist() {
             "`crates/demo/src/render.rs` and `output/` alone",
         );
     fs::write(root.join("ARCHITECTURE.md"), doc).unwrap();
-    let (code, stderr) = run_architecture_map(&script);
+    let (code, stderr) = run_architecture_map(&temp, &script);
     assert_eq!(code, Some(1), "{stderr}");
     assert!(
         stderr.contains(
@@ -706,13 +716,13 @@ fn check_architecture_map_fails_on_a_documented_path_that_does_not_exist() {
 
 #[test]
 fn check_architecture_map_fails_on_a_unit_without_a_first_line_doc() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
     let script = architecture_fixture(root);
     fs::write(root.join("crates/demo/src/cli.rs"), "// The flags.\n").unwrap();
     fs::write(root.join("crates/demo/src/output/mod.rs"), "mod sink;\n").unwrap();
     fs::write(root.join("crates/demo/src/main.rs"), "fn main() {}\n").unwrap();
-    let (code, stderr) = run_architecture_map(&script);
+    let (code, stderr) = run_architecture_map(&temp, &script);
     assert_eq!(code, Some(1), "{stderr}");
     for expected in [
         "crates/demo/src/cli.rs: `demo::cli` does not begin with a `//!` doc line",
@@ -727,8 +737,8 @@ fn check_architecture_map_fails_on_a_unit_without_a_first_line_doc() {
 fn clippy_refuses_an_aliased_env_read_and_a_direct_file_read() {
     // A scratch crate under the repository's clippy.toml, with the two lints
     // denied as the workspace denies them.
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
     fs::copy(repo_root().join("clippy.toml"), root.join("clippy.toml")).unwrap();
     fs::write(
         root.join("Cargo.toml"),
@@ -747,9 +757,12 @@ fn clippy_refuses_an_aliased_env_read_and_a_direct_file_read() {
     )
     .unwrap();
 
-    let out = Command::new(env!("CARGO"))
+    let path = isolated_path(&temp);
+    let out = temp
+        .command(env!("CARGO"))
         .args(["clippy", "--quiet", "--offline"])
         .env("CARGO_TARGET_DIR", root.join("target"))
+        .env("PATH", &path)
         .current_dir(root)
         .output()
         .unwrap();
@@ -765,9 +778,10 @@ fn clippy_refuses_an_aliased_env_read_and_a_direct_file_read() {
     }
 }
 
-/// Run `git` in `root`, which must succeed.
-fn git(root: &Path, args: &[&str]) {
-    let out = Command::new("git")
+/// Run `git` in `root` with the kit's isolated environment, which must succeed.
+fn git(temp: &cw_testkit::TempRoot, root: &Path, args: &[&str]) {
+    let out = temp
+        .command("git")
         .args(args)
         .current_dir(root)
         .output()
@@ -782,14 +796,14 @@ fn git(root: &Path, args: &[&str]) {
 /// Run the source-style gate over a scratch repository holding `source` as
 /// `src/lib.rs`: its exit code and standard error.
 fn source_style(source: &str) -> (Option<i32>, String) {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
     let script = copy_script("check-source-style.sh", root);
     copy_script("check-source-style.py", root);
-    git(root, &["init", "-q"]);
+    git(&temp, root, &["init", "-q"]);
     fs::create_dir_all(root.join("src")).unwrap();
     fs::write(root.join("src/lib.rs"), source).unwrap();
-    let out = Command::new(&script).output().unwrap();
+    let out = temp.command(&script).output().unwrap();
     (
         out.status.code(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -836,8 +850,8 @@ fn clippy_gates_parameter_count_item_order_and_literal_field_order() {
         .and_then(|rest| rest.split("[workspace.lints.rust]").next())
         .unwrap();
     let clippy = |source: &str| {
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path();
+        let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+        let root = temp.path();
         fs::copy(repo_root().join("clippy.toml"), root.join("clippy.toml")).unwrap();
         fs::write(
             root.join("Cargo.toml"),
@@ -849,9 +863,12 @@ fn clippy_gates_parameter_count_item_order_and_literal_field_order() {
         .unwrap();
         fs::create_dir_all(root.join("src")).unwrap();
         fs::write(root.join("src/lib.rs"), source).unwrap();
-        let out = Command::new(env!("CARGO"))
+        let path = isolated_path(&temp);
+        let out = temp
+            .command(env!("CARGO"))
             .args(["clippy", "--quiet", "--offline", "--", "-D", "warnings"])
             .env("CARGO_TARGET_DIR", root.join("target"))
+            .env("PATH", &path)
             .current_dir(root)
             .output()
             .unwrap();
@@ -875,23 +892,21 @@ fn clippy_gates_parameter_count_item_order_and_literal_field_order() {
     assert_eq!(code, Some(0), "{stderr}");
 }
 
-/// Copy the private-id gate into `root` and run it there. Git's search for a
-/// repository stops at `root`'s parent, so an enclosing checkout cannot make
-/// `root` look like a work tree.
-fn private_task_ids(root: &Path) -> Output {
+/// Copy the private-id gate into `root` and run it there in the kit's
+/// isolated environment, whose `GIT_CEILING_DIRECTORIES` stops git's search
+/// above the temp root, so an enclosing checkout cannot make `root` look
+/// like a work tree.
+fn private_task_ids(temp: &cw_testkit::TempRoot, root: &Path) -> Output {
     let script = copy_script("check-private-task-ids.sh", root);
-    Command::new(&script)
-        .env("GIT_CEILING_DIRECTORIES", root.parent().unwrap())
-        .output()
-        .unwrap()
+    temp.command(&script).output().unwrap()
 }
 
 #[test]
 fn private_task_ids_gate_passes_a_copy_outside_a_work_tree() {
     // Git sees none of this copy's files, so the gate scans them. The vendored
     // canon and target/ may name task ids; nothing else may.
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
     fs::create_dir_all(root.join("src")).unwrap();
     fs::write(root.join("src/lib.rs"), "//! Clean.\n").unwrap();
     fs::create_dir_all(root.join("docs/standards/STD-01")).unwrap();
@@ -903,7 +918,7 @@ fn private_task_ids_gate_passes_a_copy_outside_a_work_tree() {
     fs::create_dir_all(root.join("target")).unwrap();
     fs::write(root.join("target/build.log"), format!("{TASK_ID}\n")).unwrap();
 
-    let out = private_task_ids(root);
+    let out = private_task_ids(&temp, root);
     assert_eq!(
         out.status.code(),
         Some(0),
@@ -915,8 +930,8 @@ fn private_task_ids_gate_passes_a_copy_outside_a_work_tree() {
 
 #[test]
 fn private_task_ids_gate_names_a_file_outside_a_work_tree_with_an_id() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
     fs::create_dir_all(root.join("crates/demo/src")).unwrap();
     fs::write(
         root.join("crates/demo/src/lib.rs"),
@@ -924,7 +939,7 @@ fn private_task_ids_gate_names_a_file_outside_a_work_tree_with_an_id() {
     )
     .unwrap();
 
-    let out = private_task_ids(root);
+    let out = private_task_ids(&temp, root);
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{stderr}");
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -934,20 +949,20 @@ fn private_task_ids_gate_names_a_file_outside_a_work_tree_with_an_id() {
 
 #[test]
 fn private_task_ids_gate_inside_a_work_tree_scans_tracked_files_only() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
-    git(root, &["init", "-q"]);
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
+    git(&temp, root, &["init", "-q"]);
     fs::create_dir_all(root.join("crates/demo/src")).unwrap();
     fs::write(
         root.join("crates/demo/src/lib.rs"),
         format!("//! Tracked in {TASK_ID}.\n"),
     )
     .unwrap();
-    git(root, &["add", "crates/demo/src/lib.rs"]);
+    git(&temp, root, &["add", "crates/demo/src/lib.rs"]);
     // Untracked, so git grep does not see it.
     fs::write(root.join("untracked.md"), format!("{TASK_ID}\n")).unwrap();
 
-    let out = private_task_ids(root);
+    let out = private_task_ids(&temp, root);
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{stderr}");
     let stdout = String::from_utf8_lossy(&out.stdout);
