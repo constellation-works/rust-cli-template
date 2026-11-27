@@ -1188,7 +1188,7 @@ workspace.
   and `template` regions the template's own text, dropped by every kind;
   in one, a line marked `copy` becomes the copy's text (the README summary line
   and starting point, the first line of `AGENTS.md`, the first changelog
-  entry). `scripts/template-manifest.txt` lists the files, the regions, the
+  entry), and `copy-<kind>` only in that kind. `scripts/template-manifest.txt` lists the files, the regions, the
   template's own files and the per-kind overlays (the bare root help and MCP
   goldens, the workspace `ARCHITECTURE.md` and `README.md`), and
   `make structure` runs
@@ -1200,8 +1200,10 @@ workspace.
 - **The database file is `store.db`**, not `notes.db`, so a bare copy does
   not name the example. A store written by an earlier build of the template
   is not found under the new name: the template has no released user.
-- **`Tx` allows `dead_code`** with its reason: a bare store has no record
-  repository yet, so nothing reads its two fields.
+- **`Tx` expects `dead_code` only in `cli-bare`** (a `copy-cli-bare` directive
+  inside a `template` region): a bare store has no record repository yet, so
+  nothing reads its two fields, while `cli` reads both and carries no
+  suppression.
 - **`template.toml`** holds `version`; init writes it with the `kind` into
   the copy. A pull request that changes a path not listed `template` in the
   manifest raises the version (`check-template-version.sh`).

@@ -15,7 +15,8 @@
 #   example:begin / example:end    removed by cli-bare and workspace
 #   crates:begin / crates:end      removed by workspace
 #   template:begin / template:end  removed by every kind; inside one, a line
-#                                  `copy: <text>` becomes <text> in the copy,
+#                                  `copy: <text>` becomes <text> in every copy,
+#                                  and `copy-<kind>: <text>` only in <kind>,
 #                                  with __VERSION__ and __KIND__ filled in
 #
 # Each kind drops only the marker lines of a region it keeps. Outside these

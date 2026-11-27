@@ -8,13 +8,6 @@
 //! `snapshot.<record>()` in a read and `tx.<record>()` in a write, so it
 //! composes repositories in one read or one write, and no connection, path
 //! or borrowed document crosses into its hands.
-// STD-02 R35: `Tx`'s one #[allow(dead_code)] cannot be an #[expect]. The
-// cli kind's repositories read both fields, so an expectation would go
-// unfulfilled there, while a cli-bare store with no repository reads neither.
-#![expect(
-    clippy::allow_attributes,
-    reason = "Tx's dead_code allow holds in one kind only; see the comment above"
-)]
 
 // example:begin
 pub(crate) mod note;
@@ -66,10 +59,12 @@ impl Snapshot {
 
 /// The store inside one write transaction.
 #[derive(Debug)]
-#[allow(
-    dead_code,
-    reason = "the record repositories read both fields; a store with none yet reads neither"
-)]
+// template:begin
+// copy-cli-bare: #[expect(
+// copy-cli-bare:     dead_code,
+// copy-cli-bare:     reason = "the record repositories read both fields; a bare store has none yet"
+// copy-cli-bare: )]
+// template:end
 pub struct Tx<'a> {
     conn: &'a Connection,
     path: &'a Path,

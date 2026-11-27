@@ -191,6 +191,7 @@ fn assert_initialized(copy: &Copy, kind: &str) {
         "crates:end",
         "template:begin",
         "copy:",
+        "copy-cli-bare:",
         "__VERSION__",
     ] {
         assert_eq!(
@@ -264,6 +265,10 @@ fn the_cli_kind_keeps_the_example_and_names_the_given_repository() {
             "standards: STD-01,STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09,STD-12\n"
         )
     );
+    let repository = copy.read("crates/demo-cli-store/src/repository/mod.rs");
+    assert!(!repository.contains("#[allow("), "{repository}");
+    assert!(!repository.contains("#[expect("), "{repository}");
+    assert!(!repository.contains("dead_code"), "{repository}");
     copy.check_architecture_map();
 }
 
@@ -324,6 +329,11 @@ fn the_bare_kind_drops_the_example_leaves_the_repository_out_and_protected_trees
             "standards: STD-01,STD-02,STD-03,STD-04,STD-05,STD-06,STD-08,STD-09,STD-12\n"
         )
     );
+    let repository = copy.read("crates/demo-cli-store/src/repository/mod.rs");
+    assert!(repository.contains("#[expect("), "{repository}");
+    assert!(repository.contains("dead_code"), "{repository}");
+    assert!(!repository.contains("#[allow("), "{repository}");
+    assert!(!repository.contains("allow_attributes"), "{repository}");
     copy.check_architecture_map();
 }
 
