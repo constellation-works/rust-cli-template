@@ -1,3 +1,5 @@
+//! Wires parsing, output, runtime and dispatch; imports cli, command, error, mcp and output.
+//!
 //! `tmpl-cli`: the command-line surface over `tmpl-cli-core`.
 //!
 //! `run` is wiring only: parse, let the kit (cw-cli) make the one terminal

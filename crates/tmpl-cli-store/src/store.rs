@@ -1,3 +1,5 @@
+//! Opens the store and coordinates reads and writes; imports driver, error and repository.
+//!
 //! The [`Store`] facade: one data directory, read as a snapshot, written in
 //! one transaction.
 //!

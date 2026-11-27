@@ -1,3 +1,5 @@
+//! Captures the environment and arguments and runs the CLI; imports the CLI and core crates.
+//!
 //! Binary entry point for `tmpl-cli`: the one place that reads the
 //! arguments. The environment is captured once, by the core's
 //! `capture_env()` (no read of the environment lives in this crate,

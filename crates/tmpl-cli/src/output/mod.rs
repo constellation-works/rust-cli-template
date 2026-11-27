@@ -1,3 +1,5 @@
+//! Renders payloads and command views through the kit; imports error.
+//!
 //! The output layer: what this program shows, written through the kit.
 //!
 //! The mechanism is cw-cli's: one terminal decision ([`Terminal`]), the sink

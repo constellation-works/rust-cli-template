@@ -1,3 +1,5 @@
+//! Declares the root command and global flags; imports command and error.
+//!
 //! The root of the command tree: the program, its global flags and the
 //! parse entry point. Each noun's subcommands, flags and help live beside its
 //! handlers in `command/` (STD-01 R25: declared once). `--help` is rendered

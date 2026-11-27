@@ -1,3 +1,5 @@
+//! Defines one app per subject; imports composition.
+//!
 //! The apps: one per subject a user names on the command line.
 //!
 //! An app's public surface is its `Command`, `Outcome` and `Error` and one

@@ -63,20 +63,24 @@ Why the crates are laid out by app, and why the foundation is the kit:
 [the kit decision](docs/design/tmpl-cli/4_decisions.md#the-foundation-is-the-cw-kit).
 <!-- example:end -->
 
+The module rows name allowed sibling imports; external crates are governed by the
+crate table above. Submodule imports are also subject to the module rules below.
+
 ## `tmpl-cli` (binary)
 
 ```
-main.rs              capture_env() from the core and the arguments, once; run
-lib.rs               probe the streams, parse, open the kit's sink, start logging and the runtime, dispatch, print an audit warning
-cli.rs               the root command, the global flags, the root help's groups (rendered by cw_cli::help::grouped); Invocation: a command, or mcp
-command/<noun>.rs    arguments -> app::<app>::Command; exec; Outcome -> payload; render, then settle
-command/common/      command machinery two or more commands share
+main.rs              Captures the environment and arguments and runs the CLI; imports the CLI and core crates.
+lib.rs               Wires parsing, output, runtime and dispatch; imports cli, command, error, mcp and output.
+cli.rs               Declares the root command and global flags; imports command and error.
+command/             Maps command arguments to apps and payloads; imports output.
+  <noun>.rs          arguments -> app::<app>::Command; exec; Outcome -> payload; render, then settle
+  common/            command machinery two or more commands share
 <!-- example:begin -->
-command/common/input.rs   how a text argument is read from a tool's JSON: through the type's own FromStr
+    input.rs         how a text argument is read from a tool's JSON: through the type's own FromStr
 <!-- example:end -->
-mcp/                 the MCP surface: one cw_mcp::Tool per command, served by `tmpl-cli mcp`
+mcp/                 Serves commands as MCP tools; imports cli, command, error and output.
   mod.rs             tools(): each command's Args as the input, its summary as the description, its handler as the call; server, serve
-output/              payloads and each command's human view, written through the kit's sink
+output/              Renders payloads and command views through the kit; imports error.
   mod.rs             module wiring and re-exports only
   common/            output machinery two or more commands share
     terminal.rs      the terminal decision and the sink built from it
@@ -87,7 +91,7 @@ output/              payloads and each command's human view, written through the
 <!-- example:begin -->
   note.rs            the note payloads, the list table, the detail text, the priority's colour role
 <!-- example:end -->
-error.rs             the remedy for an error; the surfaces' own failures (output, usage, the MCP server)
+error.rs             Defines surface failures and remedies; imports no sibling modules.
 ```
 
 A command handler maps the parsed arguments to the app's `Command`, calls
@@ -128,8 +132,8 @@ tool or a tool's parameters differ from its command's arguments.
 ## `tmpl-cli-core`
 
 ```
-lib.rs               pub mod app; start, Runtime, APP; contract (from the store); Error, Kind (cw-base); Env, Origin, … (cw-app)
-app/
+lib.rs               Exports the apps, runtime, environment and contracts; imports app, composition and environment.
+app/                 Defines one app per subject; imports composition.
   status/
     mod.rs           Command, Outcome, Error, exec (forwards to cw_app::exec); StatusApp: cw_app::App (nothing audited)
     show.rs          one flow per command: the data directory and the store format, read-only
@@ -139,8 +143,8 @@ app/
     add.rs list.rs show.rs   one flow per command
     rule.rs          the note rules: the next id, a stored note from a new one, list selection
 <!-- example:end -->
-environment.rs       capture_env(): the one read of the process environment (Env::capture()), called once by main
-composition.rs       start: the data directory (the kit's, from Env), the Store, Runtime = cw_app::Runtime<Store>, Ctx (what a flow receives); its Error (no data directory)
+environment.rs       Captures the process environment once; imports no sibling modules.
+composition.rs       Builds the runtime from the captured environment; imports no sibling modules.
 ```
 
 - An app's public surface is `Command`, `Outcome`, its typed `Error` and
@@ -178,12 +182,9 @@ composition.rs       start: the data directory (the kit's, from Env), the Store,
 ## `tmpl-cli-store`
 
 ```
-lib.rs               re-exports: Store, Snapshot, Tx, Error, contract, STORE_FILE
-<!-- example:begin -->
-lib.rs               re-exports: Notes, NotesMut
-<!-- example:end -->
-store.rs             Store::open, read() -> Snapshot (strict: creates no file), read_before_write() -> Snapshot, write(|tx| …)
-driver/
+lib.rs               Exports store types; imports contract, driver, error, repository and store.
+store.rs             Opens the store and coordinates reads and writes; imports driver, error and repository.
+driver/              Sets up each storage mechanism; imports no sibling modules.
   mod.rs             one module per storage mechanism
   sqlite/mod.rs      the database: STORE_FILE (store.db), open() -> cw_sqlite::Db; no record query, no schema statement
   sqlite/damage.rs   the one probe: is a main file without its -wal and -shm a damaged database (immutable, read-only)
@@ -192,17 +193,17 @@ driver/
 <!-- example:begin -->
     note.rs          the note table's steps as named items (CREATE_NOTE)
 <!-- example:end -->
-repository/
+repository/          Holds record queries and row mappings; imports contract and error.
   mod.rs             Snapshot (one reader; path() and format()), Tx (one write transaction)
 <!-- example:begin -->
   note.rs            notes: the SQL and row mapping; all, get, bad records; put
 <!-- example:end -->
-contract/
+contract/            Defines persisted record shapes; imports no sibling modules.
 <!-- example:begin -->
   note.rs            Note, NoteId (1 to NoteId::MAX), Title, Body, Tag, Priority, NoteError
 <!-- example:end -->
-error.rs             Error (including Sqlite(cw_sqlite::Error), with a code for every cw_fs::Error and cw_sqlite::Error variant), its translator into cw_base::Error; BadRecord and its locator and reason
-test_support.rs      behind the `test-support` feature: raw SQL on the database, for other crates' tests
+error.rs             Defines store errors and bad-record reports; imports no sibling modules.
+test_support.rs      Provides raw SQL for tests behind a feature; imports driver, error and store.
 ```
 
 - **A driver sets one storage mechanism up once and returns a handle; a

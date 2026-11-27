@@ -1,3 +1,5 @@
+//! Builds the runtime from the captured environment; imports no sibling modules.
+//!
 //! Composition (STD-02 R2): what every command runs against, built once
 //! from the environment the binary's `main` captured.
 //!

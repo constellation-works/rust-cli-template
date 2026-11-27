@@ -1,3 +1,5 @@
+//! Exports the apps, runtime, environment and contracts; imports app, composition and environment.
+//!
 //! The tmpl-cli apps as a library.
 //!
 //! - [`app`]: one module per subject a user names on the command line

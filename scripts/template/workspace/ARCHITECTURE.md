@@ -25,8 +25,9 @@ A new crate goes under `crates/` and gets:
 - a row in the table below, with what it owns, its internal and kit
   dependencies, and what it must never depend on;
 - a section of its own in this file, headed with the crate's name in code
-  formatting, naming each top-level module, and a first-line `//!` doc on
-  the crate root and each top-level module
+  formatting, naming each top-level module, its responsibility and allowed
+  imports; repeat each module sentence on its first `//!` line, and add a
+  first-line `//!` doc on the crate root
   (`scripts/check-architecture-map.sh` fails until both are there);
 - a policy entry in `scripts/check-dependency-direction.sh`, without which
   the check fails.

@@ -1,3 +1,5 @@
+//! Maps command arguments to apps and payloads; imports output.
+//!
 //! Command dispatch: the noun enum and one module per noun.
 //!
 //! Each noun maps to exactly one app in `tmpl-cli-core`, and lives in its own
