@@ -91,6 +91,7 @@ regions crates/tmpl-cli/src/error.rs
 regions crates/tmpl-cli/src/mcp/mod.rs
 regions crates/tmpl-cli/src/output/mod.rs
 regions crates/tmpl-cli/src/output/common/payload.rs
+regions crates/tmpl-cli/src/output/common/render.rs
 regions crates/tmpl-cli/src/output/tests/mod.rs
 regions crates/tmpl-cli/tests/cli.rs
 regions crates/tmpl-cli/tests/golden.rs
