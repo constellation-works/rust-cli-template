@@ -342,6 +342,14 @@ fn concurrent_writers_never_lose_a_note_or_reuse_an_id() {
         })
         .collect();
     for handle in threads {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !handle.is_finished() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "writer thread timed out"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         handle.join().unwrap();
     }
     let mut ids: Vec<u64> = store

@@ -16,6 +16,10 @@
     reason = "a test sets up fixture files and runs the built binary; production code may not"
 )]
 
+mod support;
+
+use support::CommandDeadline;
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -55,7 +59,7 @@ impl Copy {
             .command(program)
             .args(args)
             .current_dir(&self.root)
-            .output()
+            .output_with_deadline()
             .unwrap()
     }
 

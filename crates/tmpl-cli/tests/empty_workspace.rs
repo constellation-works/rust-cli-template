@@ -15,6 +15,8 @@
 
 mod support;
 
+use support::CommandDeadline;
+
 use std::fs;
 use support::script::{copy_script, isolated_path, repo_root};
 
@@ -51,7 +53,7 @@ fn empty_workspace_exemption_decides_from_cargo_metadata_not_crates_glob() {
     let arch_out = temp
         .command(&arch_script)
         .env("PATH", &path_env)
-        .output()
+        .output_with_deadline()
         .unwrap();
     let arch_err = String::from_utf8_lossy(&arch_out.stderr);
     assert_eq!(arch_out.status.code(), Some(1), "{arch_err}");
@@ -63,7 +65,7 @@ fn empty_workspace_exemption_decides_from_cargo_metadata_not_crates_glob() {
     let dep_out = temp
         .command(&dep_script)
         .env("PATH", &path_env)
-        .output()
+        .output_with_deadline()
         .unwrap();
     let dep_err = String::from_utf8_lossy(&dep_out.stderr);
     assert_eq!(dep_out.status.code(), Some(1), "{dep_err}");
@@ -74,7 +76,7 @@ fn empty_workspace_exemption_decides_from_cargo_metadata_not_crates_glob() {
         .arg("fmt-check")
         .current_dir(root)
         .env("PATH", &path_env)
-        .output()
+        .output_with_deadline()
         .unwrap();
     assert_ne!(
         make_out.status.code(),

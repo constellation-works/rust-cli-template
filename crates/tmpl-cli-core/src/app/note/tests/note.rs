@@ -46,19 +46,19 @@ fn lock_timeout_audited_command_waits_for_its_deadline_and_records_one_failure_l
 
     // Another writer holds a write transaction for the duration of the
     // command, as another process would.
-    let (taken_tx, taken_rx) = mpsc::channel();
-    let (release_tx, release_rx) = mpsc::channel::<()>();
+    let (taken_tx, taken_rx) = mpsc::sync_channel(1);
+    let (release_tx, release_rx) = mpsc::sync_channel::<()>(1);
     let holder = Store::open(dir.path());
     let held = std::thread::spawn(move || {
         holder
             .write(|_tx| {
                 taken_tx.send(()).unwrap();
-                let _ = release_rx.recv();
+                let _ = release_rx.recv_timeout(Duration::from_secs(30));
                 Ok(())
             })
             .unwrap();
     });
-    taken_rx.recv().unwrap();
+    taken_rx.recv_timeout(Duration::from_secs(30)).unwrap();
 
     let deadline = Duration::from_millis(80);
     let runtime = Runtime::new(dir.path(), Store::open(dir.path()).with_lock_wait(deadline))
@@ -74,6 +74,11 @@ fn lock_timeout_audited_command_waits_for_its_deadline_and_records_one_failure_l
     let audit_written_before_settle = fixture::exists(&audit_path);
     let (_result, warning) = finished.settle();
     drop(release_tx);
+    let join_deadline = Instant::now() + Duration::from_secs(30);
+    while !held.is_finished() {
+        assert!(Instant::now() < join_deadline, "holder thread timed out");
+        std::thread::sleep(Duration::from_millis(10));
+    }
     held.join().unwrap();
 
     assert_eq!(err_code, "store_locked");

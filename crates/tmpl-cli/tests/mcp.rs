@@ -26,7 +26,7 @@ use cw_mcp::testing::{Harness, PROTOCOL_VERSION};
 use cw_testkit::Goldens;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
-use std::io::{BufRead, BufReader, Write};
+use std::io::Write;
 use std::process::Stdio;
 use support::{ChildGuard, Fixture};
 use tmpl_cli_core::Env;
@@ -171,10 +171,7 @@ fn the_binary_serves_until_its_input_closes() {
     });
     let mut stdin = child.child().stdin.take().unwrap();
     writeln!(stdin, "{initialize}").unwrap();
-    let mut line = String::new();
-    BufReader::new(child.child().stdout.take().unwrap())
-        .read_line(&mut line)
-        .unwrap();
+    let line = child.read_line();
     let reply: Value = serde_json::from_str(&line).unwrap();
     assert_eq!(reply["result"]["serverInfo"]["name"], "tmpl-cli", "{reply}");
     drop(stdin);

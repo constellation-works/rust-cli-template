@@ -8,7 +8,7 @@ use std::time::Duration;
 /// A write held by another thread until this is dropped, as
 /// another process would hold it.
 struct HeldElsewhere {
-    release: Option<mpsc::Sender<()>>,
+    release: Option<mpsc::SyncSender<()>>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -16,6 +16,14 @@ impl Drop for HeldElsewhere {
     fn drop(&mut self) {
         drop(self.release.take());
         if let Some(thread) = self.thread.take() {
+            let deadline = std::time::Instant::now() + Duration::from_secs(30);
+            while !thread.is_finished() {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "holder thread timed out"
+                );
+                std::thread::sleep(Duration::from_millis(10));
+            }
             thread.join().unwrap();
         }
     }
@@ -28,18 +36,20 @@ fn hold_write_elsewhere(root: &Path) -> HeldElsewhere {
         store
             .write(|_tx| {
                 taken.send(()).unwrap();
-                let _ = release.recv();
+                let _ = release.recv_timeout(Duration::from_secs(30));
                 Ok(())
             })
             .unwrap();
     })
 }
 
-fn held(hold: impl FnOnce(mpsc::Sender<()>, mpsc::Receiver<()>) + Send + 'static) -> HeldElsewhere {
-    let (taken_tx, taken_rx) = mpsc::channel();
-    let (release_tx, release_rx) = mpsc::channel::<()>();
+fn held(
+    hold: impl FnOnce(mpsc::SyncSender<()>, mpsc::Receiver<()>) + Send + 'static,
+) -> HeldElsewhere {
+    let (taken_tx, taken_rx) = mpsc::sync_channel(1);
+    let (release_tx, release_rx) = mpsc::sync_channel::<()>(1);
     let thread = std::thread::spawn(move || hold(taken_tx, release_rx));
-    taken_rx.recv().unwrap();
+    taken_rx.recv_timeout(Duration::from_secs(30)).unwrap();
     HeldElsewhere {
         release: Some(release_tx),
         thread: Some(thread),

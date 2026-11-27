@@ -18,6 +18,8 @@
 
 mod support;
 
+use support::CommandDeadline;
+
 use support::Fixture;
 
 fn json(bytes: &[u8]) -> serde_json::Value {
@@ -32,7 +34,7 @@ fn piped_root_help_groups_commands_and_ignores_terminal_settings() {
         .cmd(&["--help"])
         .env("COLUMNS", "12")
         .env("TERM", "xterm-256color")
-        .output()
+        .output_with_deadline()
         .unwrap();
     assert!(narrow.status.success());
     assert_eq!(wide.stdout, narrow.stdout);
@@ -93,11 +95,11 @@ fn the_format_environment_variable_applies_and_a_bad_value_falls_back() {
     let fx = Fixture::new();
     let mut cmd = fx.cmd(&["status"]);
     cmd.env("TMPL_CLI_FORMAT", "json");
-    assert!(support::text(&cmd.output().unwrap().stdout).starts_with('{'));
+    assert!(support::text(&cmd.output_with_deadline().unwrap().stdout).starts_with('{'));
 
     let mut cmd = fx.cmd(&["status"]);
     cmd.env("TMPL_CLI_FORMAT", "yaml");
-    let out = cmd.output().unwrap();
+    let out = cmd.output_with_deadline().unwrap();
     assert_eq!(out.status.code(), Some(0));
     assert_eq!(
         support::text(&out.stdout).lines().count(),
@@ -108,7 +110,7 @@ fn the_format_environment_variable_applies_and_a_bad_value_falls_back() {
     let mut cmd = fx.cmd(&["status", "--format", "table"]);
     cmd.env("TMPL_CLI_FORMAT", "json");
     assert!(
-        support::text(&cmd.output().unwrap().stdout).starts_with("ROOT"),
+        support::text(&cmd.output_with_deadline().unwrap().stdout).starts_with("ROOT"),
         "the flag wins"
     );
 }
@@ -200,14 +202,14 @@ fn the_data_directory_defaults_under_home_and_is_never_guessed() {
     let fx = Fixture::new();
     let mut cmd = fx.cmd(&["status", "--json"]);
     cmd.env_remove("TMPL_CLI_ROOT");
-    let out = cmd.output().unwrap();
+    let out = cmd.output_with_deadline().unwrap();
     assert_eq!(out.status.code(), Some(0));
     let default = fx.home().join(".tmpl-cli");
     assert_eq!(json(&out.stdout)["root"], default.to_str().unwrap());
 
     let mut cmd = fx.cmd(&["status"]);
     cmd.env_remove("TMPL_CLI_ROOT").env_remove("HOME");
-    let out = cmd.output().unwrap();
+    let out = cmd.output_with_deadline().unwrap();
     assert_eq!(out.status.code(), Some(1));
     assert!(out.stdout.is_empty());
     assert!(
@@ -221,14 +223,14 @@ fn an_empty_variable_counts_as_unset() {
     let fx = Fixture::new();
     let mut cmd = fx.cmd(&["status", "--json"]);
     cmd.env("TMPL_CLI_ROOT", "");
-    let out = cmd.output().unwrap();
+    let out = cmd.output_with_deadline().unwrap();
     assert_eq!(out.status.code(), Some(0));
     let default = fx.home().join(".tmpl-cli");
     assert_eq!(json(&out.stdout)["root"], default.to_str().unwrap());
 
     let mut cmd = fx.cmd(&["status", "--json"]);
     cmd.env("TMPL_CLI_ROOT", "").env("HOME", "");
-    let out = cmd.output().unwrap();
+    let out = cmd.output_with_deadline().unwrap();
     assert_eq!(out.status.code(), Some(1));
     assert_eq!(json(&out.stderr)["code"], "no_data_dir");
 }
@@ -267,7 +269,7 @@ fn logs_go_to_stderr_and_leave_stdout_as_pure_payload() {
     let fx = Fixture::new();
     let mut cmd = fx.cmd(&["status", "--json"]);
     cmd.env("TMPL_CLI_LOG", "debug");
-    let out = cmd.output().unwrap();
+    let out = cmd.output_with_deadline().unwrap();
     let _: serde_json::Value = serde_json::from_slice(&out.stdout).expect("stdout is only JSON");
     assert!(!out.stderr.is_empty(), "debug logs should appear on stderr");
 }
@@ -410,4 +412,17 @@ fn documented_examples_run_through_the_binary() {
         }
         assert!(checked > 0, "{source} contained no runnable examples");
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_stalled_child_is_killed_at_the_fixture_deadline() {
+    let fixture = Fixture::new();
+    let child = fixture.command("/bin/sleep").arg("10").spawn().unwrap();
+    let start = std::time::Instant::now();
+    let result = std::panic::catch_unwind(|| {
+        support::ChildGuard::new(child).finish_with_timeout(std::time::Duration::from_millis(100))
+    });
+    assert!(result.is_err());
+    assert!(start.elapsed() < std::time::Duration::from_secs(5));
 }

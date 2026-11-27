@@ -15,6 +15,8 @@
 
 mod support;
 
+use support::CommandDeadline;
+
 use std::fs;
 use support::script::copy_script;
 
@@ -34,7 +36,7 @@ fn check_test_modules_fails_when_parent_lacks_mod_tests() {
     )
     .unwrap();
 
-    let out = temp.command(&script).output().unwrap();
+    let out = temp.command(&script).output_with_deadline().unwrap();
     assert_ne!(
         out.status.code(),
         Some(0),

@@ -16,6 +16,8 @@
 
 mod support;
 
+use support::CommandDeadline;
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use support::script::repo_root;
@@ -57,7 +59,7 @@ grep -Fx '[licenses]' "$4"
         .command("make")
         .args(["deny", "CARGO=./cargo"])
         .env("CARGO_HOME", cargo_home)
-        .output()
+        .output_with_deadline()
         .unwrap();
     assert!(
         out.status.success(),

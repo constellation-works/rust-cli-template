@@ -15,6 +15,8 @@
 
 mod support;
 
+use support::CommandDeadline;
+
 use std::fs;
 use support::script::copy_script;
 
@@ -40,7 +42,11 @@ fn check_doc_frontmatter_refuses_invalid_yaml() {
 
     // Run once with the default Python environment (PyYAML if installed) and
     // once with `yaml` blocked so the built-in stdlib parser is exercised too.
-    let default_out = temp.command("python3").arg(&script).output().unwrap();
+    let default_out = temp
+        .command("python3")
+        .arg(&script)
+        .output_with_deadline()
+        .unwrap();
     let default_stderr = String::from_utf8_lossy(&default_out.stderr);
     assert_eq!(default_out.status.code(), Some(1), "{default_stderr}");
     assert!(
@@ -59,7 +65,7 @@ fn check_doc_frontmatter_refuses_invalid_yaml() {
             "import runpy, sys; sys.modules['yaml'] = None; runpy.run_path(sys.argv[1], run_name='__main__')",
         ])
         .arg(&script)
-        .output()
+        .output_with_deadline()
         .unwrap();
     let fallback_stderr = String::from_utf8_lossy(&fallback_out.stderr);
     assert_eq!(fallback_out.status.code(), Some(1), "{fallback_stderr}");

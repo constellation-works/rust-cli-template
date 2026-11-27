@@ -15,6 +15,8 @@
 
 mod support;
 
+use support::CommandDeadline;
+
 use std::fs;
 use support::script::copy_script;
 
@@ -43,7 +45,11 @@ fn check_readme_refuses_escape_links() {
     )
     .unwrap();
 
-    let out = temp.command("python3").arg(&script).output().unwrap();
+    let out = temp
+        .command("python3")
+        .arg(&script)
+        .output_with_deadline()
+        .unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{stderr}");
     for expected in [
@@ -101,7 +107,11 @@ MIT.
     )
     .unwrap();
 
-    let invalid = temp.command("python3").arg(&script).output().unwrap();
+    let invalid = temp
+        .command("python3")
+        .arg(&script)
+        .output_with_deadline()
+        .unwrap();
     let invalid_stderr = String::from_utf8_lossy(&invalid.stderr);
     assert_eq!(invalid.status.code(), Some(1), "{invalid_stderr}");
     for expected in [
@@ -149,7 +159,11 @@ MIT.
 "#,
     )
     .unwrap();
-    let valid = temp.command("python3").arg(&script).output().unwrap();
+    let valid = temp
+        .command("python3")
+        .arg(&script)
+        .output_with_deadline()
+        .unwrap();
     let valid_stderr = String::from_utf8_lossy(&valid.stderr);
     assert_eq!(valid.status.code(), Some(0), "{valid_stderr}");
 }

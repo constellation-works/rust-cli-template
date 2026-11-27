@@ -246,8 +246,9 @@ govern. Each binds as soon as it does, and this entry is edited then:
 - No destructive verb, prompt, removed flag or default filter: STD-01@4 §R5,
   §R27, §R35 (and §R33's default-filter clause).
 - No agent or script hand-off, no recovery path: STD-02@11 §R25, §R33.
-- No async code, channels or nested locks: STD-03@2 §R1–§R3. One store file,
-  so no multi-store commit or replay: §R8, §R9.
+- No async code, channels or nested locks in the product: STD-03@2 §R1–§R3.
+  Tests use bounded channels and deadlines for thread and child waits (§R2,
+  §R17, §R22). One store file, so no multi-store commit or replay: §R8, §R9.
 - No spawned or detached processes in the product: STD-03@2 §R11–§R16 and
   STD-05@1 §R10–§R12. Test fixtures that spawn the binary follow STD-03@2
   §R17–§R20.

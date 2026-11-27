@@ -46,6 +46,7 @@ disallowed-types = [
   { path = "std::process::Child", reason = "the template spawns no process; use cw_supervise if one must" },
 ]
 disallowed-methods = [
+  { path = "std::sync::mpsc::channel", reason = "use a bounded sync_channel (STD-03 R2)" },
   { path = "std::io::stdout", reason = "write through cw_cli::Sink in the output layer" },
   { path = "std::io::stderr", reason = "write through cw_cli::Sink in the output layer" },
   { path = "std::io::IsTerminal::is_terminal", reason = "probe through cw_cli::Probe in the output layer" },

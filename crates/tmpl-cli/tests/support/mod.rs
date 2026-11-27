@@ -22,8 +22,13 @@
 pub(crate) mod script;
 
 use cw_testkit::TempRoot;
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Output};
+use std::process::{Child, Command, Output, Stdio};
+use std::time::{Duration, Instant};
+
+/// Maximum time a test waits for a child or its pipe readers.
+const CHILD_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// The binary under test, exactly as cargo built it (STD-01 R24).
 pub const BIN: &str = env!("CARGO_BIN_EXE_tmpl-cli");
@@ -77,7 +82,7 @@ impl Fixture {
 
     /// Run to completion and capture everything.
     pub fn run(&self, args: &[&str]) -> Output {
-        self.cmd(args).output().expect("run binary")
+        self.cmd(args).output_with_deadline().expect("run binary")
     }
 
     /// Run and require exit 0.
@@ -128,8 +133,19 @@ impl Fixture {
 }
 // example:end
 
-/// A spawned child that is killed and reaped if the test ends early, panics
-/// included (STD-03 R18).
+/// A command whose output is collected with a deadline.
+pub trait CommandDeadline {
+    fn output_with_deadline(&mut self) -> std::io::Result<Output>;
+}
+
+impl CommandDeadline for Command {
+    fn output_with_deadline(&mut self) -> std::io::Result<Output> {
+        let child = self.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()?;
+        Ok(ChildGuard::new(child).finish())
+    }
+}
+
+/// A spawned child that is killed and reaped if the test ends early.
 pub struct ChildGuard(Option<Child>);
 
 impl ChildGuard {
@@ -141,10 +157,76 @@ impl ChildGuard {
         self.0.as_mut().expect("child not yet finished")
     }
 
-    /// Wait for the child and collect what is left of its output.
-    pub fn finish(mut self) -> Output {
-        let child = self.0.take().expect("child not yet finished");
-        child.wait_with_output().expect("wait for child")
+    /// Read one line without letting an unresponsive child hang the test.
+    pub fn read_line(&mut self) -> String {
+        let stdout = self.child().stdout.take().expect("piped stdout");
+        let (send, recv) = std::sync::mpsc::sync_channel(1);
+        std::thread::spawn(move || {
+            let mut line = String::new();
+            let result = BufReader::new(stdout).read_line(&mut line).map(|_| line);
+            let _ = send.send(result);
+        });
+        recv.recv_timeout(CHILD_TIMEOUT)
+            .expect("child output timed out")
+            .expect("read child output")
+    }
+
+    /// Wait for the child and drain both pipes concurrently, with one deadline.
+    pub fn finish(self) -> Output {
+        self.finish_with_timeout(CHILD_TIMEOUT)
+    }
+
+    pub fn finish_with_timeout(mut self, timeout: Duration) -> Output {
+        let child = self.child();
+        drop(child.stdin.take());
+        let (send, recv) = std::sync::mpsc::sync_channel(2);
+        for (index, pipe) in [
+            child
+                .stdout
+                .take()
+                .map(|pipe| Box::new(pipe) as Box<dyn Read + Send>),
+            child
+                .stderr
+                .take()
+                .map(|pipe| Box::new(pipe) as Box<dyn Read + Send>),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let send = send.clone();
+            std::thread::spawn(move || {
+                let mut data = Vec::new();
+                let result = match pipe {
+                    Some(mut pipe) => pipe.read_to_end(&mut data).map(|_| data),
+                    None => Ok(data),
+                };
+                let _ = send.send((index, result));
+            });
+        }
+        drop(send);
+        let deadline = Instant::now() + timeout;
+        let status = loop {
+            match child.try_wait().expect("poll child") {
+                Some(status) => break status,
+                None if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
+                None => {
+                    panic!("child timed out");
+                }
+            }
+        };
+        let mut streams = [Vec::new(), Vec::new()];
+        for _ in 0..2 {
+            let (index, result) = recv
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .expect("child pipe timed out");
+            streams[index] = result.expect("read child pipe");
+        }
+        let [stdout, stderr] = streams;
+        Output {
+            status,
+            stdout,
+            stderr,
+        }
     }
 }
 
@@ -152,7 +234,18 @@ impl Drop for ChildGuard {
     fn drop(&mut self) {
         if let Some(mut child) = self.0.take() {
             let _ = child.kill();
-            let _ = child.wait();
+            reap(&mut child);
+        }
+    }
+}
+
+fn reap(child: &mut Child) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) | Err(_) => return,
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
+            Ok(None) => return,
         }
     }
 }

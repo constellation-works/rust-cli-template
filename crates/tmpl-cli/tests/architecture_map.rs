@@ -15,6 +15,8 @@
 
 mod support;
 
+use support::CommandDeadline;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use support::script::{copy_script, isolated_path};
@@ -66,7 +68,11 @@ fn architecture_fixture(root: &Path) -> PathBuf {
 /// and stderr. `cargo` comes from the toolchain on an explicit `PATH`.
 fn run_architecture_map(temp: &cw_testkit::TempRoot, script: &Path) -> (Option<i32>, String) {
     let path = isolated_path(temp);
-    let out = temp.command(script).env("PATH", &path).output().unwrap();
+    let out = temp
+        .command(script)
+        .env("PATH", &path)
+        .output_with_deadline()
+        .unwrap();
     (
         out.status.code(),
         String::from_utf8_lossy(&out.stderr).into_owned(),

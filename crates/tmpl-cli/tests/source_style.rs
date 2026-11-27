@@ -15,6 +15,8 @@
 
 mod support;
 
+use support::CommandDeadline;
+
 use std::fs;
 use support::script::{copy_script, git};
 
@@ -174,7 +176,7 @@ fn source_style(source: &str) -> (Option<i32>, String) {
     git(&temp, root, &["init", "-q"]);
     fs::create_dir_all(root.join("src")).unwrap();
     fs::write(root.join("src/lib.rs"), source).unwrap();
-    let out = temp.command(&script).output().unwrap();
+    let out = temp.command(&script).output_with_deadline().unwrap();
     (
         out.status.code(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
