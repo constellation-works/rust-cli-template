@@ -34,12 +34,15 @@ fn architecture_fixture(root: &Path) -> PathBuf {
         ),
         (
             "crates/demo/src/main.rs",
-            "//! The binary.\nmod cli;\nmod output;\nfn main() {}\n",
+            "//! The binary; imports cli and output.\nmod cli;\nmod output;\nfn main() {}\n",
         ),
-        ("crates/demo/src/cli.rs", "//! The flags.\n"),
+        (
+            "crates/demo/src/cli.rs",
+            "//! The flags; imports no sibling modules.\n/// Mentions `crate::output` in docs.\n",
+        ),
         (
             "crates/demo/src/output/mod.rs",
-            "//! The output.\nmod sink;\n",
+            "//! The output; imports no sibling modules.\nmod sink;\n",
         ),
         ("crates/demo/src/output/sink.rs", "//! The sink.\n"),
         ("crates/demo/src/tests/mod.rs", ""),
@@ -47,8 +50,8 @@ fn architecture_fixture(root: &Path) -> PathBuf {
             "ARCHITECTURE.md",
             "# Architecture\n\n## Crates\n\n`demo` is the binary; \
              `scripts/check-architecture-map.sh` checks this map.\n\n\
-             ## `demo` (binary)\n\n```\nmain.rs      the entry\ncli.rs       the flags\n\
-             output/\n  sink.rs    the sink\n```\n\n`output/` alone writes.\n",
+             ## `demo` (binary)\n\n```\nmain.rs      The binary; imports cli and output.\ncli.rs       The flags; imports no sibling modules.\n\
+             output/      The output; imports no sibling modules.\n  sink.rs    the sink\n```\n\n`output/` alone writes.\n",
         ),
     ];
     for (path, text) in files {
@@ -128,8 +131,8 @@ fn check_architecture_map_fails_on_a_documented_path_that_does_not_exist() {
     let doc = fs::read_to_string(root.join("ARCHITECTURE.md")).unwrap();
     let doc = doc
         .replace(
-            "cli.rs       the flags\n",
-            "cli.rs       the flags\nerror.rs     gone\n",
+            "cli.rs       The flags; imports no sibling modules.\n",
+            "cli.rs       The flags; imports no sibling modules.\nerror.rs     gone\n",
         )
         .replace(
             "`output/` alone",
@@ -169,4 +172,73 @@ fn check_architecture_map_fails_on_a_unit_without_a_first_line_doc() {
     ] {
         assert!(stderr.contains(expected), "{expected}: {stderr}");
     }
+}
+
+#[test]
+fn check_architecture_map_fails_when_imports_clause_omits_a_referenced_sibling_module() {
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
+    let script = architecture_fixture(root);
+    fs::create_dir_all(root.join("crates/demo/src/contract")).unwrap();
+    fs::write(
+        root.join("crates/demo/src/contract/mod.rs"),
+        "//! Record shapes; imports no sibling modules.\npub struct RecordId;\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("crates/demo/src/error.rs"),
+        "//! Defines store errors; imports no sibling modules.\nuse crate::contract::RecordId;\n",
+    )
+    .unwrap();
+    let main = fs::read_to_string(root.join("crates/demo/src/main.rs")).unwrap();
+    fs::write(
+        root.join("crates/demo/src/main.rs"),
+        main.replace(
+            "//! The binary; imports cli and output.\nmod cli;\nmod output;",
+            "//! The binary; imports cli, contract, error and output.\nmod cli;\nmod contract;\nmod error;\nmod output;",
+        ),
+    )
+    .unwrap();
+    let doc = fs::read_to_string(root.join("ARCHITECTURE.md")).unwrap();
+    let doc = doc
+        .replace(
+            "main.rs      The binary; imports cli and output.\n",
+            "main.rs      The binary; imports cli, contract, error and output.\n",
+        )
+        .replace(
+            "cli.rs       The flags; imports no sibling modules.\n",
+            "cli.rs       The flags; imports no sibling modules.\n\
+             contract/    Record shapes; imports no sibling modules.\n\
+             error.rs     Defines store errors; imports no sibling modules.\n",
+        );
+    fs::write(root.join("ARCHITECTURE.md"), doc).unwrap();
+    let (code, stderr) = run_architecture_map(&temp, &script);
+    assert_eq!(code, Some(1), "{stderr}");
+    assert!(
+        stderr.contains("demo::error") && stderr.contains("contract"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn check_architecture_map_fails_when_first_doc_line_differs_from_map_row() {
+    let temp = cw_testkit::TempRoot::new("TMPL_CLI").unwrap();
+    let root = temp.path();
+    let script = architecture_fixture(root);
+    fs::write(root.join("crates/demo/src/cli.rs"), "//! The flags.\n").unwrap();
+    fs::write(
+        root.join("crates/demo/src/main.rs"),
+        "//! Wrong crate root sentence.\nmod cli;\nmod output;\nfn main() {}\n",
+    )
+    .unwrap();
+    let (code, stderr) = run_architecture_map(&temp, &script);
+    assert_eq!(code, Some(1), "{stderr}");
+    assert!(
+        stderr.contains("crates/demo/src/cli.rs") && stderr.contains("demo::cli"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("crates/demo/src/main.rs") && stderr.contains("demo: crate root main.rs"),
+        "{stderr}"
+    );
 }

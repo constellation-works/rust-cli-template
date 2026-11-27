@@ -1,4 +1,4 @@
-//! Defines store errors and bad-record reports.
+//! Defines store errors and bad-record reports; imports contract.
 //!
 //! The store's one error type, and the bad-record report a read carries.
 //!

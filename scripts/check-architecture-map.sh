@@ -17,12 +17,14 @@
 #       path suffix inside that crate (inside the repository outside a crate
 #       section). Placeholders (`<..>`, `$`, `*`, `…`) are skipped;
 #   (d) a crate root (each lib or bin target) or a top-level module file
-#       (`<name>.rs`, else `<name>/mod.rs`) does not begin with a `//!` line.
+#       (`<name>.rs`, else `<name>/mod.rs`) does not begin with a `//!` line;
+#   (e) a crate root or top-level module row with a sentence does not match
+#       the unit's first `//!` line, or the unit references a sibling
+#       top-level module via `crate::<name>` not named in the row's
+#       `imports` clause (`imports no sibling modules` means none).
 #
 # The crate list comes from `cargo metadata`, so a new crate or module fails
-# the gate until the doc names it, with no edit here. Whether a unit's
-# sentence matches its `//!` sentence stays a review matter. Needs cargo and
-# python3.
+# the gate until the doc names it, with no edit here. Needs cargo and python3.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -124,6 +126,7 @@ def exists_span(text, crate):
     return any(candidate == path or candidate.endswith("/" + path) for candidate in scope)
 
 documented = {crate["name"]: set() for crate in crates}
+documented_rows = {crate["name"]: [] for crate in crates}
 seen_sections = set()
 for crate_name, start, end in sections:
     crate = by_name.get(crate_name)
@@ -143,11 +146,16 @@ for crate_name, start, end in sections:
             if crate is None or not line.strip() or line.lstrip().startswith("<!--"):
                 continue
             indent = len(line) - len(line.lstrip(" "))
-            field = re.split(r"\s{2,}", line.strip())[0]
+            parts = re.split(r"\s{2,}", line.strip(), maxsplit=1)
+            field = parts[0]
+            sentence = parts[1].strip() if len(parts) > 1 else ""
             while stack and stack[-1][0] >= indent:
                 stack.pop()
             parent = stack[-1][1] if stack else ""
-            for token in field.split(" "):
+            tokens = field.split(" ")
+            if not stack and len(tokens) == 1 and sentence and not PLACEHOLDER.search(field) and looks_like_path(field):
+                documented_rows[crate_name].append((lineno, field, sentence))
+            for token in tokens:
                 if not looks_like_path(token) and not PLACEHOLDER.search(token):
                     continue
                 full = parent + token
@@ -171,7 +179,7 @@ for crate_name, start, end in sections:
                 where = f"`{crate_name}` section" if crate is not None else "the doc"
                 fail(f"{DOC}:{lineno}: {where} names `{text}`, which does not exist")
 
-# --- (a), (b), (d) per crate ----------------------------------------------
+# --- (a), (b), (d), (e) per crate -----------------------------------------
 def first_line(path):
     try:
         with open(path, encoding="utf-8") as handle:
@@ -182,6 +190,199 @@ def first_line(path):
 def needs_doc(path, unit):
     if not first_line(path).startswith("//!"):
         fail(f"{rel(path)}: `{unit}` does not begin with a `//!` doc line")
+
+def strip_comments_and_strings(text):
+    out = []
+    index = 0
+    length = len(text)
+    while index < length:
+        ch = text[index]
+        nxt = text[index + 1] if index + 1 < length else ""
+        if ch == "/" and nxt == "/":
+            index += 2
+            while index < length and text[index] != "\n":
+                index += 1
+            continue
+        if ch == "/" and nxt == "*":
+            depth = 1
+            index += 2
+            while index < length and depth > 0:
+                if index + 1 < length and text[index] == "/" and text[index + 1] == "*":
+                    depth += 1
+                    index += 2
+                elif index + 1 < length and text[index] == "*" and text[index + 1] == "/":
+                    depth -= 1
+                    index += 2
+                else:
+                    if text[index] == "\n":
+                        out.append("\n")
+                    index += 1
+            out.append(" ")
+            continue
+        if ch in ("r", "b") and index + 1 < length:
+            start = index
+            scan_index = index + 1
+            if ch == "b" and scan_index < length and text[scan_index] == "r":
+                scan_index += 1
+            if (ch == "r" or (ch == "b" and scan_index == index + 2)) and (
+                start == 0 or not (text[start - 1].isalnum() or text[start - 1] == "_")
+            ):
+                hashes = 0
+                while scan_index < length and text[scan_index] == "#":
+                    hashes += 1
+                    scan_index += 1
+                if scan_index < length and text[scan_index] == "\"":
+                    scan_index += 1
+                    end_marker = "\"" + ("#" * hashes)
+                    pos = text.find(end_marker, scan_index)
+                    if pos == -1:
+                        index = length
+                    else:
+                        out.append(" ")
+                        index = pos + len(end_marker)
+                    continue
+        if ch == "\"":
+            index += 1
+            while index < length:
+                if text[index] == "\\":
+                    index += 2
+                    continue
+                if text[index] == "\"":
+                    index += 1
+                    break
+                index += 1
+            out.append(" ")
+            continue
+        if ch == chr(39) and index + 1 < length:
+            # Skip char/byte literals like chr(39)+double-quote+chr(39) without consuming quotes.
+            if text[index + 1] == "\\" and index + 3 < length and text[index + 3] == chr(39):
+                out.append(" ")
+                index += 4
+                continue
+            if text[index + 1] != "\\" and index + 2 < length and text[index + 2] == chr(39):
+                out.append(" ")
+                index += 3
+                continue
+        out.append(ch)
+        index += 1
+    return "".join(out)
+
+TOKEN = re.compile(r"::|[A-Za-z_][A-Za-z0-9_]*|[{}(),;*]")
+INLINE_PATH = re.compile(r"\bcrate(?:::[A-Za-z_][A-Za-z0-9_]*)+")
+
+def expand_use_trees(text):
+    tokens = TOKEN.findall(text)
+    paths = []
+    index = 0
+    length = len(tokens)
+    def parse_tree(prefix, pos):
+        segs = list(prefix)
+        while pos < length:
+            tok = tokens[pos]
+            if tok == "{":
+                pos += 1
+                while pos < length and tokens[pos] != "}":
+                    pos = parse_tree(segs, pos)
+                    if pos < length and tokens[pos] == ",":
+                        pos += 1
+                if pos < length and tokens[pos] == "}":
+                    pos += 1
+                return pos
+            if tok == "::":
+                pos += 1
+                continue
+            if tok == "*":
+                if segs:
+                    paths.append(tuple(segs))
+                return pos + 1
+            if tok == "as":
+                pos += 1
+                if pos < length and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", tokens[pos]):
+                    pos += 1
+                if segs:
+                    paths.append(tuple(segs))
+                return pos
+            if tok in (",", "}", ";"):
+                if segs:
+                    paths.append(tuple(segs))
+                return pos
+            if tok == "self" and segs:
+                pos += 1
+                if pos < length and tokens[pos] == "as":
+                    pos += 2
+                paths.append(tuple(segs))
+                return pos
+            segs.append(tok)
+            pos += 1
+            if pos < length and tokens[pos] != "::":
+                if tokens[pos] == "as":
+                    pos += 1
+                    if pos < length and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", tokens[pos]):
+                        pos += 1
+                paths.append(tuple(segs))
+                return pos
+        if segs:
+            paths.append(tuple(segs))
+        return pos
+    while index < length:
+        if tokens[index] == "use":
+            index = parse_tree([], index + 1)
+            if index < length and tokens[index] == ";":
+                index += 1
+        else:
+            index += 1
+    return paths
+
+def crate_refs(path):
+    try:
+        text = strip_comments_and_strings(open(path, encoding="utf-8").read())
+    except OSError:
+        return set()
+    refs = set()
+    for segs in expand_use_trees(text):
+        if len(segs) >= 2 and segs[0] == "crate":
+            refs.add(segs[1])
+    for match in INLINE_PATH.findall(text):
+        segs = match.split("::")
+        if len(segs) >= 2:
+            refs.add(segs[1])
+    return refs
+
+def parse_imports(sentence):
+    match = re.search(r"\bimports\b\s+([^.;]+)", sentence)
+    if not match:
+        return set()
+    clause = match.group(1).strip()
+    if re.fullmatch(r"no\s+sibling\s+modules?", clause) or clause in ("nothing", "none"):
+        return set()
+    normalized = re.sub(r"\band\b", ",", clause)
+    return set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", normalized))
+
+def walk_rs(directory):
+    files = []
+    if os.path.isdir(directory):
+        for dirpath, dirnames, filenames in os.walk(directory):
+            dirnames[:] = [d for d in sorted(dirnames) if d != "tests"]
+            files.extend(os.path.join(dirpath, fn) for fn in sorted(filenames) if fn.endswith(".rs"))
+    return files
+
+def unit_files(crate, field):
+    src = crate["src"]
+    roots_set = set(crate["roots"])
+    if field.endswith("/"):
+        mod_name = field[:-1]
+        mod_dir = os.path.join(src, mod_name)
+        mod_rs = os.path.join(mod_dir, "mod.rs")
+        alt_rs = os.path.join(src, mod_name + ".rs")
+        doc_path = mod_rs if os.path.isfile(mod_rs) else (alt_rs if os.path.isfile(alt_rs) else None)
+        files = ([alt_rs] if os.path.isfile(alt_rs) else []) + walk_rs(mod_dir)
+        return f"{crate['"'"'name'"'"']}::{mod_name}", mod_name, doc_path, files
+    file_path = os.path.join(src, field)
+    if os.path.realpath(file_path) in roots_set:
+        return f"{crate['"'"'name'"'"']}: crate root {field}", None, file_path, [file_path] if os.path.isfile(file_path) else []
+    mod_name = field[:-3] if field.endswith(".rs") else field
+    files = ([file_path] if os.path.isfile(file_path) else []) + walk_rs(os.path.join(src, mod_name))
+    return f"{crate['"'"'name'"'"']}::{mod_name}", mod_name, file_path, files
 
 for crate in crates:
     name = crate["name"]
@@ -210,6 +411,22 @@ for crate in crates:
             fail(f"{DOC}: the `{name}` section does not name module `{module}` ({shown})")
         if path:
             needs_doc(path, f"{name}::{module}")
+    sibling_names = set(modules.keys())
+    for lineno, field, sentence in documented_rows[name]:
+        unit_label, mod_name, doc_path, files = unit_files(crate, field)
+        if doc_path and os.path.isfile(doc_path):
+            line1 = first_line(doc_path).rstrip("\r\n")
+            if line1.startswith("//!"):
+                actual = line1[3:].strip()
+                if actual != sentence:
+                    fail(f"{rel(doc_path)}:1: `{unit_label}` first `//!` line `{actual}` does not match {DOC}:{lineno} `{sentence}`")
+        allowed = parse_imports(sentence)
+        siblings = sibling_names if mod_name is None else (sibling_names - {mod_name})
+        referenced = set()
+        for src_file in files:
+            referenced |= (crate_refs(src_file) & siblings)
+        for target in sorted(referenced - allowed):
+            fail(f"{DOC}:{lineno}: `{unit_label}` references `crate::{target}`, which its row omits from its `imports` clause")
 
 for message in fails:
     print(f"architecture-map: {message}", file=sys.stderr)
