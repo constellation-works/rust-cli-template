@@ -11,6 +11,10 @@ use std::num::NonZeroUsize;
 use time::OffsetDateTime;
 use tmpl_cli_store::contract::{Body, Note, NoteId, Priority, Tag, Title};
 
+/// Maximum number of matching notes returned by default when neither
+/// `--limit` nor `--all` is supplied (STD-08 R3, R5).
+pub const DEFAULT_LIMIT: usize = 20;
+
 /// The fields a caller supplies to add a note; the app assigns the rest.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NewNote {
@@ -41,6 +45,18 @@ impl NewNote {
     }
 }
 
+/// How many matching notes a listing returns.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Limit {
+    /// At most [`DEFAULT_LIMIT`] matching notes.
+    #[default]
+    Default,
+    /// At most this many matching notes.
+    Count(NonZeroUsize),
+    /// Every matching note.
+    All,
+}
+
 /// Which notes a `note list` returns.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ListFilter {
@@ -48,8 +64,8 @@ pub struct ListFilter {
     pub tag: Option<Tag>,
     /// Only notes at this priority.
     pub priority: Option<Priority>,
-    /// At most this many of the matching notes (the oldest first).
-    pub limit: Option<NonZeroUsize>,
+    /// How many of the matching notes to return (oldest first).
+    pub limit: Limit,
 }
 
 impl ListFilter {
@@ -100,8 +116,13 @@ pub(crate) fn select(notes: Vec<Note>, filter: &ListFilter) -> NoteList {
         .filter(|note| filter.matches(note))
         .collect();
     let total = notes.len();
-    if let Some(limit) = filter.limit {
-        notes.truncate(limit.get());
+    let cap = match filter.limit {
+        Limit::Default => Some(DEFAULT_LIMIT),
+        Limit::Count(limit) => Some(limit.get()),
+        Limit::All => None,
+    };
+    if let Some(limit) = cap {
+        notes.truncate(limit);
     }
     NoteList { notes, total }
 }

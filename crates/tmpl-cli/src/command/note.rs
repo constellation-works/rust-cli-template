@@ -11,14 +11,17 @@
 //! STD-02 R18: split along responsibilities, not by length alone.
 
 use crate::command::common::input;
-use crate::output::{NotePayload, Output, Payload, SkippedRecord};
+use crate::error;
+use crate::output::{
+    ListedNotePayload, NotePayload, NoteSummaryPayload, Output, Payload, SkippedRecord,
+};
 use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::{ArgAction, Args, Subcommand};
 use cw_mcp::schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::num::NonZeroUsize;
-use tmpl_cli_core::app::note::{self, ListFilter, NewNote, NoteList, Outcome};
+use tmpl_cli_core::app::note::{self, Limit, ListFilter, NewNote, NoteList, Outcome};
 use tmpl_cli_core::contract::{Body, NoteId, Priority, Tag, Title};
 use tmpl_cli_core::{AuditWarning, Error, Origin, Runtime};
 
@@ -38,8 +41,10 @@ const LIST_EXAMPLES: &str = "\
 Examples:
   tmpl-cli note list
   tmpl-cli note list --tag work --limit 10
+  tmpl-cli note list --all
+  tmpl-cli note list --include-body --json
   tmpl-cli note list --json | jq '.notes[].title'
-  tmpl-cli note list | wc -l";
+  tmpl-cli note list --all | wc -l";
 
 const SHOW_EXAMPLES: &str = "\
 Examples:
@@ -108,10 +113,31 @@ pub(crate) struct ListArgs {
     pub(crate) priority: Option<Priority>,
 
     /// Show at most this many of the matching notes, 1 or more; --json reports the
-    /// total and whether the list was cut [default: all]
-    #[arg(long, value_name = "N")]
+    /// total and whether the list was cut [default: 20]
+    #[arg(long, value_name = "N", conflicts_with = "all")]
     #[serde(default)]
     pub(crate) limit: Option<NonZeroUsize>,
+
+    /// Show every matching note instead of the default limit [default: false]
+    #[arg(long, conflicts_with = "limit")]
+    #[serde(default)]
+    pub(crate) all: bool,
+
+    /// Include each note's body in the result [default: false]
+    #[arg(long)]
+    #[serde(default)]
+    pub(crate) include_body: bool,
+}
+
+impl ListArgs {
+    /// Checks clap enforces on the CLI that an MCP caller can still violate
+    /// in JSON.
+    fn check(&self) -> Result<(), Error> {
+        if self.all && self.limit.is_some() {
+            return Err(error::usage_error("--limit cannot be used with --all"));
+        }
+        Ok(())
+    }
 }
 
 /// Arguments to `note show`, and the `note_show` tool's input.
@@ -172,8 +198,17 @@ pub(super) fn run<R>(
     origin: &Origin,
     finish: impl FnOnce(Result<Output, Error>) -> R,
 ) -> (R, Option<AuditWarning>) {
+    if let NoteCommand::List(args) = &command
+        && let Err(err) = args.check()
+    {
+        return (finish(Err(err)), None);
+    }
+    let include_body = matches!(
+        &command,
+        NoteCommand::List(args) if args.include_body
+    );
     let (outcome, audit) = note::exec(runtime, origin, app_command(command)).into_parts();
-    let rendered = finish(outcome.map(output));
+    let rendered = finish(outcome.map(|outcome| output(outcome, include_body)));
     (rendered, audit.settle())
 }
 
@@ -195,14 +230,18 @@ fn app_command(command: NoteCommand) -> note::Command {
         NoteCommand::List(args) => note::Command::List(ListFilter {
             tag: args.tag,
             priority: args.priority,
-            limit: args.limit,
+            limit: if args.all {
+                Limit::All
+            } else {
+                args.limit.map_or(Limit::Default, Limit::Count)
+            },
         }),
         NoteCommand::Show(args) => note::Command::Show(args.id),
     }
 }
 
 /// The app's outcome as the payload every output mode renders.
-fn output(outcome: Outcome) -> Output {
+fn output(outcome: Outcome, include_body: bool) -> Output {
     match outcome {
         Outcome::Added { note, path } => {
             // Name what was written and where (STD-01 R30); `id` is in the payload.
@@ -216,22 +255,36 @@ fn output(outcome: Outcome) -> Output {
             list,
             filter,
             bad_records,
-        } => Output {
-            payload: Payload::Notes {
-                notes: list.notes.iter().map(NotePayload::from).collect(),
-                total: list.total,
-                skipped: bad_records
-                    .iter()
-                    .map(|bad| SkippedRecord {
-                        record: bad.locator.to_string(),
-                        reason: bad.reason.to_string(),
-                    })
-                    .collect(),
-            },
-            notice: list_notice(&filter, &list),
-            warnings: bad_records.iter().map(ToString::to_string).collect(),
-            skipped: Vec::new(),
-        },
+        } => {
+            let notes = list
+                .notes
+                .iter()
+                .map(|note| {
+                    if include_body {
+                        ListedNotePayload::Full(NotePayload::from(note))
+                    } else {
+                        ListedNotePayload::Summary(NoteSummaryPayload::from(note))
+                    }
+                })
+                .collect();
+            Output {
+                payload: Payload::Notes {
+                    notes,
+                    total: list.total,
+                    include_body,
+                    skipped: bad_records
+                        .iter()
+                        .map(|bad| SkippedRecord {
+                            record: bad.locator.to_string(),
+                            reason: bad.reason.to_string(),
+                        })
+                        .collect(),
+                },
+                notice: list_notice(&filter, &list),
+                warnings: bad_records.iter().map(ToString::to_string).collect(),
+                skipped: Vec::new(),
+            }
+        }
         Outcome::Shown { note, bad_records } => Output {
             warnings: bad_records.iter().map(ToString::to_string).collect(),
             skipped: bad_records
@@ -253,7 +306,7 @@ fn list_notice(filter: &ListFilter, listed: &NoteList) -> Option<String> {
         Some(empty_notice(filter))
     } else if listed.truncated() {
         Some(format!(
-            "showing {} of {} matching notes; raise or drop --limit to see the rest",
+            "showing {} of {} matching notes; pass --limit <N> or --all to see more",
             listed.notes.len(),
             listed.total
         ))

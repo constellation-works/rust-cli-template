@@ -374,7 +374,7 @@ fn a_one_note_list_is_still_a_table() {
 
 #[test]
 fn json_list_and_show_are_typed_documents() {
-    // STD-01 R7, R10, R11.
+    // STD-01 R7, R10, R11; STD-08 R5: compact list omits body unless asked.
     let fx = Fixture::new();
     fx.seed();
     let doc = json(&fx.ok(&["note", "list", "--json"]).stdout);
@@ -386,8 +386,24 @@ fn json_list_and_show_are_typed_documents() {
     let first = &list[0];
     assert_eq!(first["id"], 1);
     assert_eq!(first["priority"], "high");
-    assert!(first["body"].is_null(), "absent is null, not omitted");
+    assert!(
+        first.get("body").is_none(),
+        "compact default omits body: {first}"
+    );
     assert_eq!(first["tags"], serde_json::json!(["home"]));
+    assert!(
+        list[2].get("body").is_none(),
+        "compact default omits populated body too: {}",
+        list[2]
+    );
+
+    let full = json(&fx.ok(&["note", "list", "--include-body", "--json"]).stdout);
+    let full_list = full["notes"].as_array().unwrap();
+    assert!(
+        full_list[0]["body"].is_null(),
+        "absent is null, not omitted when --include-body is passed"
+    );
+    assert_eq!(full_list[2]["body"], "An article\nwith two lines");
 
     let show: serde_json::Value =
         serde_json::from_slice(&fx.ok(&["note", "show", "3", "--json"]).stdout).unwrap();
@@ -655,7 +671,7 @@ fn a_closed_stdout_ends_the_process_quietly_with_exit_zero() {
     let fx = Fixture::new();
     support::write_store(&fx.root(), 5000);
     let mut child = ChildGuard::new(
-        fx.cmd(&["note", "list"])
+        fx.cmd(&["note", "list", "--all"])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -786,7 +802,7 @@ fn every_listed_id_is_accepted_back_by_show() {
     // STD-01 R32: identifiers round-trip, from both the JSON and piped forms.
     let fx = Fixture::new();
     fx.seed();
-    let doc = json(&fx.ok(&["note", "list", "--json"]).stdout);
+    let doc = json(&fx.ok(&["note", "list", "--include-body", "--json"]).stdout);
     for note in doc["notes"].as_array().unwrap() {
         let id = note["id"].to_string();
         assert_eq!(&json(&fx.ok(&["note", "show", &id, "--json"]).stdout), note);
@@ -796,6 +812,53 @@ fn every_listed_id_is_accepted_back_by_show() {
         let id = line.split('\t').next().unwrap();
         fx.ok(&["note", "show", id]);
     }
+}
+
+#[test]
+fn default_list_is_bounded_and_opt_in_flags_expand_or_conflict() {
+    // STD-08 R3, R5: default list bounds at DEFAULT_LIMIT (20) without bodies.
+    let fx = Fixture::new();
+    let total = tmpl_cli_core::app::note::DEFAULT_LIMIT + 5;
+    support::write_store(&fx.root(), total);
+
+    let default_out = fx.ok(&["note", "list", "--json"]);
+    let doc = json(&default_out.stdout);
+    let notes = doc["notes"].as_array().unwrap();
+    assert_eq!(notes.len(), tmpl_cli_core::app::note::DEFAULT_LIMIT);
+    assert_eq!(doc["total"], total);
+    assert_eq!(doc["truncated"], true);
+    assert!(notes.iter().all(|item| item.get("body").is_none()));
+    let stderr = support::text(&default_out.stderr);
+    assert!(
+        stderr.contains(&format!(
+            "{} of {total}",
+            tmpl_cli_core::app::note::DEFAULT_LIMIT
+        )),
+        "stderr: {stderr}"
+    );
+
+    let all_out = fx.ok(&["note", "list", "--all", "--json"]);
+    let all_doc = json(&all_out.stdout);
+    assert_eq!(all_doc["notes"].as_array().map(Vec::len), Some(total));
+    assert_eq!(all_doc["truncated"], false);
+    assert!(all_out.stderr.is_empty(), "uncut list has no notice");
+
+    let conflict = fx.run(&["note", "list", "--limit", "5", "--all"]);
+    assert_eq!(conflict.status.code(), Some(2));
+    assert!(conflict.stdout.is_empty());
+
+    let list_help = support::text(&fx.ok(&["note", "list", "--help"]).stdout);
+    let limit_line = list_help
+        .lines()
+        .find(|line| line.contains("--limit"))
+        .expect("--limit line in note list --help");
+    assert!(
+        limit_line.contains(&format!(
+            "[default: {}]",
+            tmpl_cli_core::app::note::DEFAULT_LIMIT
+        )),
+        "got {limit_line:?}"
+    );
 }
 
 #[test]

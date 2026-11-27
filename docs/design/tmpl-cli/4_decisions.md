@@ -368,6 +368,9 @@ matching notes` on stderr in every mode. `--limit` must be at least 1.
   capped page cannot pass for a complete one.
 - Cost: `jq '.notes[]'` instead of `jq '.[]'`, and every future list verb
   inherits the envelope.
+- Update (2026-11-27): `note list` now defaults to 20 compact notes (without
+  `body`), with `--limit <N>`, `--all` and `--include-body` to ask for more;
+  see [note list is bounded to 20 compact notes by default](#note-list-is-bounded-to-20-compact-notes-by-default).
 
 ## add names what it wrote on stderr
 
@@ -1307,3 +1310,58 @@ exist, so the main file alone may lack committed records).
   remedy is a write. Moving the satellites pin to the commit that adds
   `Db::read_strict` also moved the kit's environment table (`CLICOLOR_FORCE`
   and `COLUMNS` are now declared by `cw-app`), which `docs/usage.md` renders.
+
+## note list is bounded to 20 compact notes by default
+
+**Recorded:** 2026-11-27
+**Code anchors:** `crates/tmpl-cli-core/src/app/note/rule.rs::DEFAULT_LIMIT`, `::Limit`, `::select`; `crates/tmpl-cli/src/command/note.rs::ListArgs`, `::list_notice`; `crates/tmpl-cli/src/output/note.rs::NoteSummaryPayload`, `::ListedNotePayload`, `::list_table`; `crates/tmpl-cli/src/output/common/payload.rs::Payload::Notes`
+
+### Context
+
+STD-08 §R3 requires agent-readable tool results to have a fixed upper bound
+that does not grow with the history of the store, and §R5 requires read tools
+to return a compact default with full records opt-in. Previously `note list`
+(and the `note_list` MCP tool) defaulted `--limit` to all matching notes and
+included every note's full `body` in `--json` and MCP output, so result size
+grew without bound with store size and body length.
+
+### Decision
+
+- **Default bound of 20 notes (`DEFAULT_LIMIT = 20`).** `ListFilter::limit`
+  defaults to `Limit::Default` (20 matching notes, applied after filters per
+  STD-01 §R33). Callers opt into a larger or smaller page with `--limit <N>`,
+  or every matching note with `--all` (`Limit::All`). `--limit` and `--all`
+  are mutually exclusive and rejected as `usage_error` (exit 2 on CLI, tool
+  error on MCP). When truncated, stderr prints `showing N of M matching
+  notes; pass --limit <N> or --all to see more`.
+- **Compact default omits `body`.** By default `note list --json` and
+  `note_list` emit `NoteSummaryPayload` (`id`, `title`, `tags`, `priority`,
+  `created_at`), matching the five columns of the human table and piped
+  views. Callers opt into bodies with `--include-body` (`include_body: true`
+  in MCP), which emits `NotePayload` (carrying `"body": null` when absent
+  per STD-01 §R11) and adds a `BODY` column in table and plain views.
+- **Shipped output change (STD-01 §R10).** The template has no released user;
+  the CLI help, MCP schema and output goldens are updated and reviewed as a
+  contract change, and [specs/output-contract.md](./specs/output-contract.md#readers-and-sizes)
+  records the steady-state and repeated sizes per STD-08 §R1.
+
+Alternatives considered and rejected:
+1. Arbitrary `--fields` projection strings: adds string-list validation and
+   schema surface for a six-field example domain where only `body` is
+   unbounded text; a typed `--include-body` flag keeps one schema across CLI
+   and MCP.
+2. Keeping `"body": null` in compact output or omitting only absent bodies:
+   omitting `body` conditionally violates STD-01 §R11, while keeping it on
+   compact records wastes tokens.
+3. A smaller (5) or larger (100) default bound: 20 fits ~3.6 KB typical
+   (~7 KB worst case) in a single call while covering typical interactive and
+   agent pages.
+
+### Consequences
+
+- Default `note_list` / `note list` output stays O(1) regardless of store
+  growth, and agents read a full `body` on demand via `note_show` (or
+  `include_body: true`).
+- Cost: scripts or callers expecting every note or `body` from bare `note
+  list` must pass `--all` / `--limit <N>` or `--include-body` (or call
+  `note show <id>`).

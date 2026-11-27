@@ -23,7 +23,9 @@ use std::path::Path;
 use std::sync::Arc;
 use time::OffsetDateTime;
 use time::macros::datetime;
-use tmpl_cli_core::app::note::{self, Command, ListFilter, NewNote, NoteList, Outcome};
+use tmpl_cli_core::app::note::{
+    self, Command, DEFAULT_LIMIT, Limit, ListFilter, NewNote, NoteList, Outcome,
+};
 use tmpl_cli_core::contract::{Note, NoteId, Priority, Tag};
 use tmpl_cli_core::{Error, Origin, Runtime, Surface};
 use tmpl_cli_store::contract::NoteError;
@@ -120,8 +122,8 @@ fn write_store_file(dir: &Path, text: &str) {
     }
 }
 
-fn limit(count: usize) -> Option<NonZeroUsize> {
-    NonZeroUsize::new(count)
+fn limit(count: usize) -> Limit {
+    Limit::Count(NonZeroUsize::new(count).unwrap())
 }
 
 fn new_note(title: &str, tags: &[&str], priority: Priority) -> NewNote {
@@ -216,7 +218,7 @@ fn list_filters_before_the_limit_and_reports_the_total() {
         titles(ListFilter {
             tag: Some(home),
             priority: Some(Priority::High),
-            limit: None,
+            limit: Limit::All,
         }),
         ["a"]
     );
@@ -281,7 +283,7 @@ fn filters_combine_and_keep_the_stored_order() {
         .list(&ListFilter {
             tag: Some("home".parse().unwrap()),
             priority: Some(Priority::High),
-            limit: None,
+            limit: Limit::All,
         })
         .unwrap()
         .value;
@@ -320,6 +322,36 @@ fn the_limit_applies_after_the_filters_and_the_total_counts_every_match() {
     assert_eq!(ids(&listed), [1, 3]);
     assert_eq!(listed.total, 3);
     assert!(listed.truncated());
+}
+
+#[test]
+fn default_limit_bounds_large_stores_and_all_returns_every_match() {
+    // STD-08 R3, R5: ListFilter::default() caps at DEFAULT_LIMIT, while
+    // Limit::All returns every matching note.
+    let dir = tempdir();
+    let store = Store::open(dir.path());
+    let total = DEFAULT_LIMIT + 5;
+    for seq in 1..=total {
+        store
+            .add(new_note(&format!("note-{seq}"), &[], Priority::Normal), NOW)
+            .unwrap();
+    }
+
+    let default_listed = store.list(&ListFilter::default()).unwrap().value;
+    assert_eq!(default_listed.notes.len(), DEFAULT_LIMIT);
+    assert_eq!(default_listed.total, total);
+    assert!(default_listed.truncated());
+
+    let all_listed = store
+        .list(&ListFilter {
+            limit: Limit::All,
+            ..ListFilter::default()
+        })
+        .unwrap()
+        .value;
+    assert_eq!(all_listed.notes.len(), total);
+    assert_eq!(all_listed.total, total);
+    assert!(!all_listed.truncated());
 }
 
 #[test]

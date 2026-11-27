@@ -1,4 +1,4 @@
-//! Maps command arguments to apps and payloads; imports output.
+//! Maps command arguments to apps and payloads; imports error and output.
 //!
 //! Command dispatch: the noun enum and one module per noun.
 //!
