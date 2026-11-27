@@ -2,13 +2,13 @@
 title: tmpl-cli — Decisions
 owner: claude
 created_date: 2026-09-26
-updated_date: 2026-11-26
+updated_date: 2026-11-27
 last_validated: 2026-09-26
 status: Draft
 feature: tmpl-cli
 doc_role: decisions
 type: design
-summary: Why three crates laid out by app over the cw-kit (binary, core with apps and composition, store with a driver, repositories and a contract module; the one error type, file access, the SQLite notes database, the command path, the command line's mechanism and the MCP surface from the kit's cw-base, cw-fs, cw-sqlite, cw-app, cw-cli and cw-mcp), why the MCP surface is a second mapping onto the same commands, why commands are one module per noun, why mutating commands are audited through one chokepoint and why that chokepoint, the captured environment and the audit log are the kit's, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, why the notes live in SQLite and how its schema evolves, how the store stays private, and every recorded standard deviation or rule the template does not exercise.
+summary: Why three crates laid out by app over the cw-kit (binary, core with apps and composition, store with a driver, repositories and a contract module; the one error type, file access, the SQLite notes database, the command path, the command line's mechanism and the MCP surface from the kit's cw-base, cw-fs, cw-sqlite, cw-app, cw-cli and cw-mcp), why the MCP surface is a second mapping onto the same commands, why commands are one module per noun, why mutating commands are audited through one chokepoint and why that chokepoint, the captured environment and the audit log are the kit's, why --json is the only alias, why a list's JSON is an envelope, why std file locks, why clap has no color, why the notes live in SQLite and how its schema evolves, and how the store stays private; the deviations and unexercised rules every kind keeps are in the kit's decisions.
 tags: [tmpl-cli, decisions]
 paths: ["Cargo.toml", "crates/**", "Makefile"]
 related_features: [tmpl-cli]
@@ -305,33 +305,8 @@ follow it unchanged as a notice, so the bytes are the same.
   error and one line for a command failure.
 - Update: STD-01@2 §R19 allows exactly this rendering, so it is
   no longer a deviation.
-- Deviation from STD-08@2 §R10. Human usage errors retain clap's tips and
-  usage line. Command errors include the resolved note ID or path when
-  those details explain the failure, as required by STD-02 §R26.
-
-## standards-check warns locally and fails in CI
-
-**Recorded:** 2026-09
-**Code anchors:** `Makefile` `standards-check`; `.github/workflows/ci.yml` `STANDARDS_STRICT`
-
-### Context
-
-The adopted standards are vendored into `docs/standards/` by the
-constellation's `sync-standards.sh`, which may run after the repository is
-created. A fresh copy must still pass `make ci`, but a real project whose
-standards were never vendored should not pass CI.
-
-### Decision
-
-Without `docs/standards/check.sh`, `make standards-check` prints a warning
-and the command to run, and exits 0 — unless `STANDARDS_STRICT=1`, which CI
-sets, and then it fails.
-
-### Consequences
-
-- The template and a just-created project pass `make ci` locally.
-- Cost: a local `make ci` can pass while CI fails, until the standards are
-  vendored.
+- The deviation from STD-08 §R10 is recorded with the other kit-level ones in
+  [Usage errors keep clap's tips and usage line](../kit/4_decisions.md#usage-errors-keep-claps-tips-and-usage-line).
 
 ## A list's JSON is an envelope with total and truncated
 
@@ -447,8 +422,8 @@ directory itself may be a link, since the operator chooses it; its target is
 what gets checked. Because the directory is verified owner-only first, the
 files are not re-verified after opening: only the same user could swap them,
 and that is not a boundary (STD-05@1 §R5). `rustix` supplies `geteuid` on
-unix; on other platforms the checks are no-ops (STD-05@1 §R8, §R9, deviation
-for Windows, which would need ACLs).
+unix; on other platforms the checks are no-ops, a deviation recorded in
+[Owner-only checks are no-ops without Unix modes](../kit/4_decisions.md#owner-only-checks-are-no-ops-without-unix-modes).
 
 ### Consequences
 
@@ -547,103 +522,6 @@ bad record is present (`store_bad_record`), leaving `notes.json` untouched.
   refusal stays, so a bad record is repaired before notes are added beside
   it and the commands behave as before. Duplicate ids can no longer be
   stored, so `store_duplicate_id` is gone.
-
-## Missing gate tools warn locally and fail in CI
-
-**Recorded:** 2026-09
-**Code anchors:** `Makefile` `missing_tool`, `test`, `goldens`, `deny`, `ci-fast`
-
-### Context
-
-STD-04@2 §R10 says a gate whose tool is missing fails, and §R12 puts every
-parity check CI runs into the fast local gate, except those that need a
-build. `cargo-nextest` (per-test timeouts, `--no-tests=fail`) and
-`cargo-deny` are not installed everywhere a copy of this template is built.
-
-### Decision
-
-Deviation from STD-04@2 §R10 for local runs only: without `cargo-deny` the
-supply-chain check is skipped, and without `cargo-nextest` the tests run
-under `cargo test`, each with a warning naming the install command. Under
-`CI=true` (set by GitHub Actions) either missing tool fails the gate, and CI
-installs both at pinned versions. `ci-fast` runs formatting, the structure
-checks and `standards-check`. Two checks stay out of it under STD-04@2 §R12
-because they need a build: the help and output goldens (`make goldens`) and
-Cargo.lock freshness (`--locked` on every cargo build).
-
-### Consequences
-
-- A fresh clone passes `make ci` with only cargo installed, and CI cannot
-  pass with a gate missing.
-- Cost: a local green `make ci` without those tools is weaker than CI's.
-
-## Environment settings fall back rather than refuse
-
-**Recorded:** 2026-09
-**Code anchors:** the kit's `cw_cli::Terminal::decide` and `cw_cli::Logging::from_env`; `crates/tmpl-cli/src/lib.rs::run`
-
-### Context
-
-STD-02@2 §R28 refuses a bad configuration value at load, naming the key.
-STD-01@2 §R8 requires an unrecognized output-format variable to fall back
-to `auto`, so one exported typo does not break every command in a shell.
-The log filter is a side channel (STD-02@2 §R31).
-
-### Decision
-
-Deviation from STD-02@2 §R28 for the environment: an unrecognized
-`TMPL_CLI_FORMAT` means `auto`, and a `TMPL_CLI_LOG` that does not parse is
-reported once on stderr and replaced by `warn`. Command-line values are
-validated when parsed (`--limit` at least 1, a non-blank `--body`) and
-refused as usage errors naming the flag.
-
-### Consequences
-
-- A stray variable never stops a command.
-- Cost: an unrecognized `TMPL_CLI_FORMAT` gives no warning, by STD-01's
-  rule.
-
-## Standard rules this template does not exercise
-
-**Recorded:** 2026-09
-
-### Context
-
-The [adopted standards](../../standards/README.md) are pinned to the canon.
-Some of their rules govern things a three-verb note CLI does not do. A
-project grown from the template must not read their absence as a waiver.
-
-### Decision
-
-These rules are met trivially today because the code does not do what they
-govern. Each binds as soon as it does, and this entry is edited then:
-
-- No destructive verb, prompt, removed flag or default filter: STD-01@2 §R5,
-  §R27, §R35 (and §R33's default-filter clause).
-- No agent or script hand-off, no recovery path: STD-02@3 §R25, §R33.
-- No async code, channels or nested locks: STD-03@2 §R1–§R3. One store file,
-  so no multi-store commit or replay: §R8, §R9.
-- No spawned or detached processes in the product: STD-03@2 §R11–§R16 and
-  STD-05@1 §R10–§R12. Test fixtures that spawn the binary follow STD-03@2
-  §R17–§R20.
-- No installed defaults, long-lived processes, moving references,
-  integrity guards, deletion, remote calls or git automation: STD-03@2
-  §R25–§R32.
-- No capability-dependent tests: every test runs on every CI runner, so
-  there is nothing to skip (STD-04@2 §R8).
-- No authorization, plugins, credentials, listeners, consent or tokens:
-  STD-05@1 §R1–§R5, §R15–§R19, §R21, §R22, §R25. The binary makes no
-  network request at all (§R20).
-- No persisted free text besides note content the caller asked to store,
-  kept verbatim, so there is no redaction layer (STD-05@1 §R13, §R14). The
-  audit log persists identifiers and stable codes only; the integration
-  tests pin its fields, and adding a free-text field to it brings §R13 into force.
-
-### Consequences
-
-- A reviewer checks a new feature against this list first.
-- Cost: the list goes stale unless the change that starts doing one of
-  these things also edits it.
 
 ## The template is laid out by app in three crates
 
@@ -799,13 +677,11 @@ on the app's typed error through `downcast_ref`, and builds its one failure
 (output that could not be written) as the same type. It still names only
 the core, which re-exports `Error`, `Kind` and the store's `contract`.
 
-Three readings of the standard are deliberate. STD-02@4 §R10 says library
-code never returns `Box<dyn Error>`: `Error` holds one inside a typed
-struct, the typed enum stays intact behind it, and classification is by
-`Kind` and code, never by message. §R11 asks `#[non_exhaustive]` of the
-surface error type: `Error` carries it; `Kind` and `fs::Error` do not, so
-that adding a kind or a file failure breaks every match that must decide
-about it. §R7 starts a CLI at two crates and asks a dependency reason for
+The readings of STD-02 §R10 and §R11 (the boxed cause inside a typed struct,
+and the kinds left exhaustive) are recorded with the other kit-level
+deviations in
+[cw_base::Error holds a boxed cause and carries no non_exhaustive](../kit/4_decisions.md#cw_baseerror-holds-a-boxed-cause-and-carries-no-non_exhaustive).
+§R7 starts a CLI at two crates and asks a dependency reason for
 each further one: the store and the core must both name the error type, and
 the store cannot depend on the core, so it has to sit below both.
 
@@ -1108,7 +984,7 @@ re-vendored. Each line names the rule and how it is now met.
   `created_date` and `updated_date`, which STD-09@4 §R29 (vendored since
   the record was written) asks of every document with frontmatter, and the
   check holds that too. The vendored `docs/standards/` is the one gap: see
-  "The vendored standards carry no project frontmatter".
+  [The vendored standards carry no project frontmatter](../kit/4_decisions.md#the-vendored-standards-carry-no-project-frontmatter).
 - **STD-09@3 §R16**: `scripts/generate-doc-index.py` renders
   `docs/INDEX.md` from the summaries; `make docs-check` fails when the
   committed file differs, and `scripts/init.sh` regenerates it for a copy.
@@ -1133,34 +1009,6 @@ re-vendored. Each line names the rule and how it is now met.
   §R25, §R26), a document a reviewer reads.
 - Cost: while the record was open, a project made from the template
   inherited these gaps along with the record of them.
-
-## The vendored standards carry no project frontmatter
-
-**Recorded:** 2026-11-25
-**Code anchors:** `scripts/check-doc-frontmatter.py::documents`
-
-### Context
-
-STD-09@4 §R15 asks every Markdown document under `docs/` to open with
-`type` and `summary`, and §R29 asks each such document for `created_date`
-and `updated_date`. The vendored standards under `docs/standards/` are
-Markdown under `docs/`, and most of them carry no such frontmatter (the
-`STD-nn.md` files carry the canon's own). STD-09 also says an adopting repo
-never edits its vendored copy, and `docs/standards/check.sh` fails on any
-byte changed there.
-
-### Decision
-
-Deviation from STD-09@4 §R15 and §R29 for `docs/standards/` only:
-`scripts/check-doc-frontmatter.py` skips the directory, and the template
-adds no frontmatter to it. The alternative, adding frontmatter to the
-vendored files, breaks the vendoring check and the rule never to edit them.
-
-### Consequences
-
-- Every other document under `docs/` is held to both rules.
-- Cost: the vendored files stay outside the frontmatter check until the
-  canon either carries the frontmatter itself or exempts vendored copies.
 
 ## One init command makes three kinds from one marked tree
 

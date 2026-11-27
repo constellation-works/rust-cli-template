@@ -83,6 +83,17 @@ impl Copy {
         assert!(out.status.success(), "architecture map: {}", stderr(&out));
     }
 
+    /// The template's own check of the kit's decisions, run on this copy as
+    /// the kind it was made as; the copy no longer holds the script.
+    fn check_kit_decisions(&self, kind: &str) -> Output {
+        let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/check-template.py");
+        let root = self.root.to_string_lossy().into_owned();
+        self.run(
+            "python3",
+            &["-I", &script.to_string_lossy(), "--decisions", &root, kind],
+        )
+    }
+
     /// A git repository holding every file, as a new repository would.
     fn commit(&self, message: &str) {
         for args in [
@@ -235,6 +246,18 @@ fn assert_initialized(copy: &Copy, kind: &str) {
             .file_type()
             .is_symlink(),
         "{kind}: CLAUDE.md stays a link to AGENTS.md"
+    );
+    // The kit's decisions survive every kind, with an active decision for
+    // each deviation the kind's code carries.
+    assert!(
+        copy.path("docs/design/kit/1_scope.md").exists(),
+        "{kind}: the kit's scope"
+    );
+    let out = copy.check_kit_decisions(kind);
+    assert!(
+        out.status.success(),
+        "{kind}: kit decisions: {}",
+        stderr(&out)
     );
 }
 
@@ -492,6 +515,65 @@ fn the_template_gate_fails_on_a_note_reference_outside_the_example() {
         "{err}"
     );
     assert!(err.contains("LICENSE.extra: has region markers"), "{err}");
+}
+
+#[test]
+fn a_copy_missing_the_decision_for_a_deviation_its_code_carries_fails_the_check() {
+    let kit = "docs/design/kit/4_decisions.md";
+    let windows = "Owner-only checks are no-ops without Unix modes";
+    let gates = "Missing gate tools warn locally and fail in CI";
+
+    // The template's gate fails on a kit decision that is gone.
+    let template = Copy::new();
+    template.commit("template");
+    let text = template.read(kit);
+    template.write(kit, &text.replacen(windows, "Owner-only checks differ", 1));
+    let out = template.run("python3", &["-I", "scripts/check-template.py"]);
+    assert_eq!(out.status.code(), Some(1));
+    let err = stderr(&out);
+    assert!(
+        err.contains(&format!("the cli kind has no decision \"{windows}\"")),
+        "{err}"
+    );
+    assert!(
+        err.contains(&format!("the cli-bare kind has no decision \"{windows}\"")),
+        "{err}"
+    );
+    assert!(!err.contains("the workspace kind has no decision"), "{err}");
+
+    // A copy of the workspace kind, which has no crate, needs no decision
+    // about the crates; one that lost a gate decision fails.
+    let workspace = Copy::new();
+    workspace.write(kit, &text.replacen(gates, "Gate tools differ", 1));
+    workspace.init(&["demo-cli", "--kind", "workspace"]);
+    assert!(
+        !workspace
+            .read(kit)
+            .contains("Owner-only checks are no-ops without Unix modes")
+    );
+    let out = workspace.check_kit_decisions("workspace");
+    assert_eq!(out.status.code(), Some(1));
+    let err = stderr(&out);
+    assert!(
+        err.contains(&format!("the workspace kind has no decision \"{gates}\"")),
+        "{err}"
+    );
+
+    // A superseded decision is no longer an active one.
+    let bare = Copy::new();
+    bare.write(
+        kit,
+        &text.replacen(
+            &format!("## {windows}\n\n**Recorded:**"),
+            &format!("## {windows}\n\n**Superseded** by nothing.\n**Recorded:**"),
+            1,
+        ),
+    );
+    bare.init(&["demo-cli", "--kind", "cli-bare"]);
+    let out = bare.check_kit_decisions("cli-bare");
+    assert_eq!(out.status.code(), Some(1));
+    let err = stderr(&out);
+    assert!(err.contains("is superseded but the cli-bare kind"), "{err}");
 }
 
 #[test]

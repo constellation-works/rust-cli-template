@@ -8,7 +8,13 @@ region markers) and fails when
 - a marker is unbalanced, unknown or crosses another family's region;
 - a file with markers is not listed `regions`, or a `regions` file has none;
 - a shipped path or line names the note example outside an `example` entry,
-  an example or template region, or a file the cli-bare kind replaces.
+  an example or template region, or a file the cli-bare kind replaces;
+- the kit's decisions (docs/design/kit/4_decisions.md) lack an active decision
+  for a deviation or an unexercised rule that a kind's code or scripts carry,
+  or hold one a kind does not carry (the crates region drops it).
+
+`check-template.py --decisions ROOT KIND` runs only the last check, on the
+copy of kind KIND that scripts/init.sh made in ROOT.
 
 Shipped files are the repository's files (`git ls-files`) apart from the
 vendored docs/standards/, symlinks, and `template` and `generated` entries.
@@ -25,6 +31,21 @@ FAMILIES = ("example", "crates", "template")
 MARKER = re.compile(r"\b(" + "|".join(FAMILIES) + r"):(begin|end)\b")
 NOTE = re.compile(r"note", re.IGNORECASE)
 KINDS = ("cli", "cli-bare", "workspace")
+KIT_DECISIONS = "docs/design/kit/4_decisions.md"
+# The kit's decisions: each title, with the kinds whose code or scripts carry
+# the deviation it records. A title needed by every kind sits outside any
+# region; one needed only by kinds with crates sits inside a crates region.
+DECISIONS = {
+    "Missing gate tools warn locally and fail in CI": KINDS,
+    "standards-check warns locally and fails in CI": KINDS,
+    "The vendored standards carry no project frontmatter": KINDS,
+    "Standard rules this template does not exercise": KINDS,
+    "Environment settings fall back rather than refuse": ("cli", "cli-bare"),
+    "Usage errors keep clap's tips and usage line": ("cli", "cli-bare"),
+    "cw_base::Error holds a boxed cause and carries no non_exhaustive": ("cli", "cli-bare"),
+    "Owner-only checks are no-ops without Unix modes": ("cli", "cli-bare"),
+}
+DROPPED = {"cli": (), "cli-bare": ("example",), "workspace": ("example", "crates")}
 
 
 def load_manifest(errors):
@@ -88,7 +109,68 @@ def regions(path, lines, errors):
         errors.append(f"{path}: unclosed {stack[-1]} region")
 
 
+def kept_decisions(lines, kind):
+    """The sections of a decisions file that survive init for `kind`: title
+    mapped to its lines. A region of a family the kind drops is skipped."""
+    sections, title, stack = {}, None, []
+    for text in lines:
+        found = MARKER.findall(text)
+        if found:
+            family, edge = found[0]
+            if edge == "begin":
+                stack.append(family)
+            elif stack:
+                stack.pop()
+            continue
+        if any(family in DROPPED[kind] or family == "template" for family in stack):
+            continue
+        if text.startswith("## "):
+            title = text[3:].strip()
+            sections[title] = []
+        elif title is not None:
+            sections[title].append(text)
+    return sections
+
+
+def check_decisions(root, kinds, errors):
+    """Each kind's copy holds an active decision for every deviation it carries."""
+    path = root / KIT_DECISIONS
+    if not path.is_file():
+        errors.append(f"{KIT_DECISIONS}: missing; every kind keeps the kit's decisions")
+        return
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for kind in kinds:
+        sections = kept_decisions(lines, kind)
+        for title, carriers in DECISIONS.items():
+            body = sections.get(title)
+            if kind in carriers and body is None:
+                errors.append(f"{KIT_DECISIONS}: the {kind} kind has no decision \"{title}\"")
+            elif kind in carriers and any(line.startswith("**Superseded") for line in body):
+                errors.append(f"{KIT_DECISIONS}: the decision \"{title}\" is superseded but the {kind} kind still carries it")
+            elif kind in carriers and not any(line.startswith("**Recorded:**") for line in body):
+                errors.append(f"{KIT_DECISIONS}: the decision \"{title}\" has no Recorded line")
+            elif kind not in carriers and body is not None:
+                errors.append(f"{KIT_DECISIONS}: the {kind} kind keeps \"{title}\", which its code does not carry; put it in a crates region")
+        for title in sections.keys() - DECISIONS.keys():
+            errors.append(f"{KIT_DECISIONS}: \"{title}\" is not in DECISIONS in {Path(__file__).name}; add it with the kinds that carry it")
+
+
+def report(errors):
+    if errors:
+        print("\n".join(f"check-template: {error}" for error in errors), file=sys.stderr)
+        return 1
+    print("check-template: ok")
+    return 0
+
+
 def main():
+    if sys.argv[1:2] == ["--decisions"]:
+        if len(sys.argv) != 4 or sys.argv[3] not in KINDS:
+            print("usage: check-template.py [--decisions ROOT KIND]", file=sys.stderr)
+            return 2
+        errors = []
+        check_decisions(Path(sys.argv[2]), [sys.argv[3]], errors)
+        return report(errors)
     errors = []
     entries = load_manifest(errors)
     skipped = entries["template"] + entries["generated"]
@@ -116,11 +198,8 @@ def main():
         errors.append(f"{path}: has region markers; list it as `regions` in {MANIFEST.name}")
     for path in sorted(listed_regions - with_markers):
         errors.append(f"{path}: listed as `regions` but has no marker")
-    if errors:
-        print("\n".join(f"check-template: {error}" for error in errors), file=sys.stderr)
-        return 1
-    print("check-template: ok")
-    return 0
+    check_decisions(ROOT, KINDS, errors)
+    return report(errors)
 
 
 if __name__ == "__main__":
