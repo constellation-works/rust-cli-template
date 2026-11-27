@@ -3,7 +3,7 @@ title: tmpl-cli — Decisions
 owner: claude
 created_date: 2026-09-26
 updated_date: 2026-11-27
-last_validated: 2026-09-26
+last_validated: 2026-11-27
 status: Draft
 feature: tmpl-cli
 doc_role: decisions
@@ -20,7 +20,7 @@ Record non-obvious decisions here by title. Superseded decisions remain in place
 
 ## A domain library crate and a CLI crate
 
-**Superseded** by [The template is laid out by app in three crates](#the-template-is-laid-out-by-app-in-three-crates).
+**Superseded by:** [The template is laid out by app in three crates](#the-template-is-laid-out-by-app-in-three-crates).
 
 **Recorded:** 2026-09
 **Code anchors:** `Cargo.toml` `[workspace] members`; `scripts/check-dependency-direction.sh::policy`
@@ -55,10 +55,10 @@ collapse to one crate with STD-02's single-crate check.
 
 ## Persistence is one module inside the core crate
 
-**Superseded** by [The template is laid out by app in three crates](#the-template-is-laid-out-by-app-in-three-crates).
+**Superseded by:** [The template is laid out by app in three crates](#the-template-is-laid-out-by-app-in-three-crates).
 
 **Recorded:** 2026-09-26
-**Code anchors:** `crates/tmpl-cli-core/src/store/mod.rs`; `scripts/check-dependency-direction.sh` (the `store | tests` loop)
+**Code anchors:** `crates/tmpl-cli-store/src/store.rs::Store`; `scripts/check-dependency-direction.sh` (its store section)
 
 ### Context
 
@@ -125,7 +125,7 @@ length (STD-02@3 §R18).
 ## Mutating commands are audited through one guard
 
 **Recorded:** 2026-09-26
-**Code anchors:** `crates/tmpl-cli-core/src/runtime/audit.rs::AuditGuard`; `crates/tmpl-cli-core/src/runtime/exec.rs::exec`; `crates/tmpl-cli-core/src/app/note/mod.rs::Command::audit`
+**Code anchors:** `crates/tmpl-cli-core/src/app/note/mod.rs::exec`; `crates/tmpl-cli-core/src/app/note/mod.rs::Command::audit`
 
 ### Context
 
@@ -195,7 +195,7 @@ checked after parsing in `Cli::parse_args` and reported as a clap usage error
 
 ## An empty JSON list is []
 
-**Superseded** by [A list's JSON is an envelope with total and truncated](#a-lists-json-is-an-envelope-with-total-and-truncated).
+**Superseded by:** [A list's JSON is an envelope with total and truncated](#a-lists-json-is-an-envelope-with-total-and-truncated).
 
 **Recorded:** 2026-09
 **Code anchors:** `crates/tmpl-cli/src/output/note.rs::list_table`
@@ -221,7 +221,7 @@ is 0. This reads R16's "nothing" as "no records", as Orbit does.
 ## The store lock uses std file locks, not a crate
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli-store/src/store.rs::Store::lock`; the kit's `cw_fs::Lock::acquire`
+**Code anchors:** the kit's `cw_fs::Lock::acquire`
 
 ### Context
 
@@ -249,7 +249,40 @@ the need.
 - Update (2026-11-25): only the audit log takes this lock now. Note writes
   are SQLite transactions, which wait on SQLite's own lock (see
   [The notes are a SQLite database](#the-notes-are-a-sqlite-database)), and
-  a note-write timeout names no holder.
+  a note-write timeout names no holder (see
+  [A note-write lock timeout names no holder](#a-note-write-lock-timeout-names-no-holder)).
+
+## A note-write lock timeout names no holder
+
+**Recorded:** 2026-11-27
+**Code anchors:** `crates/tmpl-cli-store/src/store.rs::DEFAULT_LOCK_WAIT`; `crates/tmpl-cli-store/src/driver/sqlite/mod.rs::open`; `crates/tmpl-cli-store/src/error.rs::Error::code`
+
+### Context
+
+STD-03@2 §R7 says a lock acquisition is bounded by a deadline, and a timeout
+MUST report its holder: the holder's PID, the time it acquired the lock and a
+label. A note write takes SQLite's write lock, an `IMMEDIATE` transaction that
+waits up to the store's lock wait. SQLite keeps no owner for that lock, so the
+store cannot name the process that holds it.
+
+### Decision
+
+Deviation from STD-03@2 §R7 for note writes: a write that waits out the lock
+wait fails with `store_locked`, which names the store file and not a holder.
+The wait is bounded, so no command hangs. The audit log's lock is the kit's
+`cw_fs::Lock`, which writes a holder record just after acquiring and names that
+holder while its process is alive; the record is diagnostic, as §R7 allows.
+
+Alternative: write a holder file beside `store.db` after each write transaction
+begins and remove it at commit. Rejected: §R7 makes such a record diagnostic
+only, so every note write would pay a file write for a message, and a crash
+leaves the file naming a process that no longer exists until the next write.
+
+### Consequences
+
+- A waiter gives up at the bound with the stable code `store_locked`.
+- Cost: an operator who meets `store_locked` learns the store file, not which
+  process holds it, and must find the holder with an operating-system tool.
 
 ## clap without color or terminal-width features
 
@@ -279,7 +312,7 @@ is ever wanted, is applied from the kit's terminal decision.
 ## Usage errors keep clap's rendering
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli/src/output/mod.rs::finish_parse_error`
+**Code anchors:** `crates/tmpl-cli/src/output/common/error.rs::finish_parse_error`
 
 ### Context
 
@@ -311,7 +344,7 @@ follow it unchanged as a notice, so the bytes are the same.
 ## A list's JSON is an envelope with total and truncated
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli/src/output/payload.rs::ListPayload`; `crates/tmpl-cli-core/src/app/note/rule.rs::NoteList`; `crates/tmpl-cli/src/command/note.rs::list_notice`
+**Code anchors:** `crates/tmpl-cli/src/output/note.rs::ListPayload`; `crates/tmpl-cli-core/src/app/note/rule.rs::NoteList`; `crates/tmpl-cli/src/command/note.rs::list_notice`
 
 ### Context
 
@@ -351,7 +384,7 @@ the JSON would make `add` and `show` return different shapes.
 ### Decision
 
 `add` returns the same note payload as `show` (the record, with its `id`) and
-prints `added note <id> to <root>/notes.json` on stderr in every mode.
+prints `added note <id> to <root>/store.db` on stderr in every mode.
 Errors that depend on the data directory name the store file too
 (STD-02@2 §R26).
 
@@ -363,8 +396,10 @@ Errors that depend on the data directory name the store file too
 
 ## Store format upgrades are an append-only registry
 
+**Superseded by:** [The notes are a SQLite database](#the-notes-are-a-sqlite-database): the database's append-only `MIGRATIONS` keeps the same rule, and the JSON registry below is the record of its first form.
+
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli-store/src/db/format.rs::UPGRADES`, `::FORMAT`
+**Code anchors:** `crates/tmpl-cli-store/src/driver/sqlite/schema/mod.rs::MIGRATIONS`
 
 ### Context
 
@@ -400,7 +435,7 @@ registry ships empty.
 ## Store state is owner-only and checked on every load
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli-store/src/store.rs::Store::write`, `::Store::load`; the kit's `cw_fs::create_private_dir`, `cw_fs::inspect_dir`, `cw_fs::inspect_file`, `cw_fs::read`, `cw_fs::Lock::acquire`
+**Code anchors:** `crates/tmpl-cli-store/src/store.rs::Store::write`, `::Store::read`; the kit's `cw_fs::create_private_dir`, `cw_fs::inspect_dir`, `cw_fs::inspect_file`, `cw_fs::read`, `cw_fs::Lock::acquire`
 
 ### Context
 
@@ -453,10 +488,10 @@ unix; on other platforms the checks are no-ops, a deviation recorded in
 
 ## One malformed note makes the store corrupt
 
-**Superseded** by [Bad note records are isolated on read and block writes](#bad-note-records-are-isolated-on-read-and-block-writes).
+**Superseded by:** [Bad note records are isolated on read and block writes](#bad-note-records-are-isolated-on-read-and-block-writes).
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli-core/src/store/mod.rs::Store::load`, `crates/tmpl-cli-core/src/store/format.rs::decode`
+**Code anchors:** `crates/tmpl-cli-store/src/store.rs::Store::read`
 
 ### Context
 
@@ -481,7 +516,7 @@ per record instead.
 ## Bad note records are isolated on read and block writes
 
 **Recorded:** 2026-11-21
-**Code anchors:** `crates/tmpl-cli-store/src/db/format.rs::decode`, `crates/tmpl-cli-store/src/store.rs::Store::write`, `crates/tmpl-cli-store/src/repository/note.rs::Notes`
+**Code anchors:** `crates/tmpl-cli-store/src/repository/note.rs::into_note`, `crates/tmpl-cli-store/src/store.rs::Store::write`, `crates/tmpl-cli-store/src/repository/note.rs::Notes`
 
 ### Context
 
@@ -493,21 +528,22 @@ forbid silently dropping or defaulting damaged records on write.
 
 ### Decision
 
-`db/format.rs::decode` parses the top-level document and then validates
-each note entry at the construction boundary without `#[serde(default)]`.
+On the JSON document one decode step parsed the top-level document and
+then validated each note entry at the construction boundary without
+`#[serde(default)]`; the updates below say how the rows are mapped now.
 Valid notes are returned alongside one typed `BadRecord` per invalid entry
 (naming its id, or 1-based line number when the id is unreadable, and the
 reason). Read commands (`list`, `show` of a good id) succeed with the valid
 notes and emit one stderr warning per bad record in every mode. `show` of a
 bad id fails with `store_bad_record`. Every write command refuses while any
-bad record is present (`store_bad_record`), leaving `notes.json` untouched.
+bad record is present (`store_bad_record`), leaving the store untouched.
 
 ### Consequences
 
 - Good notes stay readable even when one entry was damaged by hand, and a
   damaged store is never rewritten with dropped or defaulted records.
 - Cost: reads carry the bad records beside the notes (today the notes
-  repository's `bad_records` and the app's `Outcome`), and `format.rs`
+  repository's `bad_records` and the app's `Outcome`), and the row mapping
   validates note fields explicitly rather than deriving `Deserialize` on
   `Note`.
 - Update (2026-11-24): the write refusal is enforced twice: the note app's
@@ -526,7 +562,7 @@ bad record is present (`store_bad_record`), leaving `notes.json` untouched.
 ## The template is laid out by app in three crates
 
 **Recorded:** 2026-11-24
-**Code anchors:** `Cargo.toml` `[workspace] members`; `scripts/check-dependency-direction.sh::policy`; `crates/tmpl-cli-core/src/runtime/exec.rs::App`, `::exec`; `crates/tmpl-cli-core/src/app/note/mod.rs::exec`; `crates/tmpl-cli-store/src/store.rs::Store`
+**Code anchors:** `Cargo.toml` `[workspace] members`; `scripts/check-dependency-direction.sh::policy`; `crates/tmpl-cli-core/src/app/note/mod.rs::exec`; `crates/tmpl-cli-store/src/store.rs::Store`
 
 ### Context
 
@@ -608,10 +644,15 @@ or the persisted format, only the repositories.
   The same day the foundation crate was replaced by the kit's `cw-base` and
   `cw-fs`, leaving three crates again: see
   [The foundation is the cw-kit](#the-foundation-is-the-cw-kit).
+- Update (2026-11-25): the runtime and its audit guard are gone, and the command
+  path is the kit's `cw-app`; `db/` is gone too. See
+  [The command path is the kit's cw-app](#the-command-path-is-the-kits-cw-app) and
+  [The notes are a SQLite database](#the-notes-are-a-sqlite-database). The three
+  crates and the one-line forward of each app's `exec` stand.
 
 ## One error type and file access live in a foundation crate
 
-**Superseded** by [The foundation is the cw-kit](#the-foundation-is-the-cw-kit):
+**Superseded by:** [The foundation is the cw-kit](#the-foundation-is-the-cw-kit):
 the crate this decision made is deleted, and its two folders are the kit's
 `cw-base` and `cw-fs`. The reasoning below stands; the anchors name what
 replaced the deleted files.
@@ -714,7 +755,7 @@ the store cannot depend on the core, so it has to sit below both.
 ## The foundation is the cw-kit
 
 **Recorded:** 2026-11-24
-**Code anchors:** `Cargo.toml` `[workspace.dependencies]` `cw-base`, `cw-fs`, `cw-testkit`; `crates/tmpl-cli/tests/support/mod.rs::Fixture`; `crates/tmpl-cli/tests/golden.rs::goldens`; `deny.toml` `[sources] allow-git`; `crates/tmpl-cli-store/src/error.rs::Error::code`; `crates/tmpl-cli-store/src/db/mod.rs::STORE_CAP`; the kit's `cw_cli::exit_code`; `scripts/check-dependency-direction.sh::policy`
+**Code anchors:** `Cargo.toml` `[workspace.dependencies]` `cw-base`, `cw-fs`, `cw-testkit`; `crates/tmpl-cli/tests/support/mod.rs::Fixture`; `crates/tmpl-cli/tests/golden.rs::goldens`; `deny.toml` `[sources] allow-git`; `crates/tmpl-cli-store/src/error.rs::Error::code`; the kit's `cw_cli::exit_code`; `scripts/check-dependency-direction.sh::policy`
 
 ### Context
 
@@ -799,7 +840,7 @@ example store moves onto it and that the audit log stays an append-only file.
 
 ### Decision
 
-The notes live in `<root>/notes.db`, opened only through `cw_sqlite::Db`.
+The notes live in `<root>/store.db`, opened only through `cw_sqlite::Db`.
 
 - **A driver sets one storage mechanism up once and returns a handle; a
   repository is one record's use of it.** `driver/sqlite/mod.rs` holds the
@@ -1018,7 +1059,7 @@ re-vendored. Each line names the rule and how it is now met.
 ## One init command makes three kinds from one marked tree
 
 **Recorded:** 2026-11-25
-**Code anchors:** `scripts/init.sh`; `scripts/template-manifest.txt`; `scripts/check-template.py`; `scripts/check-template-version.sh`; `template.toml`; `crates/tmpl-cli-core/src/app/status/mod.rs::exec`; `crates/tmpl-cli-store/src/driver/sqlite/mod.rs::STORE_FILE`; `Makefile` (`CRATES`)
+**Code anchors:** `scripts/init.sh`; `scripts/template-manifest.txt`; `scripts/check-template.py`; `scripts/check-template-version.sh`; `template.toml`; `crates/tmpl-cli-core/src/app/status/mod.rs::exec`; `crates/tmpl-cli-store/src/driver/sqlite/mod.rs::STORE_FILE`; `Makefile` (`WORKSPACE_EMPTY`)
 
 ### Context
 
@@ -1125,7 +1166,7 @@ boundaries on Clippy, which resolves every call to its path.
 ## The command line's mechanism is the kit's cw-cli
 
 **Recorded:** 2026-11-25
-**Code anchors:** `crates/tmpl-cli/src/lib.rs::run`; `crates/tmpl-cli/src/output/mod.rs::finish`, `finish_parse_error`; `crates/tmpl-cli/src/cli.rs::GROUPS`; `crates/tmpl-cli/src/error.rs::hint`; `scripts/check-dependency-direction.sh::policy`
+**Code anchors:** `crates/tmpl-cli/src/lib.rs::run`; `crates/tmpl-cli/src/output/common/render.rs::finish`, `crates/tmpl-cli/src/output/common/error.rs::finish_parse_error`; `crates/tmpl-cli/src/cli.rs::GROUPS`; `crates/tmpl-cli/src/error.rs::hint`; `scripts/check-dependency-direction.sh::policy`
 
 ### Context
 
@@ -1176,7 +1217,7 @@ crate names it.
 ## The MCP surface is a second mapping onto the same commands
 
 **Recorded:** 2026-11-25
-**Code anchors:** `crates/tmpl-cli/src/mcp/mod.rs::tools`, `call`; `crates/tmpl-cli/src/command/common/input.rs`; `crates/tmpl-cli/src/command/note.rs::AddArgs`; `crates/tmpl-cli/src/output/payload.rs::Payload::json`; `crates/tmpl-cli/tests/mcp.rs`
+**Code anchors:** `crates/tmpl-cli/src/mcp/mod.rs::tools`, `call`; `crates/tmpl-cli/src/command/common/input.rs`; `crates/tmpl-cli/src/command/note.rs::AddArgs`; `crates/tmpl-cli/src/output/common/payload.rs::Payload::json`; `crates/tmpl-cli/tests/mcp.rs`
 
 ### Context
 

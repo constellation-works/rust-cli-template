@@ -17,7 +17,7 @@ related_artifacts: []
 
 # <Feature> — Decisions
 
-Record non-obvious decisions here by title. Task references carry provenance; superseded decisions remain in place so their original reasoning stays legible. See [CONVENTIONS.md §3](../CONVENTIONS.md#3-what-earns-a-decision-entry) for the admission rule and required `Cost:` line.
+Record non-obvious decisions here by title. Task references carry provenance; superseded decisions remain in place so their original reasoning stays legible. A superseded decision opens with the bold label `**Superseded by:**` and a link to its successor. See [CONVENTIONS.md §3](../CONVENTIONS.md#3-what-earns-a-decision-entry) for the admission rule and required `Cost:` line.
 
 <!-- Copy ONE of the two blocks below for each new decision. Delete this comment in real docs. -->
 

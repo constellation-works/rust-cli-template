@@ -5,7 +5,7 @@ status: Accepted
 type: design
 summary: How a feature's design docs under docs/design/ are laid out, what their frontmatter carries, and what earns a decision entry.
 created_date: 2026-09-26
-updated_date: 2026-11-25
+updated_date: 2026-11-27
 ---
 
 # Design Doc Conventions
@@ -64,6 +64,18 @@ A decision enters `4_decisions.md` through one of two doors:
 Either way it names a real alternative and a non-trivial `Cost:`. Everything
 else is design prose in `2_design.md`. A departure from an adopted
 constellation standard is always a decision entry, citing `STD-nn@<version> §Rn`.
+
+A superseded entry stays in place (STD-06 R11). Its first line under the title
+is the bold label `**Superseded by:**` followed by a link to the successor's
+title, spelled exactly so:
+
+```markdown
+**Superseded by:** [successor title](#successor-anchor)
+```
+
+A sentence on what replaced it follows. The entry's code anchors name what
+replaced the deleted code, and a dated `Update` line records a mechanism that
+moved while the decision stands.
 
 ## 4. Links and ids
 
