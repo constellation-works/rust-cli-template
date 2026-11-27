@@ -46,6 +46,9 @@ disallowed-types = [
   { path = "std::process::Child", reason = "the template spawns no process; use cw_supervise if one must" },
 ]
 disallowed-methods = [
+  { path = "std::io::stdout", reason = "write through cw_cli::Sink in the output layer" },
+  { path = "std::io::stderr", reason = "write through cw_cli::Sink in the output layer" },
+  { path = "std::io::IsTerminal::is_terminal", reason = "probe through cw_cli::Probe in the output layer" },
   { path = "std::fs::canonicalize", reason = "file access goes through cw_fs in the store" },
   { path = "std::fs::copy", reason = "file access goes through cw_fs in the store" },
   { path = "std::fs::create_dir", reason = "create a directory with cw_fs in the store" },
