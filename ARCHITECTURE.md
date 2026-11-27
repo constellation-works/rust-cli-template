@@ -72,7 +72,7 @@ crate table above. Submodule imports are also subject to the module rules below.
 main.rs              Captures the environment and arguments and runs the CLI; imports the CLI and core crates.
 lib.rs               Wires parsing, output, runtime and dispatch; imports cli, command, error, mcp and output.
 cli.rs               Declares the root command and global flags; imports command and error.
-command/             Maps command arguments to apps and payloads; imports output.
+command/             Maps command arguments to apps and payloads; imports error and output.
   <noun>.rs          arguments -> app::<app>::Command; exec; Outcome -> payload; render, then settle
   common/            command machinery two or more commands share
 <!-- example:begin -->

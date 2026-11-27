@@ -4,7 +4,7 @@ use super::error::report;
 use super::payload::{Output, Payload};
 use crate::error;
 // example:begin
-use crate::output::note;
+use crate::output::note::{self, ListedNotePayload, NoteSummaryPayload};
 // example:end
 use crate::output::status;
 // example:begin
@@ -52,12 +52,19 @@ fn emit<O: Write, E: Write>(sink: &mut Sink<O, E>, output: &Output) -> Result<()
     let emitted = match payload {
         Payload::Status(status) => sink.emit(&json, |_| status::to_table(status)),
         // example:begin
-        Payload::Notes { notes, .. } => sink.emit(&json, |_| note::list_table(notes)),
+        Payload::Notes {
+            notes,
+            include_body,
+            ..
+        } => sink.emit(&json, |_| note::list_table(notes, *include_body)),
         // A piped `show` is the list's one tab-separated line; a terminal
         // or `--format table` gets the detail view.
-        Payload::Note(note) if sink.terminal().mode() == Mode::Plain => {
-            sink.emit(&json, |_| note::list_table(std::slice::from_ref(note)))
-        }
+        Payload::Note(note) if sink.terminal().mode() == Mode::Plain => sink.emit(&json, |_| {
+            note::list_table(
+                &[ListedNotePayload::Summary(NoteSummaryPayload::from(note))],
+                false,
+            )
+        }),
         Payload::Note(note) => sink.emit_text(&json, |_| note::detail_text(note)),
         // example:end
     };

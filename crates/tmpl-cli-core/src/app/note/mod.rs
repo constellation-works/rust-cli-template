@@ -15,7 +15,7 @@ mod rule;
 
 mod show;
 
-pub use rule::{ListFilter, NewNote, NoteList};
+pub use rule::{DEFAULT_LIMIT, Limit, ListFilter, NewNote, NoteList};
 
 use crate::composition::{Ctx, Runtime};
 use cw_app::{App, AuditMeta, Finished, Origin};

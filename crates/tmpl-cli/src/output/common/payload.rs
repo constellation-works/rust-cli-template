@@ -10,7 +10,7 @@ use crate::output::status::StatusPayload;
 use serde::Serialize;
 // example:begin
 
-use crate::output::note::{ListPayload, NotePayload, SkippedRecord};
+use crate::output::note::{ListPayload, ListedNotePayload, NotePayload, SkippedRecord};
 // example:end
 
 /// What a command produced, before rendering: the payload for stdout and
@@ -56,10 +56,12 @@ pub(crate) enum Payload {
     /// A list of notes.
     Notes {
         /// The notes returned, in order.
-        notes: Vec<NotePayload>,
+        notes: Vec<ListedNotePayload>,
         /// How many matched before the limit; more than `notes.len()` when
         /// the list was cut.
         total: usize,
+        /// Whether `--include-body` asked for note bodies in the result.
+        include_body: bool,
         /// The records skipped because they could not be read.
         skipped: Vec<SkippedRecord>,
     },
@@ -78,6 +80,7 @@ impl Payload {
             Self::Notes {
                 notes,
                 total,
+                include_body: _,
                 skipped,
             } => Json::Notes(ListPayload {
                 notes,

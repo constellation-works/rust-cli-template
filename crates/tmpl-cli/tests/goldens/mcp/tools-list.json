@@ -88,9 +88,19 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "all": {
+          "default": false,
+          "description": "Show every matching note instead of the default limit [default: false]",
+          "type": "boolean"
+        },
+        "include_body": {
+          "default": false,
+          "description": "Include each note's body in the result [default: false]",
+          "type": "boolean"
+        },
         "limit": {
           "default": null,
-          "description": "Show at most this many of the matching notes, 1 or more; --json reports the\ntotal and whether the list was cut [default: all]",
+          "description": "Show at most this many of the matching notes, 1 or more; --json reports the\ntotal and whether the list was cut [default: 20]",
           "format": "uint",
           "minimum": 1,
           "type": [

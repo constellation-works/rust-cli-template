@@ -2,7 +2,7 @@
 type: guide
 summary: "How to run tmpl-cli: its commands, output modes, data directory, environment variables and exit status."
 created_date: 2026-11-22
-updated_date: 2026-11-25
+updated_date: 2026-11-27
 ---
 
 # Using tmpl-cli
@@ -44,7 +44,9 @@ tmpl-cli note list --json | jq '.notes[].title'
 tmpl-cli note show <id>
 ```
 
-Use an ID from `note list` with `note show`. With `--json`, a list is
+Use an ID from `note list` with `note show`. By default, `note list` returns
+at most 20 notes without bodies; pass `--limit <N>`, `--all`, or
+`--include-body` for more. With `--json`, a list is
 `{"notes": [...], "total": N, "truncated": false, "warnings": [...]}` and
 one note is an object. Each `note add` appends one event to `audit.jsonl`
 with the note ID and outcome.

@@ -24,7 +24,7 @@ pub(crate) use common::payload::{Output, Payload};
 pub(crate) use common::render::{audit_warning, finish};
 pub(crate) use common::terminal::{decide, sink};
 // example:begin
-pub(crate) use note::{NotePayload, SkippedRecord};
+pub(crate) use note::{ListedNotePayload, NotePayload, NoteSummaryPayload, SkippedRecord};
 // example:end
 pub(crate) use status::StatusPayload;
 

@@ -189,13 +189,53 @@ fn note_list_and_show_return_what_json_prints() {
     let mut session = Session::start(&fx);
     let listed = session.call("note_list", &json!({}));
     assert_eq!(structured(&listed), cli_json(&fx, &["note", "list"]));
+    assert!(
+        structured(&listed)["notes"][2].get("body").is_none(),
+        "compact default omits body: {listed}"
+    );
+    let with_body = session.call("note_list", &json!({"include_body": true}));
+    assert_eq!(
+        structured(&with_body),
+        cli_json(&fx, &["note", "list", "--include-body"])
+    );
+    assert_eq!(
+        structured(&with_body)["notes"][2]["body"],
+        "An article\nwith two lines"
+    );
     let filtered = session.call("note_list", &json!({"tag": "work", "limit": 1}));
     assert_eq!(
         structured(&filtered),
         cli_json(&fx, &["note", "list", "--tag", "work", "--limit", "1"])
     );
+    let all = session.call("note_list", &json!({"all": true}));
+    assert_eq!(structured(&all), cli_json(&fx, &["note", "list", "--all"]));
     let shown = session.call("note_show", &json!({"id": 3}));
     assert_eq!(structured(&shown), cli_json(&fx, &["note", "show", "3"]));
+    session.close();
+}
+
+#[test]
+fn note_list_bounds_default_and_rejects_limit_with_all() {
+    let fx = Fixture::new();
+    let total = tmpl_cli_core::app::note::DEFAULT_LIMIT + 5;
+    support::write_store(&fx.root(), total);
+    let mut session = Session::start(&fx);
+
+    let default_list = structured(&session.call("note_list", &json!({})));
+    assert_eq!(
+        default_list["notes"].as_array().map(Vec::len),
+        Some(tmpl_cli_core::app::note::DEFAULT_LIMIT)
+    );
+    assert_eq!(default_list["total"], total);
+    assert_eq!(default_list["truncated"], true);
+
+    let all_list = structured(&session.call("note_list", &json!({"all": true})));
+    assert_eq!(all_list["notes"].as_array().map(Vec::len), Some(total));
+    assert_eq!(all_list["truncated"], false);
+
+    let conflict = session.call("note_list", &json!({"limit": 5, "all": true}));
+    assert_eq!(conflict["isError"], json!(true), "{conflict}");
+    assert_eq!(conflict["structuredContent"]["code"], "usage_error");
     session.close();
 }
 
