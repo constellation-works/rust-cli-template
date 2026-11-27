@@ -133,8 +133,9 @@ for path in "${remove[@]}"; do
 done
 
 # Drop the regions of the families this kind removes and the marker lines of
-# the rest; a `copy:` line in a template region becomes its text. A blank
-# line left doubled by a removal, and trailing blank lines, go too.
+# the rest; a `copy:` line in a template region becomes its text (and
+# `copy-<kind>:` only when KIND matches). A blank line left doubled by a
+# removal, and trailing blank lines, go too.
 for file in "${regions[@]}"; do
   [[ -f "$ROOT/$file" ]] || continue
   DROP="$drop" VERSION="$VERSION" KIND="$KIND" perl -0777 -i -ne '
@@ -150,8 +151,9 @@ for file in "${regions[@]}"; do
       if (@dropped) {
         $removed = 1;
         next unless @dropped == 1 && $dropped[0] eq "template" && $stack[-1] eq "template";
-        next unless $line =~ /^\s*(<!--|#|\/\/) copy:(.*)$/;
-        my ($opener, $text) = ($1, $2);
+        next unless $line =~ /^\s*(<!--|#|\/\/) copy(?:-([a-z-]+))?:(.*)$/;
+        my ($opener, $for_kind, $text) = ($1, $2, $3);
+        next if defined $for_kind && $for_kind ne $ENV{KIND};
         $text =~ s/\s*-->$// if $opener eq "<!--";
         $text =~ s/^ //;
         $line = $text;
