@@ -9,3 +9,4 @@ Version history of [STD-09](STD-09.md). Adopting repos pin the `version:` in its
 - **Editorial (2026-11-25, version unchanged):** Name the canon lint gate (`line_wrapped`) for R27 (ORB-28282).
 - **v4 (2026-11-25):** R28 (runbook file naming), R29 (`created_date` and `updated_date`) and R30 (`last_validated`) added, moved unchanged from STD-13 v1 §R1–§R3 (scribe standard-10, ORB-28209). STD-13 is retired into this version on the owner's direction that these rules belong in `docs/standards/STD-09-project-docs`.
 - **Editorial (2026-11-27, version unchanged):** existing lines in `why.md` and `CHANGELOG.md` that quoted a person's chat words now record them as facts (the role or owner, the date, the decision), with the raw words kept in the scribe entries and tasks (scribe standard-29).
+- **v5 (2026-11-27):** Link the feature board once rather than indexing each feature design document (scribe standard-30).

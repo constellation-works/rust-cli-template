@@ -20,6 +20,8 @@ The standard starts from the owner's direction in the chief's chat on 2026-11-21
 - **R14 (status once).** Orbit says it is pre-1.0 only in the changelog bullet of its last list, where a reader deciding whether to adopt will not look.
 - **R15.** Scribe standard-9: the shared-docs cluster of the project-docs widening; the README joins a group of common docs that share one front matter (scribe standard-9, ORB-27809).
 - **R16.** Scribe standard-9: the index is generated from the summaries, so it cannot drift from them (scribe standard-9, ORB-27809).
+
+The feature board provides the entry point to feature designs without duplicating every design document in the documentation index (scribe standard-30).
 - **R17.** Scribe standard-9: links resolve across the group, not only in the README (extends §R12) (scribe standard-9, ORB-27809).
 - **R18.** Scribe standard-9: one changelog shape across the group (scribe standard-9, ORB-27809).
 - **R19.** Scribe standard-9: a breaking change carries its migration in the changelog itself (scribe standard-9, ORB-27809).
