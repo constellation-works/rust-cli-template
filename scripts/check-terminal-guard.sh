@@ -33,32 +33,32 @@ token_re = re.compile(r"::|[A-Za-z_][A-Za-z0-9_]*|[{}(),;*]")
 def strip_comments(text):
     """Replace comments with spaces, keeping newlines so line numbers stay exact."""
     out = []
-    i = 0
-    n = len(text)
-    while i < n:
-        ch = text[i]
-        nxt = text[i + 1] if i + 1 < n else ""
+    index = 0
+    length = len(text)
+    while index < length:
+        ch = text[index]
+        nxt = text[index + 1] if index + 1 < length else ""
         if ch == "/" and nxt == "/":
-            i += 2
-            while i < n and text[i] != "\n":
-                i += 1
+            index += 2
+            while index < length and text[index] != "\n":
+                index += 1
             continue
         if ch == "/" and nxt == "*":
             depth = 1
-            i += 2
-            while i < n and depth > 0:
-                if i + 1 < n and text[i] == "/" and text[i + 1] == "*":
+            index += 2
+            while index < length and depth > 0:
+                if index + 1 < length and text[index] == "/" and text[index + 1] == "*":
                     depth += 1
-                    i += 2
-                elif i + 1 < n and text[i] == "*" and text[i + 1] == "/":
+                    index += 2
+                elif index + 1 < length and text[index] == "*" and text[index + 1] == "/":
                     depth -= 1
-                    i += 2
+                    index += 2
                 else:
-                    out.append("\n" if text[i] == "\n" else " ")
-                    i += 1
+                    out.append("\n" if text[index] == "\n" else " ")
+                    index += 1
             continue
         out.append(ch)
-        i += 1
+        index += 1
     return "".join(out)
 
 def imported_stdio_lines(cleaned):
@@ -67,20 +67,20 @@ def imported_stdio_lines(cleaned):
     for match in token_re.finditer(cleaned):
         lineno = cleaned.count("\n", 0, match.start()) + 1
         tokens.append((match.group(0), lineno))
-    n = len(tokens)
+    length = len(tokens)
     bad_lines = set()
 
     def parse_tree(prefix, pos):
         segs = list(prefix)
-        while pos < n:
+        while pos < length:
             tok, lineno = tokens[pos]
             if tok == "{":
                 pos += 1
-                while pos < n and tokens[pos][0] != "}":
+                while pos < length and tokens[pos][0] != "}":
                     pos = parse_tree(segs, pos)
-                    if pos < n and tokens[pos][0] == ",":
+                    if pos < length and tokens[pos][0] == ",":
                         pos += 1
-                if pos < n and tokens[pos][0] == "}":
+                if pos < length and tokens[pos][0] == "}":
                     pos += 1
                 return pos
             if tok == "::":
@@ -90,41 +90,41 @@ def imported_stdio_lines(cleaned):
                 return pos + 1
             if tok == "as":
                 pos += 1
-                if pos < n and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", tokens[pos][0]):
+                if pos < length and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", tokens[pos][0]):
                     pos += 1
                 return pos
             if tok in (",", "}", ";"):
                 return pos
             if tok == "self" and segs:
                 pos += 1
-                if pos < n and tokens[pos][0] == "as":
+                if pos < length and tokens[pos][0] == "as":
                     pos += 2
                 return pos
             segs.append(tok)
             if len(segs) >= 2 and segs[-2] == "io" and segs[-1] in ("stdout", "stderr"):
                 bad_lines.add(lineno)
             pos += 1
-            if pos < n and tokens[pos][0] != "::":
+            if pos < length and tokens[pos][0] != "::":
                 if tokens[pos][0] == "as":
                     pos += 1
-                    if pos < n and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", tokens[pos][0]):
+                    if pos < length and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", tokens[pos][0]):
                         pos += 1
                 return pos
         return pos
 
-    i = 0
-    while i < n:
-        if tokens[i][0] == "use":
-            i = parse_tree([], i + 1)
-            if i < n and tokens[i][0] == ";":
-                i += 1
+    index = 0
+    while index < length:
+        if tokens[index][0] == "use":
+            index = parse_tree([], index + 1)
+            if index < length and tokens[index][0] == ";":
+                index += 1
         else:
-            i += 1
+            index += 1
     return bad_lines
 
 hits = []
 for dirpath, dirnames, filenames in os.walk("crates"):
-    dirnames[:] = [d for d in sorted(dirnames) if d != "tests"]
+    dirnames[:] = [dirname for dirname in sorted(dirnames) if dirname != "tests"]
     norm_dir = os.path.normpath(dirpath)
     if norm_dir == output_dir or norm_dir.startswith(output_dir + os.sep):
         continue

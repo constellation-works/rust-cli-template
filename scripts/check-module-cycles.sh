@@ -27,69 +27,69 @@ fails = []
 def strip_comments_and_strings(text):
     """Strip Rust comments and string literals so non-code text creates no edge."""
     out = []
-    i = 0
-    n = len(text)
-    while i < n:
-        ch = text[i]
-        nxt = text[i + 1] if i + 1 < n else ""
+    index = 0
+    length = len(text)
+    while index < length:
+        ch = text[index]
+        nxt = text[index + 1] if index + 1 < length else ""
         if ch == "/" and nxt == "/":
-            i += 2
-            while i < n and text[i] != "\n":
-                i += 1
+            index += 2
+            while index < length and text[index] != "\n":
+                index += 1
             continue
         if ch == "/" and nxt == "*":
             depth = 1
-            i += 2
-            while i < n and depth > 0:
-                if i + 1 < n and text[i] == "/" and text[i + 1] == "*":
+            index += 2
+            while index < length and depth > 0:
+                if index + 1 < length and text[index] == "/" and text[index + 1] == "*":
                     depth += 1
-                    i += 2
-                elif i + 1 < n and text[i] == "*" and text[i + 1] == "/":
+                    index += 2
+                elif index + 1 < length and text[index] == "*" and text[index + 1] == "/":
                     depth -= 1
-                    i += 2
+                    index += 2
                 else:
-                    if text[i] == "\n":
+                    if text[index] == "\n":
                         out.append("\n")
-                    i += 1
+                    index += 1
             out.append(" ")
             continue
         # Raw strings r#"..."# or br#"..."#
-        if ch in ("r", "b") and i + 1 < n:
-            start = i
-            j = i + 1
-            if ch == "b" and j < n and text[j] == "r":
-                j += 1
-            if (ch == "r" or (ch == "b" and j == i + 2)) and (
+        if ch in ("r", "b") and index + 1 < length:
+            start = index
+            scan_index = index + 1
+            if ch == "b" and scan_index < length and text[scan_index] == "r":
+                scan_index += 1
+            if (ch == "r" or (ch == "b" and scan_index == index + 2)) and (
                 start == 0 or not (text[start - 1].isalnum() or text[start - 1] == "_")
             ):
                 hashes = 0
-                while j < n and text[j] == "#":
+                while scan_index < length and text[scan_index] == "#":
                     hashes += 1
-                    j += 1
-                if j < n and text[j] == "\"":
-                    j += 1
+                    scan_index += 1
+                if scan_index < length and text[scan_index] == "\"":
+                    scan_index += 1
                     end_marker = "\"" + ("#" * hashes)
-                    pos = text.find(end_marker, j)
+                    pos = text.find(end_marker, scan_index)
                     if pos == -1:
-                        i = n
+                        index = length
                     else:
                         out.append(" ")
-                        i = pos + len(end_marker)
+                        index = pos + len(end_marker)
                     continue
         if ch == "\"":
-            i += 1
-            while i < n:
-                if text[i] == "\\":
-                    i += 2
+            index += 1
+            while index < length:
+                if text[index] == "\\":
+                    index += 2
                     continue
-                if text[i] == "\"":
-                    i += 1
+                if text[index] == "\"":
+                    index += 1
                     break
-                i += 1
+                index += 1
             out.append(" ")
             continue
         out.append(ch)
-        i += 1
+        index += 1
     return "".join(out)
 
 TOKEN = re.compile(r"::|[A-Za-z_][A-Za-z0-9_]*|[{}(),;*]")
@@ -98,20 +98,20 @@ def expand_use_trees(text):
     """Expand every `use ...;` statement into tuples of path segments."""
     tokens = TOKEN.findall(text)
     paths = []
-    i = 0
-    n = len(tokens)
+    index = 0
+    length = len(tokens)
 
     def parse_tree(prefix, pos):
         segs = list(prefix)
-        while pos < n:
+        while pos < length:
             tok = tokens[pos]
             if tok == "{":
                 pos += 1
-                while pos < n and tokens[pos] != "}":
+                while pos < length and tokens[pos] != "}":
                     pos = parse_tree(segs, pos)
-                    if pos < n and tokens[pos] == ",":
+                    if pos < length and tokens[pos] == ",":
                         pos += 1
-                if pos < n and tokens[pos] == "}":
+                if pos < length and tokens[pos] == "}":
                     pos += 1
                 return pos
             if tok == "::":
@@ -123,7 +123,7 @@ def expand_use_trees(text):
                 return pos + 1
             if tok == "as":
                 pos += 1
-                if pos < n and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", tokens[pos]):
+                if pos < length and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", tokens[pos]):
                     pos += 1
                 if segs:
                     paths.append(tuple(segs))
@@ -134,16 +134,16 @@ def expand_use_trees(text):
                 return pos
             if tok == "self" and segs:
                 pos += 1
-                if pos < n and tokens[pos] == "as":
+                if pos < length and tokens[pos] == "as":
                     pos += 2
                 paths.append(tuple(segs))
                 return pos
             segs.append(tok)
             pos += 1
-            if pos < n and tokens[pos] != "::":
+            if pos < length and tokens[pos] != "::":
                 if tokens[pos] == "as":
                     pos += 1
-                    if pos < n and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", tokens[pos]):
+                    if pos < length and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", tokens[pos]):
                         pos += 1
                 paths.append(tuple(segs))
                 return pos
@@ -151,13 +151,13 @@ def expand_use_trees(text):
             paths.append(tuple(segs))
         return pos
 
-    while i < n:
-        if tokens[i] == "use":
-            i = parse_tree([], i + 1)
-            if i < n and tokens[i] == ";":
-                i += 1
+    while index < length:
+        if tokens[index] == "use":
+            index = parse_tree([], index + 1)
+            if index < length and tokens[index] == ";":
+                index += 1
         else:
-            i += 1
+            index += 1
     return paths
 
 INLINE_PATH = re.compile(r"\b(?:crate|super|self)(?:::[A-Za-z_][A-Za-z0-9_]*)+")
@@ -201,8 +201,8 @@ def sources(unit):
         out.append(unit["file"])
     if unit["dir"]:
         for dirpath, dirnames, filenames in os.walk(unit["dir"]):
-            dirnames[:] = [d for d in sorted(dirnames) if d != "tests"]
-            out += [os.path.join(dirpath, f) for f in sorted(filenames) if f.endswith(".rs")]
+            dirnames[:] = [dirname for dirname in sorted(dirnames) if dirname != "tests"]
+            out += [os.path.join(dirpath, filename) for filename in sorted(filenames) if filename.endswith(".rs")]
     return out
 
 def units(directory, skip):
