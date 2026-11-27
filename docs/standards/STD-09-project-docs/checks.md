@@ -19,7 +19,7 @@ The gate that enforces each rule in [STD-09](STD-09.md), or `review-only`. Ship 
 | R13 | review-only. |
 | R14 | review-only. |
 | R15 | review-only |
-| R16 | CI: regenerate docs/INDEX.md and fail on diff |
+| R16 | Review the generated index for the feature board link and excluded feature design folders; CI checks regeneration. |
 | R17 | CI: link and anchor check over root and docs/ Markdown |
 | R18 | review-only |
 | R19 | review-only |
