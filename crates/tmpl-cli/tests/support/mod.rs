@@ -19,6 +19,8 @@
     reason = "each integration target uses a different subset of the fixture"
 )]
 
+pub(crate) mod script;
+
 use cw_testkit::TempRoot;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output};
