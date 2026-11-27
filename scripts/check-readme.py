@@ -61,6 +61,66 @@ def local_links(text):
             yield link, unquote(target.path), unquote(target.fragment)
 
 
+def check_readme_structure(text, errors):
+    visible = re.sub(r"(?s)<!--.*?-->", "", without_code(text))
+    _, closing_tag, body = visible.partition("</div>")
+    if not closing_tag:
+        errors.append("README.md header has no closing </div>")
+        return
+
+    paragraphs = [
+        re.sub(r"\s+", " ", paragraph).strip()
+        for paragraph in re.split(r"\n\s*\n", body)
+        if paragraph.strip()
+    ]
+    if not paragraphs:
+        errors.append("README.md needs a description after the header")
+        return
+
+    description = paragraphs[0]
+    if description.startswith("#") or re.search(r"generated from|template\.toml", description, re.I):
+        errors.append("README.md first prose after the header must describe the project")
+    sentence_count = len(re.findall(r"[.!?](?=\s|$)", description))
+    if sentence_count > 2:
+        errors.append("README.md description must be at most two sentences")
+
+    status_count = len(re.findall(r"pre-1\.0", visible, re.I))
+    if status_count != 1 or not any("pre-1.0" in paragraph.lower() for paragraph in paragraphs[:2]):
+        errors.append("README.md must state pre-1.0 status once in or directly under the description")
+
+    headings = [
+        (match.start(), match.group(1).strip().casefold())
+        for match in re.finditer(r"^ {0,3}##[ \t]+(.+)$", body, re.M)
+    ]
+    required = ("quick start", "learn more", "contributing", "licence")
+    positions = {}
+    for title in required:
+        found = next((offset for offset, heading in headings if heading == title), None)
+        if found is None:
+            errors.append(f"README.md needs a {title.title()} section")
+        else:
+            positions[title] = found
+
+    if len(positions) == len(required):
+        ordered = [positions[title] for title in required]
+        if ordered != sorted(ordered):
+            errors.append("README.md sections must order Quick start, Learn more, Contributing and Licence")
+        quick_start = positions["quick start"]
+        learn_more = positions["learn more"]
+        for offset, heading in headings:
+            if heading not in required and not quick_start < offset < learn_more:
+                errors.append(f"README.md optional section {heading!r} must sit between Quick start and Learn more")
+                break
+
+        learn_end = min(
+            (offset for offset, _ in headings if offset > learn_more),
+            default=len(body),
+        )
+        learn_text = body[learn_more:learn_end]
+        if not re.search(r"\]\((?:\./)?docs/INDEX\.md(?:#[^)]*)?\)", learn_text):
+            errors.append("README.md Learn more section must link docs/INDEX.md")
+
+
 def resolve_local(root, base, target, default):
     """Resolve a local link target (relative or root-relative) after symlinks."""
     if not target:
@@ -76,6 +136,7 @@ def main():
     errors = []
     if lines > 150 or words > 1200:
         errors.append(f"README.md has {lines} lines and {words} words (limits: 150 and 1200)")
+    check_readme_structure(text, errors)
     links = list(local_links(text))
     if not links:
         errors.append("README.md has no local links")
