@@ -5,8 +5,10 @@ STD-09 R16: the index is generated, never edited by hand, and CI fails when
 the committed file differs from what this script renders (`--check`, in
 `make docs-check`; `make doc-index` rewrites it). The documents and their
 `summary` fields are read as `check-doc-frontmatter.py` reads them. The
-index's own frontmatter keeps its `created_date`, and moves `updated_date` to
-today only when the listing changes, so `--check` compares the listing.
+documents of a feature's design folder are left out: the feature board,
+docs/design/FEATURES.md, is their one entry. The index's own frontmatter keeps
+its `created_date`, and moves `updated_date` to today only when the listing
+changes, so `--check` compares the listing.
 """
 
 import argparse
@@ -19,7 +21,10 @@ import sys
 SCRIPTS = Path(__file__).resolve().parent
 ROOT = SCRIPTS.parent
 INDEX = ROOT / "docs" / "INDEX.md"
-SUMMARY = "Every document at the repository root and under docs/, with its one-line summary."
+SUMMARY = (
+    "Every document at the repository root and under docs/ outside the feature design folders, "
+    "with its one-line summary."
+)
 
 
 def sibling(name):
@@ -31,11 +36,24 @@ def sibling(name):
     return module
 
 
+def feature_folder(path):
+    """Whether a document sits in a feature's design folder (STD-09 R16).
+
+    A feature folder is a directory directly under docs/design/ whose name does
+    not start with `_` or `.`: the rule the feature board applies
+    (generate-feature-board.py), so `_templates/` is not one.
+    """
+    parts = path.relative_to(ROOT).parts
+    if len(parts) < 4 or parts[:2] != ("docs", "design"):
+        return False
+    return not parts[2].startswith(("_", "."))
+
+
 def render(frontmatter):
     """The index's body: one section per directory, one line per document."""
     sections = {}
     for path in frontmatter.documents():
-        if path == INDEX:
+        if path == INDEX or feature_folder(path):
             continue
         rel = path.relative_to(ROOT)
         fields = frontmatter.frontmatter(path) or {}
