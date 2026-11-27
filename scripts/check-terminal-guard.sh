@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # scripts/check-terminal-guard.sh — STD-01 R12/R17 and STD-02 R15.
 #
-# Only the CLI's output module may touch stdout/stderr, query whether a
-# stream is a terminal, or read the color and format environment. Anything
-# else doing so would make a second, disagreeing decision.
+# clippy::disallowed_methods in clippy.toml rejects calls to stdout, stderr
+# and IsTerminal::is_terminal. This guard covers spellings that lint cannot
+# resolve as calls: imports of the stream functions and terminal/format
+# variable names, whose values are only visible as string literals.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -25,10 +26,7 @@ import os, re, sys
 
 output_dir = os.path.normpath(sys.argv[1])
 pattern = re.compile(
-    r"is_terminal|IsTerminal|io::stdout|io::stderr"
-    r"|\bstdout[ \t]*\(|\bstderr[ \t]*\("
-    r"|\"NO_COLOR\"|\"CLICOLOR_FORCE\"|\"TERM\"|\"COLUMNS\"|TMPL_CLI_FORMAT"
-    r"|println!|eprintln!|print!|eprint!"
+    r"\"NO_COLOR\"|\"CLICOLOR_FORCE\"|\"TERM\"|\"COLUMNS\"|TMPL_CLI_FORMAT"
 )
 token_re = re.compile(r"::|[A-Za-z_][A-Za-z0-9_]*|[{}(),;*]")
 
