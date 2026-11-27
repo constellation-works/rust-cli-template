@@ -22,7 +22,7 @@ Before the first commit, trace one real command against [ARCHITECTURE.md](ARCHIT
 - Use integration tests or goldens first (STD-04 R23). Every test must exercise behavior (STD-02 R21). No text-matching tests (`include_str!` plus `contains()` over source or copy).
 - A fix comes with a regression test through the real entry point (the built binary or the public API), seen failing before the fix (STD-04 R1, R2).
 <!-- crates:begin -->
-- Tests never touch real host state: a private temp root is `cw_testkit::TempRoot`; the binary fixture and the kit-based script checks run their child through `TempRoot::command` (its environment cleared to `HOME`, `PATH`, `TMPL_CLI_ROOT` and `GIT_CEILING_DIRECTORIES`), while the copied-script checks in `tests/script.rs` run their scripts with their own commands in a plain temp directory; goldens compare through `cw_testkit::Goldens` ([test support](crates/tmpl-cli/tests/support/mod.rs); STD-03 R20). `cw-testkit` is a dev-dependency only.
+- Tests never touch real host state: a private temp root is `cw_testkit::TempRoot`; every child runs through `TempRoot::command` (its environment cleared to `HOME`, `PATH`, `TMPL_CLI_ROOT` and `GIT_CEILING_DIRECTORIES`), with only named variables added, including the copied-script checks in `tests/script.rs`; goldens compare through `cw_testkit::Goldens` ([test support](crates/tmpl-cli/tests/support/mod.rs); STD-03 R20). `cw-testkit` is a dev-dependency only.
 <!-- crates:end -->
 - Outside the constellation umbrella the standards are plain vendored files that `docs/standards/check.sh` only verifies.
 
