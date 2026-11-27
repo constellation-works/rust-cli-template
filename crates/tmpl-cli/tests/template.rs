@@ -624,6 +624,41 @@ fn the_version_check_requires_a_raise_for_a_shipped_change_only() {
 }
 
 #[test]
+fn the_version_check_fails_against_its_parent_when_a_merge_keeps_the_version() {
+    let copy = Copy::new();
+    copy.commit("base");
+
+    // A squash merge onto agent-main that changes shipped files without
+    // raising template.toml: HEAD changes shipped files while HEAD^ holds
+    // the same version. The push gate compares HEAD with HEAD^.
+    let readme = copy.read("README.md");
+    copy.write("README.md", &format!("{readme}\nMore.\n"));
+    copy.commit("squash merge without a raise");
+    let out = copy.run("scripts/check-template-version.sh", &["HEAD^"]);
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    assert!(stderr(&out).contains("  README.md\n"), "{}", stderr(&out));
+
+    // Raising the version passes against the same parent.
+    let toml = copy.read("template.toml");
+    let version: u32 = toml
+        .lines()
+        .find_map(|line| line.strip_prefix("version = "))
+        .unwrap()
+        .parse()
+        .unwrap();
+    copy.write(
+        "template.toml",
+        &toml.replace(
+            &format!("version = {version}"),
+            &format!("version = {}", version + 1),
+        ),
+    );
+    copy.commit("raise");
+    let out = copy.run("scripts/check-template-version.sh", &["HEAD^"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+}
+
+#[test]
 fn the_version_check_counts_overlays_and_fails_when_git_diff_fails() {
     let copy = Copy::new();
     copy.commit("base");
