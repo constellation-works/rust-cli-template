@@ -282,7 +282,8 @@ as one grouped pull request per ecosystem, a week after a release.
 - Under plain `cargo test` (nextest absent) there is no per-test timeout;
   only the CI job timeout bounds a hang.
 - A note-write lock timeout (`store_locked`) names no holder: SQLite's locks
-  record no owner. The audit lock is the kit's (`cw-app` over `cw-fs`), and
+  record no owner ([the decision](./4_decisions.md#a-note-write-lock-timeout-names-no-holder),
+  a deviation from STD-03@2 §R7). The audit lock is the kit's (`cw-app` over `cw-fs`), and
   its holder record is the kit's best effort.
 - `note list` and `note add` read every row: fine for thousands of notes. A
   domain that outgrows that adds a query to the notes repository.

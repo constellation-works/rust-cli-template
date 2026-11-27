@@ -137,7 +137,7 @@ usage errors naming the flag.
 ## Usage errors keep clap's tips and usage line
 
 **Recorded:** 2026-09
-**Code anchors:** `crates/tmpl-cli/src/output/mod.rs::finish_parse_error`
+**Code anchors:** `crates/tmpl-cli/src/output/common/error.rs::finish_parse_error`
 
 ### Context
 
@@ -258,8 +258,11 @@ govern. Each binds as soon as it does, and this entry is edited then:
 - No capability-dependent tests: every test runs on every CI runner, so
   there is nothing to skip (STD-04@2 §R8).
 - No authorization, plugins, credentials, listeners, consent or tokens:
-  STD-05@1 §R1–§R5, §R15–§R19, §R21, §R22, §R25. The binary makes no
-  network request at all (§R20).
+  STD-05@1 §R3, §R4, §R15–§R19, §R21, §R22, §R25. The binary makes no
+  network request at all (§R20). Its one identity is the audit line's
+  `actor`, which the kit reads from `USER`, else `USERNAME`: a claim, not an
+  identity the OS vouches for. §R1 and §R2 apply to it as a claim: it is
+  stored in its own field and never used as authority.
 - No persisted free text except content the caller asked to store, kept
   verbatim, so there is no redaction layer (STD-05@1 §R13, §R14). The audit
   log persists identifiers and stable codes only; the integration tests pin
