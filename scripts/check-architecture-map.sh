@@ -54,7 +54,7 @@ def fail(msg):
 def rel(path):
     return os.path.relpath(path, root)
 
-# --- the crates, from cargo metadata --------------------------------------
+# Step 1: read the crates from cargo metadata.
 members = set(meta.get("workspace_members") or [])
 crates = []
 for pkg in meta["packages"]:
@@ -77,7 +77,7 @@ if not os.path.isfile(DOC):
     sys.exit(1)
 lines = open(DOC, encoding="utf-8").read().split("\n")
 
-# --- the doc: sections, fences and code spans -----------------------------
+# Step 2: read the sections, fences and code spans of the doc.
 SPAN = re.compile(r"`([^`\n]+)`")
 PATHISH = re.compile(r"[A-Za-z0-9_.][A-Za-z0-9_./-]*")
 EXT = re.compile(r"\.(rs|sh|py|md|toml|yml|yaml|txt|json|lock)$")
@@ -179,7 +179,7 @@ for crate_name, start, end in sections:
                 where = f"`{crate_name}` section" if crate is not None else "the doc"
                 fail(f"{DOC}:{lineno}: {where} names `{text}`, which does not exist")
 
-# --- (a), (b), (d), (e) per crate -----------------------------------------
+# Step 3: check (a), (b), (d) and (e) for each crate.
 def first_line(path):
     try:
         with open(path, encoding="utf-8") as handle:

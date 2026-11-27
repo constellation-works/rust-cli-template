@@ -62,7 +62,7 @@ if [[ "$package_count" -eq 0 ]]; then
   exit 0
 fi
 
-# --- 1. crate policies -------------------------------------------------------
+# Step 1: the crate policies.
 # policy <crate>  -> sets ALLOWED (internal deps), KIT (cw-kit deps),
 # KIT_DEV (cw-kit crates allowed as dev-dependencies only) and BANNED
 # (external deps)
@@ -158,7 +158,7 @@ check_crate_edges() {
   done <<<"$edges"
 }
 
-# --- 2. module bans ----------------------------------------------------------
+# Step 2: the module bans.
 # ban <path> <extended-regex> <message>: fail if the pattern appears in
 # non-test, non-comment lines of the Rust sources under <path> (a file or a
 # directory).
