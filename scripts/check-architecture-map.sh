@@ -59,16 +59,16 @@ for pkg in meta["packages"]:
     if members and pkg["id"] not in members:
         continue
     crate_dir = os.path.dirname(pkg["manifest_path"])
-    roots = [t["src_path"] for t in pkg["targets"]
-             if any(k in ("lib", "rlib", "cdylib", "staticlib", "dylib", "proc-macro", "bin")
-                    for k in t["kind"])]
+    roots = [target["src_path"] for target in pkg["targets"]
+             if any(kind in ("lib", "rlib", "cdylib", "staticlib", "dylib", "proc-macro", "bin")
+                    for kind in target["kind"])]
     src = os.path.join(crate_dir, "src")
     crates.append({"name": pkg["name"], "dir": crate_dir, "src": src,
-                   "roots": sorted(set(os.path.realpath(r) for r in roots))})
+                   "roots": sorted(set(os.path.realpath(src_path) for src_path in roots))})
 if not crates:
     print("architecture-map: workspace has no packages yet; nothing to check")
     sys.exit(0)
-by_name = {c["name"]: c for c in crates}
+by_name = {crate["name"]: crate for crate in crates}
 
 if not os.path.isfile(DOC):
     print(f"architecture-map: {DOC} is missing; it maps every crate (STD-02 R43)", file=sys.stderr)
@@ -87,18 +87,18 @@ def looks_like_path(text):
 
 sections = []  # (crate name or None, first line index, last line index)
 current = (None, 0)
-for i, line in enumerate(lines):
+for line_index, line in enumerate(lines):
     if line.startswith("## "):
-        sections.append((current[0], current[1], i))
+        sections.append((current[0], current[1], line_index))
         spans = SPAN.findall(line)
-        current = (spans[0] if spans and spans[0] in by_name else None, i)
+        current = (spans[0] if spans and spans[0] in by_name else None, line_index)
 sections.append((current[0], current[1], len(lines)))
 
 def walk_paths(base):
     """Every file and directory under base, relative to it."""
     out = set()
     for dirpath, dirnames, filenames in os.walk(base):
-        dirnames[:] = [d for d in dirnames if d not in (".git", "target")]
+        dirnames[:] = [dirname for dirname in dirnames if dirname not in (".git", "target")]
         for name in dirnames + filenames:
             out.add(os.path.relpath(os.path.join(dirpath, name), base))
     return out
@@ -121,9 +121,9 @@ def exists_span(text, crate):
         if repo_paths is None:
             repo_paths = walk_paths(root)
         scope = repo_paths
-    return any(p == path or p.endswith("/" + path) for p in scope)
+    return any(candidate == path or candidate.endswith("/" + path) for candidate in scope)
 
-documented = {c["name"]: set() for c in crates}
+documented = {crate["name"]: set() for crate in crates}
 seen_sections = set()
 for crate_name, start, end in sections:
     crate = by_name.get(crate_name)
@@ -131,9 +131,9 @@ for crate_name, start, end in sections:
         seen_sections.add(crate_name)
     in_fence = False
     stack = []  # (indent, directory path relative to src)
-    for i in range(start, end):
-        line = lines[i]
-        lineno = i + 1
+    for line_index in range(start, end):
+        line = lines[line_index]
+        lineno = line_index + 1
         if line.lstrip().startswith("```"):
             in_fence = not in_fence
             stack = []
