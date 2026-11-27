@@ -32,7 +32,8 @@ For the template's own example, the store's contract is the
 - [driver/sqlite/](../../crates/tmpl-cli-store/src/driver/sqlite/): the
   database file, `open`, and `schema/` with its `MIGRATIONS`.
 - [repository/](../../crates/tmpl-cli-store/src/repository/): `Snapshot`,
-  `Tx`, and one module per record.
+  `Tx`, and one module per record. The module is private: `Snapshot` and
+  `Tx` reach callers through the crate root's re-exports.
 - [contract/](../../crates/tmpl-cli-store/src/contract/): the record
   shapes.
 - [error.rs](../../crates/tmpl-cli-store/src/error.rs): the store's error

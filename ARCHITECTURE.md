@@ -178,7 +178,10 @@ composition.rs       start: the data directory (the kit's, from Env), the Store,
 ## `tmpl-cli-store`
 
 ```
-lib.rs               re-exports: Store, Snapshot, Tx, Error, contract, repository, STORE_FILE
+lib.rs               re-exports: Store, Snapshot, Tx, Error, contract, STORE_FILE
+<!-- example:begin -->
+lib.rs               re-exports: Notes, NotesMut
+<!-- example:end -->
 store.rs             Store::open, read() -> Snapshot (strict: creates no file), read_before_write() -> Snapshot, write(|tx| …)
 driver/
   mod.rs             one module per storage mechanism
@@ -219,7 +222,9 @@ test_support.rs      behind the `test-support` feature: raw SQL on the database,
   transaction `Store::write` began. There is no file-system driver, and no audit
   repository: the audit log is `cw-app`'s.
 - **The record-access seam.** A caller reaches a record only through
-  `snapshot.<record>()` in a read and `tx.<record>()` in a write.
+  `snapshot.<record>()` in a read and `tx.<record>()` in a write. The
+  `repository` module is private: its types reach a caller only through the
+  crate root's re-exports.
   `Snapshot::path()` exposes the database path, and `Snapshot::format()` its
   format; `Store::root()` and `Store::path()` expose the store paths to apps.
   The public store error's `Sqlite` variant carries `cw_sqlite::Error`, but no
@@ -334,9 +339,10 @@ By grep:
   or SQLite, and defines no `check_*` function and reads no clock. There is
   no db module and no file-system driver.
 - `tmpl-cli-core`: no `std::net`, `tempfile`, `rustix`, `cw_fs`,
-  `cw_sqlite` or `rusqlite` anywhere, and no `tmpl_cli_store::repository`
-  path: a record is reached through `snapshot.<record>()` or
-  `tx.<record>()`. Every app's `mod.rs` forwards to `cw_app::exec::<`. No
+  `cw_sqlite` or `rusqlite` anywhere. A record is reached through
+  `snapshot.<record>()` or `tx.<record>()`; the store's `repository` module
+  is private, so no repository path compiles here (visibility, not a grep).
+  Every app's `mod.rs` forwards to `cw_app::exec::<`. No
   common, shared or util app. An app's `rule` names no
   `composition`, `cw_app`, `Ctx`, `Store`, `Snapshot` or `Tx`.
 - Every crate: no source calls an app's `run` (`…App::run`) or writes the
