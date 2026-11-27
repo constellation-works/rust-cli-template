@@ -15,6 +15,8 @@
 
 mod support;
 
+use support::CommandDeadline;
+
 use std::fs;
 use support::script::copy_script;
 
@@ -36,7 +38,7 @@ fn check_terminal_guard_catches_imported_stdout_and_stderr() {
     )
     .unwrap();
 
-    let out = temp.command(&script).output().unwrap();
+    let out = temp.command(&script).output_with_deadline().unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{stderr}");
     assert!(

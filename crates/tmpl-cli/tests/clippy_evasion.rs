@@ -15,6 +15,8 @@
 
 mod support;
 
+use support::CommandDeadline;
+
 use std::fs;
 use support::script::{isolated_path, repo_root};
 
@@ -71,7 +73,7 @@ fn clippy_refuses_an_aliased_env_read_and_a_direct_file_read() {
         "use std::env;\nuse std::path::Path;\nuse std::{fmt, fs};\n\n\
          fn main() {\n    let _ = fmt::Error;\n    let _value = env::var(\"X\");\n    \
          let _bytes = fs::read(\"f\");\n    let _exists = Path::new(\"f\").exists();\n    \
-         let _try_exists = Path::new(\"f\").try_exists();\n}\n",
+         let _try_exists = Path::new(\"f\").try_exists();\n    let _ = std::sync::mpsc::channel::<()>();\n}\n",
     )
     .unwrap();
 
@@ -82,11 +84,12 @@ fn clippy_refuses_an_aliased_env_read_and_a_direct_file_read() {
         .env("CARGO_TARGET_DIR", root.join("target"))
         .env("PATH", &path)
         .current_dir(root)
-        .output()
+        .output_with_deadline()
         .unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_ne!(out.status.code(), Some(0), "clippy passed: {stderr}");
     for refused in [
+        "use of a disallowed method `std::sync::mpsc::channel`",
         "use of a disallowed method `std::env::var`",
         "use of a disallowed method `std::fs::read`",
         "use of a disallowed method `std::path::Path::exists`",
@@ -127,7 +130,7 @@ fn clippy_gates_parameter_count_item_order_and_literal_field_order() {
             .env("CARGO_TARGET_DIR", root.join("target"))
             .env("PATH", &path)
             .current_dir(root)
-            .output()
+            .output_with_deadline()
             .unwrap();
         (
             out.status.code(),

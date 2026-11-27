@@ -20,7 +20,7 @@ mod support;
 #[cfg(unix)]
 mod unix {
     //! Modes, links and read-only state (STD-01 R31, STD-05 R7–R9).
-    use super::support::{self, Fixture};
+    use super::support::{self, CommandDeadline, Fixture};
     use std::fs::{self, Permissions};
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
@@ -57,7 +57,7 @@ mod unix {
             .arg("umask 000; exec \"$0\" \"$@\"")
             .arg(super::support::BIN)
             .args(["note", "add", "x"])
-            .output()
+            .output_with_deadline()
             .unwrap();
         assert_eq!(
             out.status.code(),
@@ -184,7 +184,8 @@ mod unix {
     }
 }
 
-use std::io::{BufRead, BufReader};
+use support::CommandDeadline;
+
 use std::process::Stdio;
 use support::{ChildGuard, Fixture};
 use tmpl_cli_store::STORE_FILE;
@@ -336,7 +337,7 @@ fn piped_output_is_one_undecorated_line_per_record() {
     fx.seed();
     let mut cmd = fx.cmd(&["note", "list"]);
     cmd.env("CLICOLOR_FORCE", "1").env("TERM", "xterm-256color");
-    let out = cmd.output().unwrap();
+    let out = cmd.output_with_deadline().unwrap();
     let stdout = support::text(&out.stdout);
     assert_eq!(stdout.lines().count(), 3);
     assert!(!stdout.contains('\x1b'), "no ANSI escapes off a terminal");
@@ -354,7 +355,7 @@ fn an_explicit_table_off_a_terminal_has_a_header_and_no_color_or_truncation() {
     fx.seed();
     let mut cmd = fx.cmd(&["note", "list", "--format", "table"]);
     cmd.env("CLICOLOR_FORCE", "1").env("COLUMNS", "20");
-    let stdout = support::text(&cmd.output().unwrap().stdout);
+    let stdout = support::text(&cmd.output_with_deadline().unwrap().stdout);
     assert_eq!(stdout.lines().count(), 4);
     assert!(stdout.starts_with("ID"));
     assert!(!stdout.contains('\x1b'));
@@ -401,11 +402,11 @@ fn the_format_environment_variable_applies_and_a_bad_value_falls_back() {
     fx.seed();
     let mut cmd = fx.cmd(&["note", "list"]);
     cmd.env("TMPL_CLI_FORMAT", "json");
-    assert!(support::text(&cmd.output().unwrap().stdout).starts_with('{'));
+    assert!(support::text(&cmd.output_with_deadline().unwrap().stdout).starts_with('{'));
 
     let mut cmd = fx.cmd(&["note", "list"]);
     cmd.env("TMPL_CLI_FORMAT", "yaml");
-    let out = cmd.output().unwrap();
+    let out = cmd.output_with_deadline().unwrap();
     assert_eq!(out.status.code(), Some(0));
     assert_eq!(
         support::text(&out.stdout).lines().count(),
@@ -416,7 +417,7 @@ fn the_format_environment_variable_applies_and_a_bad_value_falls_back() {
     let mut cmd = fx.cmd(&["note", "list", "--format", "table"]);
     cmd.env("TMPL_CLI_FORMAT", "json");
     assert!(
-        support::text(&cmd.output().unwrap().stdout).starts_with("ID"),
+        support::text(&cmd.output_with_deadline().unwrap().stdout).starts_with("ID"),
         "the flag wins"
     );
 }
@@ -660,10 +661,7 @@ fn a_closed_stdout_ends_the_process_quietly_with_exit_zero() {
             .spawn()
             .unwrap(),
     );
-    let mut first = String::new();
-    BufReader::new(child.child().stdout.take().unwrap())
-        .read_line(&mut first)
-        .unwrap();
+    let first = child.read_line();
     assert!(first.starts_with("1\t"));
     // The reader was dropped above, closing the pipe.
     let out = child.finish();
@@ -680,12 +678,12 @@ fn the_data_directory_defaults_under_home_and_is_never_guessed() {
     let fx = Fixture::new();
     let mut cmd = fx.cmd(&["note", "add", "x"]);
     cmd.env_remove("TMPL_CLI_ROOT");
-    assert_eq!(cmd.output().unwrap().status.code(), Some(0));
+    assert_eq!(cmd.output_with_deadline().unwrap().status.code(), Some(0));
     assert!(fx.home().join(".tmpl-cli").join("store.db").exists());
 
     let mut cmd = fx.cmd(&["note", "list"]);
     cmd.env_remove("TMPL_CLI_ROOT").env_remove("HOME");
-    let out = cmd.output().unwrap();
+    let out = cmd.output_with_deadline().unwrap();
     assert_eq!(out.status.code(), Some(1));
     assert!(
         support::text(&out.stderr).contains("--root"),
@@ -806,7 +804,7 @@ fn logs_go_to_stderr_and_leave_stdout_as_pure_payload() {
     let fx = Fixture::new();
     let mut cmd = fx.cmd(&["note", "add", "x", "--json"]);
     cmd.env("TMPL_CLI_LOG", "debug");
-    let out = cmd.output().unwrap();
+    let out = cmd.output_with_deadline().unwrap();
     let _: serde_json::Value = serde_json::from_slice(&out.stdout).expect("stdout is only JSON");
     assert!(!out.stderr.is_empty(), "debug logs should appear on stderr");
 }
@@ -915,15 +913,15 @@ fn audit_line_records_actor_from_user_or_username_else_null() {
     // USER set -> USER value.
     let mut cmd = fx.cmd(&["note", "add", "with-user"]);
     cmd.env("USER", "alice").env("USERNAME", "bob");
-    assert_eq!(cmd.output().unwrap().status.code(), Some(0));
+    assert_eq!(cmd.output_with_deadline().unwrap().status.code(), Some(0));
     // USER unset, USERNAME set -> USERNAME value.
     let mut cmd = fx.cmd(&["note", "add", "with-username"]);
     cmd.env("USERNAME", "bob");
-    assert_eq!(cmd.output().unwrap().status.code(), Some(0));
+    assert_eq!(cmd.output_with_deadline().unwrap().status.code(), Some(0));
     // A claim that is not an identifier is not written as given.
     let mut cmd = fx.cmd(&["note", "add", "with-odd-user"]);
     cmd.env("USER", "not an id");
-    assert_eq!(cmd.output().unwrap().status.code(), Some(0));
+    assert_eq!(cmd.output_with_deadline().unwrap().status.code(), Some(0));
 
     let lines = audit_lines(&fx);
     assert_eq!(lines.len(), 4, "{lines:?}");
@@ -1088,7 +1086,7 @@ fn debug_logs_escape_control_characters_in_root_paths() {
     ] {
         let mut cmd = fx.cmd(args);
         cmd.env("TMPL_CLI_LOG", "debug");
-        let out = cmd.output().unwrap();
+        let out = cmd.output_with_deadline().unwrap();
         assert_eq!(
             out.status.code(),
             Some(0),

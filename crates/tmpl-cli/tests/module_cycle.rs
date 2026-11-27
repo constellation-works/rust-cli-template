@@ -15,6 +15,8 @@
 
 mod support;
 
+use support::CommandDeadline;
+
 use std::fs;
 use support::script::copy_script;
 
@@ -53,7 +55,7 @@ fn check_module_cycles_catches_grouped_imports_and_deep_sibling_cycles() {
     )
     .unwrap();
 
-    let out = temp.command(&script).output().unwrap();
+    let out = temp.command(&script).output_with_deadline().unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{stderr}");
     for expected in [

@@ -15,6 +15,8 @@
 
 mod support;
 
+use support::CommandDeadline;
+
 use std::fs;
 use std::path::Path;
 use std::process::Output;
@@ -30,7 +32,7 @@ const TASK_ID: &str = concat!("ORB-", "26767");
 /// like a work tree.
 fn private_task_ids(temp: &cw_testkit::TempRoot, root: &Path) -> Output {
     let script = copy_script("check-private-task-ids.sh", root);
-    temp.command(&script).output().unwrap()
+    temp.command(&script).output_with_deadline().unwrap()
 }
 
 #[test]

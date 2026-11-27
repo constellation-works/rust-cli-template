@@ -5,6 +5,7 @@
     reason = "integration-test helpers set up fixtures and run copied scripts"
 )]
 
+use super::CommandDeadline;
 use cw_testkit::TempRoot;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -78,7 +79,7 @@ pub(crate) fn git(temp: &TempRoot, root: &Path, args: &[&str]) {
         .command("git")
         .args(args)
         .current_dir(root)
-        .output()
+        .output_with_deadline()
         .expect("run fixture git");
     assert!(
         output.status.success(),
