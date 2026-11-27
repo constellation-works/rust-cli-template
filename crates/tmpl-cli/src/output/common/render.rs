@@ -2,7 +2,7 @@
 
 use super::error::report;
 use super::payload::{Output, Payload};
-use crate::error::output_error;
+use crate::error;
 // example:begin
 use crate::output::note;
 // example:end
@@ -11,6 +11,7 @@ use crate::output::status;
 use cw_cli::Mode;
 // example:end
 use cw_cli::Sink;
+use std::fmt::Display;
 use std::io::Write;
 use std::process::ExitCode;
 use tmpl_cli_core::Error;
@@ -30,7 +31,7 @@ pub(crate) fn finish<O: Write, E: Write>(
 /// Print the audit log's warning after the command's own output: the line
 /// for a command that already ran could not be written. Fail open
 /// (STD-02 R31): it never changes the exit code.
-pub(crate) fn audit_warning(sink: &mut Sink, warning: &impl std::fmt::Display) {
+pub(crate) fn audit_warning(sink: &mut Sink, warning: &impl Display) {
     sink.warn(&warning.to_string());
 }
 
@@ -64,5 +65,7 @@ fn emit<O: Write, E: Write>(sink: &mut Sink<O, E>, output: &Output) -> Result<()
         Payload::Note(note) => sink.emit_text(&json, |_| note::detail_text(note)),
         // example:end
     };
-    emitted.and_then(|()| sink.finish()).map_err(output_error)
+    emitted
+        .and_then(|()| sink.finish())
+        .map_err(error::output_error)
 }

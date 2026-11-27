@@ -28,7 +28,7 @@ use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use std::io::{BufRead, BufReader, Write};
 use std::process::Stdio;
-use support::{ChildGuard, Fixture, text};
+use support::{ChildGuard, Fixture};
 use tmpl_cli_core::Env;
 
 /// The client name each session's handshake sends.
@@ -192,7 +192,7 @@ fn the_binary_serves_until_its_input_closes() {
     assert_eq!(reply["result"]["serverInfo"]["name"], "tmpl-cli", "{reply}");
     drop(stdin);
     let out = child.finish();
-    assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
+    assert_eq!(out.status.code(), Some(0), "{}", support::text(&out.stderr));
 }
 // example:begin
 

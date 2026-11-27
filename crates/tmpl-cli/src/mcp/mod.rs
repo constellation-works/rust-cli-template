@@ -28,7 +28,7 @@ use crate::command::{self, Command, StatusArgs};
 // example:begin
 use crate::command::{AddArgs, ListArgs, NoteCommand, ShowArgs};
 // example:end
-use crate::error::{TOOL_PANICKED, encode_error, mcp_error};
+use crate::error::{self, TOOL_PANICKED};
 use crate::output::Payload;
 use clap::CommandFactory;
 use cw_mcp::schemars::JsonSchema;
@@ -63,12 +63,12 @@ fn tools() -> Vec<Tool<State>> {
 /// `mcp_tool_list` when the kit refuses the tool list.
 pub fn server(runtime: Runtime) -> Result<Server<State>, Error> {
     let info = ServerInfo::new(APP, env!("CARGO_PKG_VERSION"), TOOL_PANICKED);
-    Server::new(info, runtime, tools()).map_err(mcp_error)
+    Server::new(info, runtime, tools()).map_err(error::mcp_error)
 }
 
 /// Serve every tool on standard input and output until the input closes.
 pub(crate) fn serve(runtime: Runtime) -> Result<(), Error> {
-    server(runtime)?.serve_stdio().map_err(mcp_error)
+    server(runtime)?.serve_stdio().map_err(error::mcp_error)
 }
 
 /// The tool for the command at `path`: named by the path joined with `_`,
@@ -116,7 +116,7 @@ fn call(runtime: &Runtime, origin: &Origin, command: Command) -> Result<Value, E
     let mut extra_warnings = Vec::new();
     // example:begin
     for skipped in &output.skipped {
-        extra_warnings.push(serde_json::to_value(skipped).map_err(encode_error)?);
+        extra_warnings.push(serde_json::to_value(skipped).map_err(error::encode_error)?);
     }
     // example:end
     if let Some(warning) = audit_warning {
@@ -145,5 +145,5 @@ fn attach_warnings(value: &mut Value, extra: Vec<Value>) {
 
 /// The payload as the tool's JSON: the same value `--json` prints.
 fn json(payload: &Payload) -> Result<Value, Error> {
-    serde_json::to_value(payload.json()).map_err(encode_error)
+    serde_json::to_value(payload.json()).map_err(error::encode_error)
 }

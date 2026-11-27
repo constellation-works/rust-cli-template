@@ -22,10 +22,7 @@ mod support;
 
 use cw_testkit::Goldens;
 use std::fs;
-// example:begin
-use cw_testkit::redact_timestamps;
-// example:end
-use support::{Fixture, text};
+use support::Fixture;
 
 /// Output on a fresh data directory named relative to the fixture, so the
 /// path in the output is the same on every machine.
@@ -104,7 +101,11 @@ fn help_matches_goldens() {
             let mut args = subcommands;
             args.push("--help");
             let out = fx.ok(&args);
-            check(&goldens, &format!("help/{name}.txt"), &text(&out.stdout))
+            check(
+                &goldens,
+                &format!("help/{name}.txt"),
+                &support::text(&out.stdout),
+            )
         })
         .collect();
     report(&failures);
@@ -118,7 +119,7 @@ fn command_summaries_fit_on_one_line_and_root_commands_are_listed_once() {
         .first()
         .expect("the command tree includes the root");
     let fx = Fixture::new();
-    let help = text(&fx.ok(&["--help"]).stdout);
+    let help = support::text(&fx.ok(&["--help"]).stdout);
 
     for (path, command) in commands.iter().skip(1) {
         assert_summary(path, command, MAX_SUMMARY_CHARS);
@@ -160,7 +161,11 @@ fn status_output_matches_goldens() {
         .iter()
         .filter_map(|(name, args)| {
             let out = fx.ok(args);
-            check(&goldens, &format!("output/{name}"), &text(&out.stdout))
+            check(
+                &goldens,
+                &format!("output/{name}"),
+                &support::text(&out.stdout),
+            )
         })
         .collect();
     report(&failures);
@@ -179,7 +184,7 @@ fn output_matches_goldens() {
             check(
                 &goldens,
                 &format!("output/{name}"),
-                &redact_timestamps(&text(&out.stdout)),
+                &cw_testkit::redact_timestamps(&support::text(&out.stdout)),
             )
         })
         .collect();

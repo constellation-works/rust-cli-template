@@ -1,6 +1,6 @@
-use super::{piped, render};
 use crate::output::Payload;
 use crate::output::note::NotePayload;
+use crate::output::tests;
 use cw_cli::{Format, Probe};
 use time::macros::datetime;
 use tmpl_cli_core::contract::Priority;
@@ -28,7 +28,7 @@ fn notes(notes: Vec<NotePayload>, total: usize) -> Payload {
 fn a_high_priority_is_painted_in_a_terminal_table_only() {
     // STD-01 R17, R18.
     let listed = notes(vec![note(1)], 1);
-    let terminal = render(Probe::terminal(None), None, listed.clone());
+    let terminal = tests::render(Probe::terminal(None), None, listed.clone());
     assert!(terminal.contains("\x1b[33mhigh\x1b[0m"), "{:?}", terminal);
-    assert!(!piped(Format::Table, listed).contains('\x1b'));
+    assert!(!tests::piped(Format::Table, listed).contains('\x1b'));
 }

@@ -6,7 +6,7 @@ mod note;
 // example:end
 mod status;
 
-use crate::output::{Output, Payload, finish};
+use crate::output::{self, Output, Payload};
 use cw_cli::{Format, Probe, Sink, Terminal};
 use tmpl_cli_core::{APP, Env};
 
@@ -15,7 +15,7 @@ use tmpl_cli_core::{APP, Env};
 pub(super) fn render(probe: Probe, format: Option<Format>, payload: Payload) -> String {
     let terminal = Terminal::decide(&Env::from_vars::<_, &str, &str>([]), APP, probe, format);
     let mut sink = Sink::new(terminal, Vec::new(), Vec::new());
-    let _ = finish(&mut sink, Ok(Output::new(payload)));
+    let _ = output::finish(&mut sink, Ok(Output::new(payload)));
     let (out, _err) = sink.into_parts();
     String::from_utf8(out).unwrap()
 }
