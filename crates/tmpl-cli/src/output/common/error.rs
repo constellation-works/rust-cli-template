@@ -1,11 +1,11 @@
 //! Error and usage-error rendering through the kit's sink.
 
 use super::terminal::{decide, sink};
-use crate::error::{hint, output_error, usage_error};
+use crate::error;
 use cw_cli::{Exit, Format, Mode, Probe, Sink};
 use std::io::Write;
 use std::process::ExitCode;
-use tmpl_cli_core::{Env, Error};
+use tmpl_cli_core::{Env, Error, Kind};
 
 /// Report a failure that is not a command's outcome (a usage error the
 /// surface raises itself, the MCP server's own) and return its exit code.
@@ -17,7 +17,7 @@ pub(crate) fn fail(sink: &mut Sink, err: &Error) -> ExitCode {
 /// `error:` line and a `hint:` line, or one JSON object in JSON mode
 /// (STD-01 R19, R21).
 pub(super) fn report<O: Write, E: Write>(sink: &mut Sink<O, E>, err: &Error) -> ExitCode {
-    sink.report(err, hint(err)).into()
+    sink.report(err, error::hint(err)).into()
 }
 
 /// Handle an argument-parsing outcome that is not a parsed command line:
@@ -39,7 +39,7 @@ pub(crate) fn finish_parse_error(
             .and_then(|()| sink.finish());
         return match written {
             Ok(()) => ExitCode::SUCCESS,
-            Err(write_err) => report(&mut sink, &output_error(write_err)),
+            Err(write_err) => report(&mut sink, &error::output_error(write_err)),
         };
     }
     let mut sink = sink(decide(env, probe, requested));
@@ -47,20 +47,20 @@ pub(crate) fn finish_parse_error(
     let Some(message) = first.strip_prefix("error: ") else {
         // A missing subcommand: clap's help, on stderr, is the message.
         if sink.terminal().mode() == Mode::Json {
-            return report(&mut sink, &usage_error(first));
+            return report(&mut sink, &error::usage_error(first));
         }
         sink.notice(rendered.trim_end_matches('\n'));
-        return Exit::of(tmpl_cli_core::Kind::Usage).into();
+        return Exit::of(Kind::Usage).into();
     };
     if sink.terminal().mode() == Mode::Json {
         // One JSON object: the lines that name the argument join the
         // message, and clap's usage and tip are its hint.
         let (named, rest) = json_usage(message, tail);
-        let err = usage_error(&named);
+        let err = error::usage_error(&named);
         let hint = (!rest.is_empty()).then_some(rest.as_str());
         return sink.report(&err, hint).into();
     }
-    let exit = report(&mut sink, &usage_error(message));
+    let exit = report(&mut sink, &error::usage_error(message));
     // As text, clap's usage and tip follow the error line unchanged.
     let tail = tail.trim_end_matches('\n');
     if !tail.is_empty() {

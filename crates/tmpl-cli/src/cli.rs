@@ -7,10 +7,10 @@
 //! `<id>`, never real ids or tracker numbers (STD-01 R23).
 
 use crate::command::Command;
-use crate::error::usage_error;
+use crate::error;
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 use cw_cli::Format;
-use cw_cli::help::{Group, grouped};
+use cw_cli::help::{self, Group};
 use std::ffi::OsString;
 use std::path::PathBuf;
 use tmpl_cli_core::env::{FORMAT, ROOT};
@@ -148,7 +148,7 @@ impl GlobalArgs {
     /// `--json`/`--format` conflict is checked here.
     pub(crate) fn check(&self) -> Result<(), Error> {
         if self.json && self.format.is_some_and(|format| format != Format::Json) {
-            return Err(usage_error(
+            return Err(error::usage_error(
                 "--json cannot be used with a --format other than json",
             ));
         }
@@ -188,7 +188,7 @@ fn format_help() -> String {
 /// The command tree with its root help grouped by the kit, wrapped to
 /// `help_width` (`None` keeps one line per command).
 fn root(help_width: Option<usize>) -> clap::Command {
-    grouped(Cli::command(), GROUPS, help_width)
+    help::grouped(Cli::command(), GROUPS, help_width)
 }
 
 /// The format a command line that failed to parse asked for, so the usage

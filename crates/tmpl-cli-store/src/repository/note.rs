@@ -7,7 +7,7 @@
 //! [`crate::Store::write`] began, and returns owned values: nothing borrowed
 //! from a connection or a row leaves it.
 
-use crate::contract::{Note, NoteId, Priority, Tag, Title};
+use crate::contract::{Note, NoteError, NoteId, Priority, Tag, Title};
 use crate::error::{BadRecord, BadRecordReason, Error, RecordLocator, Result};
 use cw_sqlite::rusqlite::types::ValueRef;
 use cw_sqlite::rusqlite::{Connection, OptionalExtension as _, Params, Row, params};
@@ -146,7 +146,7 @@ impl StoredRow {
     /// default (STD-02 R32).
     fn into_note(self, path: &Path) -> std::result::Result<Note, BadRecord> {
         let id = u64::try_from(self.id)
-            .map_err(|_| crate::contract::NoteError::InvalidId(self.id.to_string()))
+            .map_err(|_| NoteError::InvalidId(self.id.to_string()))
             .and_then(NoteId::try_from);
         let id = match id {
             Ok(id) => id,

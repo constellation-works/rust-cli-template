@@ -1,4 +1,4 @@
-//! Defines store errors and bad-record reports; imports no sibling modules.
+//! Defines store errors and bad-record reports.
 //!
 //! The store's one error type, and the bad-record report a read carries.
 //!
@@ -12,6 +12,10 @@
 use cw_base::Kind;
 use std::fmt;
 use std::path::PathBuf;
+// example:begin
+
+use crate::contract::{NoteError, NoteId};
+// example:end
 
 /// Where a bad record sits in the database: its record's id when it is a
 /// valid one, otherwise the row's raw id.
@@ -19,7 +23,7 @@ use std::path::PathBuf;
 pub enum RecordLocator {
     // example:begin
     /// The record had a valid note id.
-    Id(crate::contract::NoteId),
+    Id(NoteId),
     // example:end
     /// The row's id is not a valid id of its record; identified by the raw
     /// value.
@@ -54,7 +58,7 @@ pub enum BadRecordReason {
     // example:begin
     /// A domain validation rule rejected a field value.
     #[error(transparent)]
-    Validation(#[from] crate::contract::NoteError),
+    Validation(#[from] NoteError),
     // example:end
 }
 

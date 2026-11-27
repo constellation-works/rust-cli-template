@@ -20,9 +20,9 @@ mod support;
 #[cfg(unix)]
 mod unix {
     //! Modes, links and read-only state (STD-01 R31, STD-05 R7–R9).
-    use super::support::{Fixture, make_private, text};
+    use super::support::{self, Fixture};
     use std::fs::{self, Permissions};
-    use std::os::unix::fs::{PermissionsExt, symlink};
+    use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
 
     fn mode(path: &Path) -> u32 {
@@ -59,7 +59,12 @@ mod unix {
             .args(["note", "add", "x"])
             .output()
             .unwrap();
-        assert_eq!(out.status.code(), Some(0), "stderr: {}", text(&out.stderr));
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "stderr: {}",
+            support::text(&out.stderr)
+        );
         assert_eq!(mode(&fx.root()), 0o700);
         assert_eq!(mode(&fx.root().join("store.db")), 0o600);
         assert_eq!(mode(&fx.root().join("store.db-wal")), 0o600);
@@ -79,9 +84,9 @@ mod unix {
         let out = fx.run(&["note", "list"]);
         assert_eq!(out.status.code(), Some(1));
         assert!(
-            text(&out.stderr).contains("chmod -- 600"),
+            support::text(&out.stderr).contains("chmod -- 600"),
             "stderr: {}",
-            text(&out.stderr)
+            support::text(&out.stderr)
         );
         let out = fx.run(&["note", "add", "y", "--json"]);
         assert_eq!(super::json(&out.stderr)["code"], "store_permissions");
@@ -100,7 +105,7 @@ mod unix {
         let store = fx.root().join("store.db");
         let target = fx.elsewhere("target.json");
         fs::rename(&store, &target).unwrap();
-        symlink(&target, &store).unwrap();
+        std::os::unix::fs::symlink(&target, &store).unwrap();
         let before = fs::read(&target).unwrap();
         for args in [
             &["note", "list", "--json"][..],
@@ -125,7 +130,7 @@ mod unix {
         let target = fx.elsewhere("target/.keep");
         let target = target.parent().unwrap();
         let link = fx.elsewhere("link");
-        symlink(target, &link).unwrap();
+        std::os::unix::fs::symlink(target, &link).unwrap();
         let out = fx.run(&[
             "--root",
             link.to_str().unwrap(),
@@ -137,7 +142,7 @@ mod unix {
         assert_eq!(out.status.code(), Some(1));
         // The error object comes first; the audit log, refused the same
         // root, adds its warning after it.
-        let stderr = text(&out.stderr);
+        let stderr = support::text(&out.stderr);
         let error = stderr.lines().next().unwrap();
         assert_eq!(
             super::json(error.as_bytes())["code"],
@@ -165,14 +170,14 @@ mod unix {
         .map(|args| (args.to_vec(), fx.run(args)))
         .collect();
         // Restore before asserting, so the fixture can always clean up.
-        make_private(&root);
-        make_private(&root.join("store.db"));
+        support::make_private(&root);
+        support::make_private(&root.join("store.db"));
         for (args, out) in outs {
             assert_eq!(
                 out.status.code(),
                 Some(0),
                 "{args:?}: {}",
-                text(&out.stderr)
+                support::text(&out.stderr)
             );
         }
         assert_eq!(snapshot(&root), before);
@@ -181,7 +186,7 @@ mod unix {
 
 use std::io::{BufRead, BufReader};
 use std::process::Stdio;
-use support::{ChildGuard, Fixture, text};
+use support::{ChildGuard, Fixture};
 use tmpl_cli_store::STORE_FILE;
 
 fn json(bytes: &[u8]) -> serde_json::Value {
@@ -191,7 +196,7 @@ fn json(bytes: &[u8]) -> serde_json::Value {
 #[test]
 fn root_help_lists_the_note_group() {
     let fx = Fixture::new();
-    let rendered = text(&fx.ok(&["--help"]).stdout);
+    let rendered = support::text(&fx.ok(&["--help"]).stdout);
     assert!(rendered.contains("Notes:\n  note    Add, list and show notes\n"));
 }
 
@@ -243,7 +248,7 @@ fn a_read_of_a_store_without_its_wal_or_shm_is_refused_with_a_hint_and_the_next_
         let out = fx.run(args);
         assert_eq!(out.status.code(), Some(1), "{args:?}");
         assert!(out.stdout.is_empty());
-        let stderr = text(&out.stderr);
+        let stderr = support::text(&out.stderr);
         assert!(stderr.contains("hint:"), "{args:?}: {stderr}");
         assert!(stderr.contains("next write"), "{args:?}: {stderr}");
         assert_eq!(support::state_of(&fx.root()), before, "{args:?} wrote");
@@ -267,7 +272,7 @@ fn an_empty_list_prints_nothing_to_stdout_one_line_to_stderr_and_exits_zero() {
     let fx = Fixture::new();
     let out = fx.ok(&["note", "list"]);
     assert!(out.stdout.is_empty());
-    let notice = text(&out.stderr);
+    let notice = support::text(&out.stderr);
     assert_eq!(notice.lines().count(), 1);
     assert!(
         notice.starts_with("no notes yet"),
@@ -282,7 +287,7 @@ fn an_empty_list_prints_nothing_to_stdout_one_line_to_stderr_and_exits_zero() {
     let out = fx.ok(&["note", "list", "--tag", "nothing", "--priority", "high"]);
     assert!(out.stdout.is_empty());
     assert_eq!(
-        text(&out.stderr),
+        support::text(&out.stderr),
         "no notes match --tag nothing --priority high\n",
         "names every filter that was applied"
     );
@@ -310,14 +315,14 @@ fn a_limited_list_says_it_was_cut_in_the_payload_and_on_stderr() {
     assert_eq!(doc["total"], 3);
     assert_eq!(doc["truncated"], true);
     assert!(
-        text(&out.stderr).contains("2 of 3"),
+        support::text(&out.stderr).contains("2 of 3"),
         "stderr: {}",
-        text(&out.stderr)
+        support::text(&out.stderr)
     );
 
     let out = fx.ok(&["note", "list", "--limit", "2"]);
-    assert_eq!(text(&out.stdout).lines().count(), 2);
-    assert!(text(&out.stderr).contains("2 of 3"));
+    assert_eq!(support::text(&out.stdout).lines().count(), 2);
+    assert!(support::text(&out.stderr).contains("2 of 3"));
 
     let out = fx.ok(&["note", "list", "--limit", "3", "--json"]);
     assert_eq!(json(&out.stdout)["truncated"], false);
@@ -332,11 +337,15 @@ fn piped_output_is_one_undecorated_line_per_record() {
     let mut cmd = fx.cmd(&["note", "list"]);
     cmd.env("CLICOLOR_FORCE", "1").env("TERM", "xterm-256color");
     let out = cmd.output().unwrap();
-    let stdout = text(&out.stdout);
+    let stdout = support::text(&out.stdout);
     assert_eq!(stdout.lines().count(), 3);
     assert!(!stdout.contains('\x1b'), "no ANSI escapes off a terminal");
     assert!(stdout.lines().all(|line| line.split('\t').count() == 5));
-    assert!(out.stderr.is_empty(), "stderr: {}", text(&out.stderr));
+    assert!(
+        out.stderr.is_empty(),
+        "stderr: {}",
+        support::text(&out.stderr)
+    );
 }
 
 #[test]
@@ -345,7 +354,7 @@ fn an_explicit_table_off_a_terminal_has_a_header_and_no_color_or_truncation() {
     fx.seed();
     let mut cmd = fx.cmd(&["note", "list", "--format", "table"]);
     cmd.env("CLICOLOR_FORCE", "1").env("COLUMNS", "20");
-    let stdout = text(&cmd.output().unwrap().stdout);
+    let stdout = support::text(&cmd.output().unwrap().stdout);
     assert_eq!(stdout.lines().count(), 4);
     assert!(stdout.starts_with("ID"));
     assert!(!stdout.contains('\x1b'));
@@ -357,7 +366,7 @@ fn a_one_note_list_is_still_a_table() {
     // STD-01 R16: the shape does not depend on the record count.
     let fx = Fixture::new();
     fx.ok(&["note", "add", "only"]);
-    let stdout = text(&fx.ok(&["note", "list", "--format", "table"]).stdout);
+    let stdout = support::text(&fx.ok(&["note", "list", "--format", "table"]).stdout);
     assert_eq!(stdout.lines().count(), 2, "{stdout:?}");
     assert!(stdout.starts_with("ID"));
 }
@@ -392,14 +401,14 @@ fn the_format_environment_variable_applies_and_a_bad_value_falls_back() {
     fx.seed();
     let mut cmd = fx.cmd(&["note", "list"]);
     cmd.env("TMPL_CLI_FORMAT", "json");
-    assert!(text(&cmd.output().unwrap().stdout).starts_with('{'));
+    assert!(support::text(&cmd.output().unwrap().stdout).starts_with('{'));
 
     let mut cmd = fx.cmd(&["note", "list"]);
     cmd.env("TMPL_CLI_FORMAT", "yaml");
     let out = cmd.output().unwrap();
     assert_eq!(out.status.code(), Some(0));
     assert_eq!(
-        text(&out.stdout).lines().count(),
+        support::text(&out.stdout).lines().count(),
         3,
         "falls back to the piped form"
     );
@@ -407,7 +416,7 @@ fn the_format_environment_variable_applies_and_a_bad_value_falls_back() {
     let mut cmd = fx.cmd(&["note", "list", "--format", "table"]);
     cmd.env("TMPL_CLI_FORMAT", "json");
     assert!(
-        text(&cmd.output().unwrap().stdout).starts_with("ID"),
+        support::text(&cmd.output().unwrap().stdout).starts_with("ID"),
         "the flag wins"
     );
 }
@@ -419,7 +428,7 @@ fn a_missing_note_fails_with_exit_one_an_error_line_and_a_hint_on_stderr() {
     let out = fx.run(&["note", "show", "7"]);
     assert_eq!(out.status.code(), Some(1));
     assert!(out.stdout.is_empty());
-    let stderr = text(&out.stderr);
+    let stderr = support::text(&out.stderr);
     let lines: Vec<&str> = stderr.lines().collect();
     assert_eq!(lines.len(), 2, "got {stderr:?}");
     assert!(
@@ -441,7 +450,7 @@ fn a_missing_note_is_reported_with_its_hint() {
     assert_eq!(out.status.code(), Some(1));
     assert!(out.stdout.is_empty());
     assert_eq!(
-        text(&out.stderr),
+        support::text(&out.stderr),
         format!(
             "error: no note with id 7 in {}\n\
              hint: run 'tmpl-cli note list' with the same --root to see existing ids\n",
@@ -455,7 +464,7 @@ fn a_missing_note_is_reported_with_its_hint() {
     let root_arg = root.to_str().unwrap();
     let out = fx.run(&["--root", root_arg, "note", "show", "7"]);
     assert_eq!(out.status.code(), Some(1));
-    let stderr = text(&out.stderr);
+    let stderr = support::text(&out.stderr);
     assert!(
         !stderr.contains('\x1b') && !stderr.contains('\r'),
         "raw control characters on stderr: {stderr:?}"
@@ -526,7 +535,7 @@ fn refused(fx: &Fixture, args: &[&str]) -> String {
         !fx.root().join("store.db").exists(),
         "{args:?} wrote a store"
     );
-    text(&out.stderr)
+    support::text(&out.stderr)
 }
 
 #[test]
@@ -659,7 +668,11 @@ fn a_closed_stdout_ends_the_process_quietly_with_exit_zero() {
     // The reader was dropped above, closing the pipe.
     let out = child.finish();
     assert_eq!(out.status.code(), Some(0));
-    assert!(out.stderr.is_empty(), "stderr: {}", text(&out.stderr));
+    assert!(
+        out.stderr.is_empty(),
+        "stderr: {}",
+        support::text(&out.stderr)
+    );
 }
 
 #[test]
@@ -674,7 +687,10 @@ fn the_data_directory_defaults_under_home_and_is_never_guessed() {
     cmd.env_remove("TMPL_CLI_ROOT").env_remove("HOME");
     let out = cmd.output().unwrap();
     assert_eq!(out.status.code(), Some(1));
-    assert!(text(&out.stderr).contains("--root"), "says how to fix it");
+    assert!(
+        support::text(&out.stderr).contains("--root"),
+        "says how to fix it"
+    );
 }
 
 #[test]
@@ -697,7 +713,7 @@ fn add_names_the_record_and_the_file_it_wrote() {
     let fx = Fixture::new();
     let out = fx.ok(&["note", "add", "x", "--json"]);
     assert_eq!(json(&out.stdout)["id"], 1);
-    let stderr = text(&out.stderr);
+    let stderr = support::text(&out.stderr);
     let store = fx.root().join("store.db");
     assert!(
         stderr.contains("note 1") && stderr.contains(store.to_str().unwrap()),
@@ -747,9 +763,9 @@ fn a_refused_add_is_audited_as_a_failure_with_its_code() {
     assert_eq!(lines[1]["status"], "failure");
     assert_eq!(lines[1]["error_code"], "store_corrupt");
     assert!(
-        !text(&out.stderr).contains("audit"),
+        !support::text(&out.stderr).contains("audit"),
         "a written audit line is silent: {}",
-        text(&out.stderr)
+        support::text(&out.stderr)
     );
 }
 
@@ -760,9 +776,9 @@ fn a_blank_body_is_refused_by_name_and_nothing_is_written() {
     let out = fx.run(&["note", "add", "x", "--body", "  "]);
     assert_eq!(out.status.code(), Some(2));
     assert!(
-        text(&out.stderr).contains("--body"),
+        support::text(&out.stderr).contains("--body"),
         "stderr: {}",
-        text(&out.stderr)
+        support::text(&out.stderr)
     );
     assert!(!fx.root().exists());
 }
@@ -777,7 +793,7 @@ fn every_listed_id_is_accepted_back_by_show() {
         let id = note["id"].to_string();
         assert_eq!(&json(&fx.ok(&["note", "show", &id, "--json"]).stdout), note);
     }
-    let piped = text(&fx.ok(&["note", "list"]).stdout);
+    let piped = support::text(&fx.ok(&["note", "list"]).stdout);
     for line in piped.lines() {
         let id = line.split('\t').next().unwrap();
         fx.ok(&["note", "show", id]);
@@ -824,12 +840,12 @@ fn title_rejects_control_characters_and_piped_output_strips_body_control_bytes()
             bad_byte,
             None,
             "{args:?} emitted raw control byte in stdout: {:?}",
-            text(&out.stdout)
+            support::text(&out.stdout)
         );
     }
     // The detail view shows a control character escaped and a CRLF as one
     // line break.
-    let detail = text(&fx.ok(&["note", "show", "1", "--format", "table"]).stdout);
+    let detail = support::text(&fx.ok(&["note", "show", "1", "--format", "table"]).stdout);
     assert!(
         detail.contains("line1\\roverwrite\\u{1b}[31mred\\u{1b}[0m\n"),
         "{detail:?}"
@@ -848,8 +864,8 @@ fn warnings_go_to_stderr_before_the_notice() {
             (3, 'Bad', NULL, '[]', 'urgent', '2026-01-02T03:04:05Z');",
     );
     let out = fx.ok(&["note", "list", "--limit", "1"]);
-    assert_eq!(text(&out.stdout).lines().count(), 1);
-    let stderr = text(&out.stderr);
+    assert_eq!(support::text(&out.stdout).lines().count(), 1);
+    let stderr = support::text(&out.stderr);
     let lines: Vec<&str> = stderr.lines().collect();
     assert_eq!(lines.len(), 2, "{stderr:?}");
     assert!(
@@ -862,7 +878,6 @@ fn warnings_go_to_stderr_before_the_notice() {
 #[cfg(unix)]
 #[test]
 fn json_error_object_precedes_audit_failure_warning_on_stderr() {
-    use std::os::unix::fs::symlink;
     let fx = Fixture::new();
     fx.ok(&["note", "add", "seed"]);
     support::corrupt_store(&fx.root());
@@ -870,11 +885,11 @@ fn json_error_object_precedes_audit_failure_warning_on_stderr() {
     let target = fx.elsewhere("audit-target");
     std::fs::write(&target, b"").unwrap();
     std::fs::remove_file(&audit).unwrap();
-    symlink(&target, &audit).unwrap();
+    std::os::unix::fs::symlink(&target, &audit).unwrap();
 
     let out = fx.run(&["note", "add", "next", "--json"]);
     assert_eq!(out.status.code(), Some(1));
-    let stderr = text(&out.stderr);
+    let stderr = support::text(&out.stderr);
     let first_line = stderr.lines().next().expect("stderr has error line");
     let err: serde_json::Value = serde_json::from_str(first_line).unwrap_or_else(|err| {
         panic!("first stderr line must be JSON error object ({err}): {stderr:?}")
@@ -944,10 +959,10 @@ fn bad_records_warn_on_reads_fail_on_show_and_refuse_writes_without_touching_sto
 
     // `note list` (plain): exits 0, lists only good note, 1 warning per bad record on stderr.
     let list_plain = fx.ok(&["note", "list"]);
-    let stdout = text(&list_plain.stdout);
+    let stdout = support::text(&list_plain.stdout);
     assert_eq!(stdout.lines().count(), 1, "stdout: {stdout:?}");
     assert!(stdout.contains("Good note"));
-    let stderr = text(&list_plain.stderr);
+    let stderr = support::text(&list_plain.stderr);
     let warn_lines: Vec<&str> = stderr.lines().collect();
     assert_eq!(warn_lines.len(), 2, "stderr: {stderr:?}");
     assert!(
@@ -969,7 +984,7 @@ fn bad_records_warn_on_reads_fail_on_show_and_refuse_writes_without_touching_sto
     assert_eq!(doc["truncated"], false);
     assert_eq!(doc["notes"].as_array().map(Vec::len), Some(1));
     assert_eq!(doc["notes"][0]["id"], 1);
-    assert_eq!(text(&list_json.stderr).lines().count(), 2);
+    assert_eq!(support::text(&list_json.stderr).lines().count(), 2);
     // The envelope names each skipped record in `warnings`, in store order.
     let warnings = doc["warnings"].as_array().unwrap();
     assert_eq!(warnings.len(), 2, "{doc}");
@@ -986,7 +1001,7 @@ fn bad_records_warn_on_reads_fail_on_show_and_refuse_writes_without_touching_sto
     // `note show <good id>`: exits 0 with good note and stderr warnings.
     let show_good = fx.ok(&["note", "show", "1", "--json"]);
     assert_eq!(json(&show_good.stdout)["id"], 1);
-    assert_eq!(text(&show_good.stderr).lines().count(), 2);
+    assert_eq!(support::text(&show_good.stderr).lines().count(), 2);
 
     // `note show <bad id>`: fails exit 1 with typed error naming the record.
     let show_bad = fx.run(&["note", "show", "2", "--json"]);
@@ -1039,11 +1054,11 @@ fn non_utf8_rows_are_isolated_as_bad_records_and_named_in_warnings() {
         warnings[1]["reason"].as_str().unwrap().contains("UTF-8"),
         "{doc}"
     );
-    assert_eq!(text(&list.stderr).lines().count(), 2);
+    assert_eq!(support::text(&list.stderr).lines().count(), 2);
 
     let show_good = fx.ok(&["note", "show", "1", "--json"]);
     assert_eq!(json(&show_good.stdout)["id"], 1);
-    assert_eq!(text(&show_good.stderr).lines().count(), 2);
+    assert_eq!(support::text(&show_good.stderr).lines().count(), 2);
 
     let show_bad = fx.run(&["note", "show", "2", "--json"]);
     assert_eq!(show_bad.status.code(), Some(1));
@@ -1078,9 +1093,9 @@ fn debug_logs_escape_control_characters_in_root_paths() {
             out.status.code(),
             Some(0),
             "{args:?}: {}",
-            text(&out.stderr)
+            support::text(&out.stderr)
         );
-        let stderr = text(&out.stderr);
+        let stderr = support::text(&out.stderr);
         assert!(
             !stderr.contains('\x1b') && !stderr.contains('\r'),
             "{args:?} emitted raw control characters on stderr: {stderr:?}"
@@ -1101,14 +1116,14 @@ fn debug_logs_escape_control_characters_in_root_paths() {
 #[test]
 fn help_states_defaults_for_tag_and_json() {
     let fx = Fixture::new();
-    let root_help = text(&fx.ok(&["--help"]).stdout);
+    let root_help = support::text(&fx.ok(&["--help"]).stdout);
     let json_line = root_help
         .lines()
         .find(|line| line.contains("--json"))
         .expect("--json line in root --help");
     assert!(json_line.contains("[default:"), "got {json_line:?}");
 
-    let add_help = text(&fx.ok(&["note", "add", "--help"]).stdout);
+    let add_help = support::text(&fx.ok(&["note", "add", "--help"]).stdout);
     let tag_line = add_help
         .lines()
         .find(|line| line.contains("--tag"))

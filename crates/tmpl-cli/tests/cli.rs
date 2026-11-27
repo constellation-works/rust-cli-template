@@ -18,7 +18,7 @@
 
 mod support;
 
-use support::{Fixture, text};
+use support::Fixture;
 
 fn json(bytes: &[u8]) -> serde_json::Value {
     serde_json::from_slice(bytes).expect("one JSON document")
@@ -38,7 +38,7 @@ fn piped_root_help_groups_commands_and_ignores_terminal_settings() {
     assert_eq!(wide.stdout, narrow.stdout);
     assert_eq!(wide.stdout, fx.ok(&["help"]).stdout);
     assert!(wide.stderr.is_empty() && narrow.stderr.is_empty());
-    let rendered = text(&wide.stdout);
+    let rendered = support::text(&wide.stdout);
     assert!(rendered.contains("Store:\n  status  Show the data directory and the store format\n"));
     assert!(rendered.contains("Help:\n  help    Print this message"));
 }
@@ -51,10 +51,14 @@ fn status_reports_a_new_data_directory_in_every_mode_and_creates_nothing() {
     let root_text = root.to_str().unwrap();
 
     let plain = fx.ok(&["status"]);
-    assert_eq!(text(&plain.stdout), format!("{root_text}\t-\n"));
-    assert!(plain.stderr.is_empty(), "stderr: {}", text(&plain.stderr));
+    assert_eq!(support::text(&plain.stdout), format!("{root_text}\t-\n"));
+    assert!(
+        plain.stderr.is_empty(),
+        "stderr: {}",
+        support::text(&plain.stderr)
+    );
 
-    let table = text(&fx.ok(&["status", "--format", "table"]).stdout);
+    let table = support::text(&fx.ok(&["status", "--format", "table"]).stdout);
     let lines: Vec<&str> = table.lines().collect();
     assert_eq!(lines.len(), 2, "a header and one row: {table:?}");
     assert!(lines[0].starts_with("ROOT") && lines[0].ends_with("FORMAT"));
@@ -89,14 +93,14 @@ fn the_format_environment_variable_applies_and_a_bad_value_falls_back() {
     let fx = Fixture::new();
     let mut cmd = fx.cmd(&["status"]);
     cmd.env("TMPL_CLI_FORMAT", "json");
-    assert!(text(&cmd.output().unwrap().stdout).starts_with('{'));
+    assert!(support::text(&cmd.output().unwrap().stdout).starts_with('{'));
 
     let mut cmd = fx.cmd(&["status"]);
     cmd.env("TMPL_CLI_FORMAT", "yaml");
     let out = cmd.output().unwrap();
     assert_eq!(out.status.code(), Some(0));
     assert_eq!(
-        text(&out.stdout).lines().count(),
+        support::text(&out.stdout).lines().count(),
         1,
         "falls back to the piped form"
     );
@@ -104,7 +108,7 @@ fn the_format_environment_variable_applies_and_a_bad_value_falls_back() {
     let mut cmd = fx.cmd(&["status", "--format", "table"]);
     cmd.env("TMPL_CLI_FORMAT", "json");
     assert!(
-        text(&cmd.output().unwrap().stdout).starts_with("ROOT"),
+        support::text(&cmd.output().unwrap().stdout).starts_with("ROOT"),
         "the flag wins"
     );
 }
@@ -182,7 +186,12 @@ fn a_usage_error_is_reported_in_the_format_its_command_line_asked_for() {
         let out = fx.run(args);
         assert_eq!(out.status.code(), Some(2), "{args:?}");
         let parsed = serde_json::from_slice::<serde_json::Value>(&out.stderr).ok();
-        assert_eq!(parsed.is_some(), in_json, "{args:?}: {}", text(&out.stderr));
+        assert_eq!(
+            parsed.is_some(),
+            in_json,
+            "{args:?}: {}",
+            support::text(&out.stderr)
+        );
     }
 }
 
@@ -201,7 +210,10 @@ fn the_data_directory_defaults_under_home_and_is_never_guessed() {
     let out = cmd.output().unwrap();
     assert_eq!(out.status.code(), Some(1));
     assert!(out.stdout.is_empty());
-    assert!(text(&out.stderr).contains("--root"), "says how to fix it");
+    assert!(
+        support::text(&out.stderr).contains("--root"),
+        "says how to fix it"
+    );
 }
 
 #[test]
@@ -365,7 +377,7 @@ fn documented_examples_run_through_the_binary() {
     for (path, _) in tmpl_cli::every_command() {
         let mut args: Vec<_> = path.split_whitespace().skip(1).collect();
         args.push("--help");
-        let help = text(&fx.ok(&args).stdout);
+        let help = support::text(&fx.ok(&args).stdout);
         if let Some((_, examples)) = help.split_once("Examples:") {
             sources.push((path, examples.to_owned()));
         }
